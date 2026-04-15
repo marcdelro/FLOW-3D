@@ -8,17 +8,20 @@
  *   │         SimHeader (two rows)    │  ← full width, fixed height
  *   ├──────────────┬──────────────────┤
  *   │   Sidebar    │  SimulatorCanvas │
- *   │   (~290 px)  │  (flex: 1)      │
+ *   │   (~300 px)  │  (flex: 1)      │
  *   └──────────────┴──────────────────┘
  *
  * All shared state lives here and is passed as props into Sidebar and
  * SimulatorCanvas.  App.jsx owns no solver logic, API calls, or Three.js code.
+ * Theme is read from themeStore and propagated via the `theme` prop pattern.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import SimHeader from './components/SimHeader.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import SimulatorCanvas from './components/SimulatorCanvas.jsx';
+import useThemeStore from './store/themeStore.js';
+import { getTheme } from './theme.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -72,60 +75,37 @@ const INITIAL_CONSTRAINTS = {
   weightDist: false,
 };
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-const styles = {
-  shell: {
-    display: 'flex',
-    flexDirection: 'column',
-    width: '100%',
-    height: '100%',
-    fontFamily: 'system-ui, sans-serif',
-    overflow: 'hidden',
-    background: '#f9fafb',
-  },
-  body: {
-    display: 'flex',
-    flex: 1,
-    overflow: 'hidden',
-  },
-  canvasPanel: {
-    flex: 1,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-};
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function App() {
-  // -- Truck config (Trucks tab) --
-  const [truck, setTruck] = useState({
-    width: 240,
-    height: 244,
-    length: 1360,
-    maxWeight: 20000,
-    quantity: 1,
-  });
+  const { theme } = useThemeStore();
+  const t = getTheme(theme);
 
-  // -- Route (Route tab) --
+  // Apply body background for the dashboard
+  useEffect(() => {
+    document.body.style.background = t.canvasBg;
+    document.body.style.color = t.text;
+    return () => {
+      document.body.style.background = '';
+      document.body.style.color = '';
+    };
+  }, [t.canvasBg, t.text]);
+
+  // -- Truck config --
+  const [truck, setTruck] = useState(INITIAL_TRUCK);
+
+  // -- Route --
   const [stops, setStops] = useState(INITIAL_STOPS);
   const [lifoEnabled, setLifoEnabled] = useState(true);
 
-  // -- Items (shared between Items tab and canvas) --
+  // -- Items --
   const [items, setItems] = useState(INITIAL_ITEMS);
 
-  // -- Solver constraints (Options tab) --
-  const [constraints, setConstraints] = useState({
-    lifo: true,
-    orientation: false,
-    fragility: false,
-    stacking: false,
-    weightDist: false,
-  });
+  // -- Solver constraints --
+  const [constraints, setConstraints] = useState(INITIAL_CONSTRAINTS);
 
   // -- Canvas view mode --
-  const [viewMode, setViewMode] = useState('3d'); // '3d' | 'exploded' | 'labels' | 'play'
+  const [viewMode, setViewMode] = useState('3d');
 
   // -- Header actions --
   const handleReset = () => {
@@ -139,35 +119,59 @@ export default function App() {
 
   const handleClearItems = () => setItems([]);
 
+  const shell = {
+    display: 'flex',
+    flexDirection: 'column',
+    width: '100%',
+    height: '100%',
+    fontFamily: "'Inter', system-ui, sans-serif",
+    overflow: 'hidden',
+    background: t.canvasBg,
+    transition: 'background-color 0.3s ease',
+  };
+
+  const body = {
+    display: 'flex',
+    flex: 1,
+    overflow: 'hidden',
+  };
+
+  const canvasPanel = {
+    flex: 1,
+    position: 'relative',
+    overflow: 'hidden',
+    background: t.canvasBg,
+  };
+
   return (
-    <div style={styles.shell}>
+    <div style={shell}>
       <SimHeader
         truck={truck}
         stops={stops}
         lifoEnabled={lifoEnabled}
         onReset={handleReset}
         onClearItems={handleClearItems}
+        theme={t}
+        themeName={theme}
       />
 
-      <div style={styles.body}>
+      <div style={body}>
         <Sidebar
-          // Items tab
           items={items}
           setItems={setItems}
-          // Route tab
           stops={stops}
           setStops={setStops}
           lifoEnabled={lifoEnabled}
           setLifoEnabled={setLifoEnabled}
-          // Trucks tab
           truck={truck}
           setTruck={setTruck}
-          // Options tab
           constraints={constraints}
           setConstraints={setConstraints}
+          theme={t}
+          themeName={theme}
         />
 
-        <main style={styles.canvasPanel}>
+        <main style={canvasPanel}>
           <SimulatorCanvas
             viewMode={viewMode}
             setViewMode={setViewMode}

@@ -1,3 +1,4 @@
 - [FLOW-3D Frontend Stack](project_stack.md) — Confirmed React 18 + Vite 5 + Three.js r165 + Zustand 4 file layout
 - [Placement manifest schema](project_manifest_schema.md) — Backend JSON contract: fields, mm units, Three.js axis mapping
 - [LIFO stop color palette](project_color_palette.md) — 8-stop hex palette in stopColors.js; stop 1 = door = red
+- [Theme system architecture](project_theme_system.md) — themeStore + theme.js tokens; prop-threading pattern for Sidebar/SimHeader; Legend/Landing read store directly
