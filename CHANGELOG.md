@@ -10,6 +10,63 @@ until the sprint is closed, then move to a dated sprint block.
 
 > Add new entries here as you work. Move to a sprint block when the sprint ends.
 
+### Added
+
+**Backend**
+- `backend/solver/ilp_solver.py`: Implement live Gurobi ILP model — `_variable_domains()`
+  defines `b_i ∈ {0,1}`, `s_ij,k ∈ {0,1}` (k=1..6), and integer-mm coordinates
+  `x_i, y_i, z_i ≥ 0` bounded by `W`, `L`, `H`.
+  Thesis ref: section 3.5.2.1 D
+- `backend/solver/ilp_solver.py`: Implement `_boundary()` — enforces `x_i+w_i ≤ W·b_i`,
+  `y_i+l_i ≤ L·b_i`, `z_i+h_i ≤ H·b_i`; unpacked items (`b_i=0`) are pinned to the
+  origin because `w_i`, `l_i`, `h_i` are strictly positive.
+  Thesis ref: section 3.5.2.1 C
+- `backend/solver/ilp_solver.py`: Implement `_non_overlap()` — Big-M disjunctive
+  separation across 6 spatial planes using axis-specific constants `M_x=W`, `M_y=L`,
+  `M_z=H` (tighter LP relaxation than a single global M); adds activation constraint
+  `∑s_ij,k ≥ b_i + b_j − 1`.
+  Thesis ref: section 3.5.2.1 B
+- `backend/solver/ilp_solver.py`: Implement `_lifo()` — Sequential Loading Constraint
+  `y_i + l_i ≤ y_j + L·(2 − b_i − b_j)` for every ordered pair where
+  `stop_i > stop_j`; the `L·(2 − b_i − b_j)` slack gate ensures unpacked items do
+  not pin packed items' `y_i` coordinates.
+  Thesis ref: section 3.5.2.1 E
+- `backend/solver/ilp_solver.py`: Implement Rigid Orientation (`_orientation()`) —
+  adds 6 binary variables `o_i,k` per item; `∑o_i,k = b_i` selects exactly one
+  orientation when packed; `side_up=True` restricts `o_i,k` to upright set `{0,1}`
+  (original `h_i` stays along truck z-axis). `_effective_dims()` linearizes the
+  6-permutation `ORIENTATION_PERMUTATIONS` table so `w_eff`, `l_eff`, `h_eff` replace
+  constants in `_boundary()`, `_non_overlap()`, and `_lifo()`.
+  Thesis ref: section 3.5.2.1 (Rigid Orientation)
+- `backend/solver/ilp_solver.py`: Implement `_objective()` — maximizes
+  `V_util = ∑(v_i · b_i) / (W·L·H)`; denominator is a positive constant so the
+  numerator is maximized directly; coefficients are normalised to `[0,1]` to avoid
+  Gurobi large-coefficient numerical warnings.
+  Thesis ref: section 3.5.2.1 A
+- `backend/solver/ilp_solver.py`: Implement `_extract_plan()` — reads `b_i.X`,
+  `o_i,k.X`, and `x_i/y_i/z_i.X` from the solved model; emits actual
+  `orientation_index` and effective `(w, l, h)` on each `Placement` so downstream
+  consumers (frontend, validator) need no re-computation.
+- `backend/core/validator.py`: Implement `validate_non_overlap()` — O(n²) pairwise
+  scan over packed placements; passes when at least one of the six axis-aligned
+  separation conditions holds for every pair.
+  Thesis ref: section 3.5.2.1 B
+- `backend/core/validator.py`: Implement `validate_boundary()` — rejects any packed
+  placement where `x_i < 0`, or `x_i+w_i > W`, `y_i+l_i > L`, `z_i+h_i > H`.
+  Thesis ref: section 3.5.2.1 C
+- `backend/core/validator.py`: Implement `validate_lifo()` — O(n²) check that every
+  packed pair with `stop_i > stop_j` satisfies `y_i + l_i ≤ y_j`.
+  Thesis ref: section 3.5.2.1 E
+- `backend/core/validator.py`: Implement `validate_orientation()` — asserts
+  `orientation_index ∈ [0,5]` for every placement; `side_up` upright enforcement is
+  delegated to the solver's `_orientation()` constraints (the placement-only view
+  cannot recover the manifest `side_up` flag).
+  Thesis ref: section 3.5.2.1 (Rigid Orientation)
+- `backend/tests/test_validator.py`: Add 9 pytest cases for `ConstraintValidator` —
+  covers happy path (mockPlan.json passes all checks), targeted failures for each of
+  the four check types, touching-face boundary for non-overlap, and the rule that
+  unpacked placements are skipped by all spatial checks.
+
 ---
 
 ## Sprint 1 — 2026-04-24 · Project Bootstrap
@@ -28,9 +85,10 @@ and put developer tooling (pre-push gate, changelog, slash commands) in place.
   Decreasing (heuristic, O(n²)); items pre-sorted by descending stop order before
   placement to maintain LIFO along the Y-axis.
   Thesis ref: section 3.5.2.1 E
-- `backend/core/validator.py` — ConstraintValidator: verifies non-overlap Big-M
-  (`s_ij_k`, k=1..6), boundary conditions (`x_i+w_i ≤ W`, `y_i+l_i ≤ L`,
-  `z_i+h_i ≤ H`), orientation admissibility, and route-sequenced LIFO after every solve.
+- `backend/core/validator.py` — ConstraintValidator scaffold: stub methods for
+  non-overlap Big-M (`s_ij_k`, k=1..6), boundary conditions (`x_i+w_i ≤ W`,
+  `y_i+l_i ≤ L`, `z_i+h_i ≤ H`), orientation admissibility, and route-sequenced
+  LIFO (all returning `True` pending implementation).
   Thesis ref: section 3.5.2.1 B, C, E
 - `backend/core/optimizer.py` — hybrid dispatch: routes to ILPSolver when
   `n ≤ SOLVER_THRESHOLD`, FFDSolver otherwise; always calls
