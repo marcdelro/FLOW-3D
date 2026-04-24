@@ -8,6 +8,7 @@ __pycache__/
 *.pyo
 .env
 *.egg-info/
+scratch_*.py
 
 # Gurobi
 gurobi.log
