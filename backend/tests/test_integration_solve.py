@@ -19,9 +19,9 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from api.models import PackingPlan
-from api.routes import _engine
 from core.validator import ConstraintValidator
 from main import app
+from worker.tasks import _engine
 
 
 def _item_payload(
@@ -127,7 +127,7 @@ async def test_ffd_solve_round_trip_validates(
     }
 
     solve = await client.post("/api/solve", json=payload)
-    assert solve.status_code == 200
+    assert solve.status_code == 202
     job_id = solve.json()["job_id"]
 
     result = await client.get(f"/api/result/{job_id}")

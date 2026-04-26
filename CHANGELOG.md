@@ -13,58 +13,35 @@ until the sprint is closed, then move to a dated sprint block.
 ### Added
 
 **Backend**
-- `backend/solver/ilp_solver.py`: Add `_apply_gurobi_params()` — pushes
-  `GUROBI_TIME_LIMIT`, `GUROBI_MIP_GAP`, `GUROBI_THREADS`, and
-  `GUROBI_OUTPUT_FLAG` onto the Gurobi model immediately after construction;
-  suppresses console output by default (`OutputFlag=0`) to keep pytest logs
-  readable; any parameter left `None` preserves the Gurobi internal default.
-- `backend/solver/ilp_solver.py`: Add `_min_effective_dims()` and tighten
-  variable upper bounds — `x[i].ub = W − w_min`, `y[i].ub = L − l_min`,
-  `z[i].ub = H − h_min` where each `*_min` is the minimum effective dimension
-  over the admissible orientation set for item `i` (`UPRIGHT_ORIENTATIONS`
-  for `side_up=True`, all 6 for free items); shrinks the LP relaxation domain
-  without removing any feasible integer solution.
-  Thesis ref: section 3.5.2.1 C — Boundary containment
-- `backend/solver/ilp_solver.py`: Add `_symmetry_breaking()` — two families
-  of valid inequalities added after `_non_overlap()`:
-  (1) Activation linkage: `s_ij,k ≤ b_i` and `s_ij,k ≤ b_j` for all pairs
-  and planes — collapses LP relaxation slack where a separation indicator
-  could float to 1 with both items unpacked;
-  (2) Identical-item lex break: `b_i ≥ b_j` for every `i < j` pair with
-  the same `(w, l, h, stop_id, side_up)` — prunes the factorial of
-  equivalent solutions from the Branch-and-Bound tree.
-  Code comments document why per-pair Big-M reduction below `W`/`L`/`H` was
-  rejected (boundary saturation already saturates the truck dimension) and
-  why an anchor cut was not added (LIFO can force the largest item off the
-  origin).
-  Thesis ref: section 3.5.2.1 B — Non-overlap Big-M
-- `backend/settings.py`: Expose four Gurobi tuning knobs —
-  `GUROBI_TIME_LIMIT` (`Optional[float]`, seconds), `GUROBI_MIP_GAP`
-  (`Optional[float]`), `GUROBI_THREADS` (`Optional[int]`),
-  `GUROBI_OUTPUT_FLAG` (`int`, default `0`); parsed by new
-  `_optional_float()` / `_optional_int()` helpers; `None` means "leave
-  Gurobi default".
-- `backend/tests/test_integration_solve.py`: Add 5 end-to-end integration
-  tests for `/api/solve` + `/api/result` with `USE_MOCK_SOLVER=False` —
-  fixtures `live_solver`, `force_ffd`, `force_ilp` control solver dispatch
-  without sending large manifests; tests cover FFD round-trip + client-side
-  validator re-check, LIFO Y-axis ordering (`y_i + l_i ≤ y_j` for
-  `stop_i > stop_j`), oversized `side_up` item landing in `unplaced_items`,
-  `side_up` rigid orientation index confined to `{0, 1}`, and ILP round-trip
-  (auto-skipped when Gurobi license is absent).
-  Thesis ref: section 3.5.2.1 B, C, E; section 3.5.2.2
-- `backend/tests/test_settings.py`: Add 3 pytest cases for env-var parsing —
-  `_optional_float` / `_optional_int` return `None` for blank env values,
-  parse non-blank floats and ints correctly, and `GUROBI_OUTPUT_FLAG`
-  defaults to `0` when unset.
+- `backend/worker/celery_app.py`, `backend/worker/tasks.py`: Implement Celery + Redis
+  async job queue — `solve_task` runs the full solver pipeline (ILP/FFD +
+  ConstraintValidator) asynchronously; enqueued via `apply_async()` and results stored
+  in Redis; task config enables JSON serialization, 3600-second result retention, and
+  started tracking for polling.
+- `backend/core/db.py`: Implement SQLAlchemy job logging to PostgreSQL — `job_logs` table
+  captures `job_id`, `solver_mode`, `n_items`, `v_util`, `t_exec_ms`, `status`,
+  `error`, and `created_at` for every solve job (success or failure); used for ANOVA
+  benchmarking (thesis section 3.6); DB errors are swallowed gracefully so logging
+  never crashes the solve pipeline; `create_tables()` runs at app startup via lifespan.
+- `backend/tests/conftest.py`: Add pytest fixture `celery_eager` — configures Celery to
+  run tasks synchronously and store results in-memory; allows tests to run without a
+  broker/backend; fixture is auto-used on all tests.
 
-**Config & Docs**
-- `backend/tests/INTEGRATION_TESTS.md`: Add integration-test design document
-  covering scope table (layers exercised), fixture rationale, per-test
-  thesis-section mapping, Gurobi skip conditions, and run instructions.
-- `.env.example`: Document four new Gurobi env vars (`GUROBI_TIME_LIMIT`,
-  `GUROBI_MIP_GAP`, `GUROBI_THREADS`, `GUROBI_OUTPUT_FLAG`) with inline
-  usage notes.
+### Changed
+
+**Backend**
+- `backend/api/routes.py`: Convert POST/GET endpoints to async Celery queue pattern —
+  `POST /api/solve` now returns HTTP 202 (Accepted) with `job_id` in <100 ms instead
+  of blocking; `GET /api/result/{job_id}` polls Celery's AsyncResult backend, returning
+  `status: pending` while running, `status: done` with full plan on success, or HTTP 422
+  with `failed_check` detail when ConstraintValidator fails; adds `422` error response
+  for infeasible plans and unexpected task crashes.
+- `backend/main.py`: Add FastAPI lifespan context manager — calls `core.db.create_tables()`
+  at startup so PostgreSQL schema is initialized before first request.
+- `backend/requirements.txt`: Add `sqlalchemy` dependency (was missing but required by
+  `core/db.py`).
+- `backend/tests/test_integration_solve.py`: Fix imports (`_engine` now imported from
+  `worker.tasks` not `api.routes`); update POST status code assertion from `200` to `202`.
 
 ---
 
