@@ -13,7 +13,7 @@ from pathlib import Path
 # Ensure backend/ is in sys.path so imports work from worker/ subdirectory
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from api.models import FurnitureItem, PackingPlan, SolveRequest, TruckSpec
+from api.models import PackingPlan, SolveRequest
 from core.db import log_job
 from core.optimizer import OptimizationEngine
 from core.validator import PlanValidationError
