@@ -164,49 +164,6 @@ production-ready code.
 
 ---
 
-## Sprint 2 — 2026-04-27 · Frontend UI — Manifest Form, 3D Hover, Multi-Plan Comparison
-
-**Goal:** Deliver a fully interactive frontend: a complete cargo manifest input form,
-hover tooltips on 3D-packed items, and a three-plan comparison selector so users can
-evaluate trade-offs between ILP and FFD solver outputs.
-
-### Added
-
-**Frontend**
-- `frontend/src/components/ManifestForm.tsx` — new full manifest input component with
-  truck spec editor, stops editor, and per-item add/validate/delete; pre-populated with
-  5 furniture items across 3 delivery stops for thesis demo.
-- `frontend/src/components/PlanSelector.tsx` — new 3-card comparison panel showing
-  `V_util` colour bar, packed/total count, `T_exec`, and solver mode badge for each
-  alternative plan; selected card highlighted with a blue ring.
-- `frontend/src/components/TruckViewer.tsx` — `THREE.Raycaster` `mousemove` handler;
-  each item mesh stores its `Placement` in `mesh.userData`; renders an `ItemTooltip`
-  overlay showing `item_id`, `w_i × l_i × h_i`, volume (m³), position (`x_i`, `y_i`,
-  `z_i`), `orientation_index`, and `stop_id` colour dot; tooltip auto-flips left when
-  cursor is past 60 % of canvas width.
-  Thesis ref: section 3.5.2.1 — Placement contract (`x_i`, `y_i`, `z_i`, `w_i`,
-  `l_i`, `h_i`, `orientation_index`, `stop_id`)
-- `frontend/src/components/TruckViewer.tsx` — camera position and `OrbitControls`
-  target persisted in `useRef` across scene rebuilds so orbit state survives
-  3D ↔ Exploded ↔ Labels mode switches.
-- `frontend/src/components/Dashboard.tsx` — LIFO load-sequence panel groups packed
-  items by descending `stop_id` (highest loaded first, sits nearest rear); colour-coded
-  `V_util` progress bar (green ≥ 70 %, amber ≥ 40 %, red below); ILP/FFD solver mode
-  badge; amber callout for `unplaced_items`.
-  Thesis ref: section 3.5.2.1 E — Route-Sequenced LIFO (`stop_i > stop_j → y_i + l_i ≤ y_j`)
-- `frontend/src/api/client.ts` — `fetchSolutions(request): Promise<PackingPlan[]>`
-  returns 3 alternative plans; real mode makes 3 parallel requests, mock mode returns
-  `mockPlans` array.
-- `frontend/src/data/mockPlan.ts` — added `mockPlanB` (FFD, `V_util` 0.41, `T_exec`
-  23 ms, right-shifted layout) and `mockPlanC` (FFD, `V_util` 0.39, `T_exec` 15 ms,
-  `bookshelf_01` unplaced) exported as `mockPlans: PackingPlan[]`.
-- `frontend/src/App.tsx` — replaced single `plan: PackingPlan | null` state with
-  `plans: PackingPlan[]` and `selectedIdx: number`; wires `fetchSolutions`; mounts
-  `PlanSelector` above `Dashboard` in Results tab; loading copy updated to reflect
-  "Generating 3 alternative plans".
-
----
-
 ## Sprint 1 — 2026-04-24 · Project Bootstrap
 
 **Goal:** Establish the full project scaffold so all members can run the system locally
