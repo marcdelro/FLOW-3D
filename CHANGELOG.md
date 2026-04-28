@@ -12,6 +12,56 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 5 — 2026-04-28 · Unified Pre-Push Gate and Docker Compose Dev Pipeline
+
+**Goal:** Consolidate the two-step pre-push gate into a single `/ship` slash
+command with a mode flag, and containerize the full live pipeline
+(Redis + FastAPI + Celery + Vite) into a one-command `docker compose up`
+workflow so members no longer juggle four terminals.
+
+### Added
+
+**Config & Tooling**
+- `.claude/commands/ship.md`: New unified slash command — `/ship` (commit
+  mode) runs gitignore audit, lint, tests, type check, secret/conflict/
+  large-file scans, and emits a ready-to-copy conventional commit message;
+  `/ship release` adds Sprint-aware `CHANGELOG.md` regeneration and a
+  semver tag proposal.
+- `docker-compose.yml`: New stack — `redis:7-alpine` with healthcheck,
+  FastAPI on `:8000`, Celery worker on `--pool=solo`, Vite dev server on
+  `:5173`; bind mounts on `./backend` and `./frontend` preserve hot
+  reload; `depends_on: service_healthy` ensures the broker is up before
+  the api and worker start.
+- `backend/Dockerfile`, `backend/.dockerignore`: Containerize FastAPI and
+  Celery on `python:3.11-slim` with `libpq-dev` for `psycopg2-binary`;
+  the same image is reused by both the `backend` and `celery` compose
+  services with a different `command`.
+- `frontend/Dockerfile`, `frontend/.dockerignore`: Containerize the Vite
+  dev server on `node:20-alpine`, bound to `0.0.0.0:5173` so the host
+  browser can reach it from `http://localhost:5173`.
+
+### Changed
+
+**Config & Docs**
+- `README.md`: Replace `/check-git-push` and `/update-changelog`
+  references with the unified `/ship` command (commit + release modes).
+- `.gitignore`: Add `gurobi.lic` so WLS / named-user license files are
+  never committed when mounted into containers via docker-compose.
+- `backend/api/routes.py`, `backend/main.py`, `backend/api/models.py`:
+  Drop unused imports surfaced by `ruff check`.
+- `.gitignore`: Add `.env.local` and `scratch_*.py` so the
+  `VITE_USE_MOCK=false` override and ad-hoc scratch scripts never reach
+  the remote.
+
+### Removed
+
+**Config & Tooling**
+- `.claude/commands/check-git-push.md`: Superseded by `/ship`
+  (commit mode).
+- `.claude/commands/update-changelog.md`: Superseded by `/ship release`.
+
+---
+
 ## Sprint 4 — 2026-04-27 · Async Pipeline, Payload Constraint, and Live Demo Bring-up
 
 **Goal:** Wire the FastAPI ↔ Celery ↔ Redis ↔ PostgreSQL async pipeline end-to-end,
