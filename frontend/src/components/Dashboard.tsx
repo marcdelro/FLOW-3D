@@ -1,4 +1,15 @@
+import React from "react";
 import type { PackingPlan, Placement } from "../types";
+
+function downloadPlan(plan: PackingPlan) {
+  const blob = new Blob([JSON.stringify(plan, null, 2)], { type: "application/json" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `flow3d_${plan.solver_mode}_${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 // ── Stop palette (mirrors TruckViewer / tailwind config) ──────────────────────
 const STOP_STYLE: Record<number, { bg: string; border: string; text: string }> = {
@@ -14,12 +25,13 @@ const stopStyle = (sid: number) => STOP_STYLE[sid] ?? DEFAULT_STYLE;
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
-function SectionHeader({ title }: { title: string }) {
+function SectionHeader({ title, action }: { title: string; action?: React.ReactNode }) {
   return (
-    <div className="flex items-center px-4 py-2 border-b border-gray-800 sticky top-0 bg-gray-950 z-10">
+    <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800 sticky top-0 bg-gray-950 z-10">
       <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
         {title}
       </span>
+      {action}
     </div>
   );
 }
@@ -74,7 +86,22 @@ export function Dashboard({ plan }: DashboardProps) {
     <div className="flex flex-col">
 
       {/* ── Performance metrics ───────────────────────────────────────────── */}
-      <SectionHeader title="Performance" />
+      <SectionHeader
+        title="Performance"
+        action={
+          <button
+            onClick={() => downloadPlan(plan)}
+            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-200 transition-colors px-2 py-1 rounded hover:bg-gray-800"
+            title="Download packing plan as JSON"
+          >
+            <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 12l-4-4h2.5V3h3v5H12L8 12z"/>
+              <path d="M3 13h10v1.5H3z"/>
+            </svg>
+            Export JSON
+          </button>
+        }
+      />
       <div className="px-4 py-3 space-y-3">
 
         {/* Utilisation bar */}

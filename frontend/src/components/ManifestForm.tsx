@@ -7,6 +7,10 @@ import type {
   SolveRequest,
   TruckSpec,
 } from "../types";
+import {
+  FURNITURE_DEFAULTS,
+  FURNITURE_OPTIONS,
+} from "../data/modelCatalog";
 
 // ── Palette (mirrors tailwind.config stop colours) ────────────────────────────
 const STOP_BADGE: Record<number, string> = {
@@ -26,14 +30,6 @@ const DEFAULT_STOPS: DeliveryStop[] = [
   { stop_id: 1, address: "123 Quezon Ave, Manila" },
   { stop_id: 2, address: "456 Ortigas Ave, Pasig" },
   { stop_id: 3, address: "789 EDSA, Makati" },
-];
-
-const DEFAULT_ITEMS: FurnitureItem[] = [
-  { item_id: "wardrobe_01",     w: 1200, l: 600,  h: 1800, weight_kg: 90, stop_id: 3, side_up: true  },
-  { item_id: "desk_01",         w: 1000, l: 600,  h: 750,  weight_kg: 35, stop_id: 3, side_up: false },
-  { item_id: "dining_table_01", w: 1500, l: 900,  h: 750,  weight_kg: 40, stop_id: 2, side_up: false },
-  { item_id: "sofa_01",         w: 2000, l: 900,  h: 850,  weight_kg: 80, stop_id: 1, side_up: false },
-  { item_id: "bookshelf_01",    w: 800,  l: 300,  h: 1800, weight_kg: 30, stop_id: 1, side_up: true  },
 ];
 
 const blankItem = (): FurnitureItem => ({
@@ -75,6 +71,7 @@ function Section({
 function AddItemForm({
   value,
   stops,
+  existingIds,
   error,
   onChange,
   onConfirm,
@@ -82,29 +79,71 @@ function AddItemForm({
 }: {
   value: FurnitureItem;
   stops: DeliveryStop[];
+  existingIds: string[];
   error: string | null;
   onChange: (v: FurnitureItem) => void;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const [selectedPrefix, setSelectedPrefix] = useState("");
+
   function set<K extends keyof FurnitureItem>(k: K, v: FurnitureItem[K]) {
     onChange({ ...value, [k]: v });
   }
 
+  function handlePrefixChange(prefix: string) {
+    setSelectedPrefix(prefix);
+    if (!prefix) {
+      onChange({ ...value, item_id: "" });
+      return;
+    }
+    // Find the smallest unused numeric suffix for this prefix
+    const pattern = new RegExp(`^${prefix}_(\\d+)$`);
+    const used = existingIds
+      .map((id) => pattern.exec(id.toLowerCase())?.[1])
+      .filter(Boolean)
+      .map(Number);
+    let n = 1;
+    while (used.includes(n)) n++;
+    const newId = `${prefix}_${String(n).padStart(2, "0")}`;
+    const def = FURNITURE_DEFAULTS[prefix];
+    onChange({ ...value, item_id: newId, ...(def ?? {}) });
+  }
+
   return (
     <div className="border border-gray-700 rounded p-3 space-y-2 bg-gray-900/30">
+      {/* Furniture type dropdown grouped by category */}
       <div>
-        <label className={labelCls}>Item ID</label>
-        <input
-          className={inputCls}
-          type="text"
-          placeholder="e.g. sofa_01"
-          value={value.item_id}
+        <label className={labelCls}>Furniture Type</label>
+        <select
+          className={`${inputCls} cursor-pointer`}
+          value={selectedPrefix}
           // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
-          onChange={(e) => set("item_id", e.target.value)}
-        />
+          onChange={(e) => handlePrefixChange(e.target.value)}
+        >
+          <option value="">— select furniture type —</option>
+          {FURNITURE_OPTIONS.map((group) => (
+            <optgroup key={group.folder} label={group.categoryLabel}>
+              {group.items.map((item) => (
+                <option key={item.prefix} value={item.prefix}>
+                  {item.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
       </div>
+
+      {/* Auto-generated item ID badge */}
+      {value.item_id && (
+        <div className="flex items-center gap-1.5 py-0.5">
+          <span className="text-xs text-gray-600">ID:</span>
+          <span className="font-mono text-xs text-blue-400 bg-blue-950/40 border border-blue-900/40 px-2 py-0.5 rounded">
+            {value.item_id}
+          </span>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-2">
         {(["w", "l", "h"] as const).map((k) => (
@@ -192,7 +231,7 @@ interface ManifestFormProps {
 export function ManifestForm({ onSolve, loading }: ManifestFormProps) {
   const [truck, setTruck]   = useState<TruckSpec>(DEFAULT_TRUCK);
   const [stops, setStops]   = useState<DeliveryStop[]>(DEFAULT_STOPS);
-  const [items, setItems]   = useState<FurnitureItem[]>(DEFAULT_ITEMS);
+  const [items, setItems]   = useState<FurnitureItem[]>([]);
   const [draft, setDraft]   = useState<FurnitureItem>(blankItem());
   const [showAdd, setShowAdd]   = useState(false);
   const [itemError, setItemError] = useState<string | null>(null);
@@ -223,7 +262,7 @@ export function ManifestForm({ onSolve, loading }: ManifestFormProps) {
   function commitAdd() {
     setItemError(null);
     if (!draft.item_id.trim())
-      return setItemError("Item ID is required.");
+      return setItemError("Select a furniture type.");
     if (items.some((it) => it.item_id === draft.item_id.trim()))
       return setItemError("Item ID must be unique.");
     if (draft.w <= 0 || draft.l <= 0 || draft.h <= 0)
@@ -389,6 +428,7 @@ export function ManifestForm({ onSolve, loading }: ManifestFormProps) {
           <AddItemForm
             value={draft}
             stops={stops}
+            existingIds={items.map((it) => it.item_id)}
             error={itemError}
             onChange={setDraft}
             onConfirm={commitAdd}
