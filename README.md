@@ -103,11 +103,12 @@ python -m pytest tests/ -v
 
 - Never commit your `venv/` or `.venv/` folder.
 - Never commit `.env` — copy `.env.example` and fill in your values.
-- **Before every commit and push**, run these two slash commands inside Claude Code:
-  - `/check-git-push` — runs lint, tests, secret scan, conflict markers, and large-file
-    checks; generates a ready-to-copy conventional commit message.
-  - `/update-changelog` — classifies new commits, updates `CHANGELOG.md`, and proposes
-    the next semver tag. Run this when closing a sprint or tagging a release.
-- Both commands are defined in `.claude/commands/` and work identically on Windows and
-  macOS. If Claude Code is not open, ask the optimization engineer to run them before
-  the PR is merged.
+- **Before every commit and push**, run the `/ship` slash command inside Claude Code:
+  - `/ship` (commit mode) — runs lint, tests, secret scan, conflict markers, and
+    large-file checks; generates a ready-to-copy conventional commit message.
+  - `/ship release` (release mode) — does everything above plus classifies new
+    commits, updates `CHANGELOG.md`, and proposes the next semver tag. Use this when
+    closing a sprint or tagging a release.
+- The command is defined in `.claude/commands/ship.md` and works identically on
+  Windows and macOS. If Claude Code is not open, ask the optimization engineer to
+  run it before the PR is merged.

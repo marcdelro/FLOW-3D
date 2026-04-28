@@ -15,6 +15,7 @@ scratch_*.py
 # Gurobi
 gurobi.log
 *.rlp
+gurobi.lic
 
 # Node
 node_modules/

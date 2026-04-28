@@ -1,0 +1,53 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      REDIS_URL: redis://redis:6379
+      USE_MOCK_SOLVER: "False"
+      SOLVER_THRESHOLD: "20"
+    volumes:
+      - ./backend:/app
+      - ./docs:/docs
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  celery:
+    build: ./backend
+    command: celery -A worker.celery_app worker --loglevel=info --pool=solo
+    environment:
+      REDIS_URL: redis://redis:6379
+      USE_MOCK_SOLVER: "False"
+      SOLVER_THRESHOLD: "20"
+    volumes:
+      - ./backend:/app
+      - ./docs:/docs
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_USE_MOCK: "false"
+      VITE_API_URL: http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
