@@ -12,7 +12,7 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
-## Sprint 5 — 2026-04-28 · Unified Pre-Push Gate and Docker Compose Dev Pipeline
+## Sprint 6 — 2026-04-28 · Unified Pre-Push Gate and Docker Compose Dev Pipeline
 
 **Goal:** Consolidate the two-step pre-push gate into a single `/ship` slash
 command with a mode flag, and containerize the full live pipeline
@@ -59,6 +59,61 @@ workflow so members no longer juggle four terminals.
 - `.claude/commands/check-git-push.md`: Superseded by `/ship`
   (commit mode).
 - `.claude/commands/update-changelog.md`: Superseded by `/ship release`.
+
+---
+
+## Sprint 5 — 2026-04-28 · 3D Furniture Models, Animate Mode, and Manifest UX
+
+**Goal:** Render ShapeNetSem 3D furniture meshes in the loading viewer, add LIFO
+animate-mode playback, replace the free-text item input with a structured furniture
+dropdown, and provide one-click JSON plan export.
+
+### Added
+
+**Frontend**
+- `frontend/src/data/modelCatalog.ts`: New module — exports `FURNITURE_OPTIONS`
+  (grouped dropdown data for all 8 furniture categories), `FURNITURE_DEFAULTS`
+  (auto-fills `w_i`, `l_i`, `h_i`, `weight_kg`, and `side_up` per furniture prefix),
+  and `resolveModelPath()` (maps `item_id` prefix → ShapeNetSem OBJ path under
+  `/models/`; numeric suffix cycles through the available model files for each category).
+- `frontend/public/models/`: 41 ShapeNetSem OBJ mesh files across 8 categories
+  (Bed, Bookshelf, Chair, Desk, Refrigerator, Sofa\_Couch, Table, Wardrobe\_Cabinet);
+  served statically by Vite and the production build at `/models/<Category>/<id>.obj`.
+- `frontend/src/components/TruckViewer.tsx`: `"▶ Animate"` view mode — packed items
+  sorted by descending `stop_id` (LIFO load order) and revealed one at a time via
+  `animStep` / `isPlaying` / `animSpeed` state machine and `setTimeout` playback loop;
+  most-recently-placed item highlighted with a blue (`0x60a5fa`) edge outline and full
+  opacity while older items dim to 50 %; playback controls bar with ⏮⏪▶⏩⏭, a
+  progress slider, step counter, and Slow / Normal / Fast speed selector.
+  Thesis ref: section 3.5.2.1 E — Route-Sequenced LIFO (animate sort by `stop_id` desc)
+- `frontend/src/components/Dashboard.tsx`: `downloadPlan()` function and "Export JSON"
+  button in the Performance section header; triggers a browser file-save of the full
+  `PackingPlan` as `flow3d_{solver_mode}_{timestamp}.json`.
+
+### Changed
+
+**Frontend**
+- `frontend/src/components/TruckViewer.tsx`: `OBJLoader` integration — loads
+  ShapeNetSem OBJ models into a persistent `modelCacheRef` (Map keyed by path); each
+  loaded `THREE.Group` is deep-cloned per placement and scaled by `fitModelToBox()` to
+  exact `w_i × h_i × l_i` dimensions before being positioned at the placement centre
+  `(cx, cy, cz)`; falls back to `BoxGeometry` when a model is unavailable or the
+  `item_id` prefix is unrecognised.
+- `frontend/src/components/ManifestForm.tsx`: Replace free-text `item_id` input with
+  a categorized `<optgroup>` dropdown; selecting a furniture type auto-generates the
+  smallest unused numeric suffix ID (e.g. `sofa_02`) and pre-fills `w_i`, `l_i`, `h_i`,
+  `weight_kg`, and `side_up` from `FURNITURE_DEFAULTS`; cargo item list now starts
+  empty — items are added exclusively through user action.
+
+### Fixed
+
+**Frontend**
+- `frontend/src/components/TruckViewer.tsx`: Fix React 18 Strict Mode double-invoke
+  bug — the `cancelled` cleanup flag prevented OBJ models from ever loading by marking
+  all paths as in-flight (`null`) during the first effect run and then returning early on
+  the remount because the cache already contained those entries; cleanup now deletes
+  in-flight (`null`) cache entries so the remounted effect starts a fresh
+  `OBJLoader.loadAsync` request.
 
 ---
 
@@ -150,6 +205,11 @@ demonstrated outside of mock mode.
   error pointing at the Celery worker as the likely culprit when the deadline
   passes. Previous behaviour spun the UI forever if the broker stalled.
 
+**Config & Tooling**
+- Fix unused TypeScript and Python imports flagged by `tsc` and `ruff`; add
+  `.env.local` to `.gitignore` so Vite's local environment override file is not
+  accidentally staged.
+
 ---
 
 ## Sprint 3 — 2026-04-25 · FFD Heuristic, Post-Solve Safety Net, and Template Method
@@ -185,9 +245,19 @@ full pipeline (FFD → ConstraintValidator → PackingPlan) through the smoke te
   path — LIFO pre-sort ordering, end-to-end `_solve()` produces a plan that
   passes `validate_all()`, oversized items land in `unplaced_items`, and
   `side_up` items keep `h_i` along the truck z-axis (orientation in `{0, 1}`).
+- `backend/tests/test_integration_solve.py`: End-to-end integration test for
+  the full solver pipeline (ILP and FFD paths, ConstraintValidator pass);
+  automatically skipped when Redis is unreachable on localhost:6379 (skip
+  logic added to `conftest.py` in Sprint 4).
 
 ### Changed
 
+**Backend**
+- `backend/solver/ilp_solver.py`: Expose Gurobi solver parameters (time limit,
+  MIP gap) via application settings; tighten decision-variable upper bounds for
+  `x_i`, `y_i`, `z_i` to `W`, `L`, `H` respectively, reducing the Branch-and-Bound
+  search space.
+  Thesis ref: section 3.5.2.1 D — variable domains
 - `backend/solver/ilp_solver.py`, `backend/solver/ffd_solver.py`: Rename
   the override `solve()` → `_solve()` to match the new template-method
   contract in `AbstractSolver`. Public `solve()` is unchanged from the
