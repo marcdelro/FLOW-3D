@@ -1,4 +1,4 @@
-import { mockPlan, mockPlans } from "../data/mockPlan";
+import { buildPlansFromRequest } from "../data/planBuilder";
 import type { PackingPlan, SolveRequest } from "../types";
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
@@ -18,7 +18,7 @@ export async function fetchSolutions(
 ): Promise<PackingPlan[]> {
   if (USE_MOCK) {
     await delay(MOCK_DELAY_MS);
-    return mockPlans;
+    return buildPlansFromRequest(request);
   }
   // Real API: 3 parallel requests — backend may return identical plans for
   // deterministic solvers; UI still handles all three correctly.
@@ -34,7 +34,7 @@ export async function fetchSolution(
 ): Promise<PackingPlan> {
   if (USE_MOCK) {
     await delay(MOCK_DELAY_MS);
-    return mockPlan;
+    return buildPlansFromRequest(request)[0];
   }
 
   const solveResponse = await fetch(`${API_URL}/api/solve`, {
