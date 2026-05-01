@@ -10,6 +10,45 @@ until the sprint is closed, then move to a dated sprint block.
 
 > Add new entries here as you work. Move to a sprint block when the sprint ends.
 
+### Added
+
+**Frontend**
+- `frontend/src/App.tsx`: Add conditional classes for every hardcoded dark element
+  (logo text, version badge, tabs, `V_util` badge, error banner, loading text, empty
+  state); inline `EmptyState` JSX directly in `App` so the `lightMode` state is in
+  scope; replace emoji `🌙/☀️` toggle with a borderless SVG moon + sun pill where the
+  active icon renders at full opacity and the inactive one at 35 %; thread `lightMode`
+  prop to `PlanSelector` and `Dashboard`.
+- `frontend/src/components/Dashboard.tsx`: Add `lightMode` prop to `DashboardProps`,
+  `SectionHeader`, and `StatCard`; make every bg/border/text Tailwind class conditional
+  on `lightMode`; extend per-stop colour palette with `bgLight` and `borderLight`
+  variants for legible stop cards on white backgrounds; redesign LIFO load-sequence
+  section with numbered step-counter cards (`w-10 h-10 rounded-xl`), a contextual
+  instruction card ("Loading order — rear to door"), and an annotated REAR → DOOR
+  gradient bar — all sized for 50+ readability.
+  Thesis ref: section 3.5.2.1 E — Route-Sequenced LIFO (step counter reflects `stop_id` load order)
+- `frontend/src/components/PlanSelector.tsx`: Add `lightMode` prop; make card
+  background, border, hover state, solver mode badge, progress bar track, and all
+  label/value text classes conditional on `lightMode`.
+- `frontend/src/components/ManifestForm.tsx`: Update theme helpers
+  (`bg2 → slate-100`, `muted → text-gray-700` in light mode); add `lightMode` prop
+  to `AddItemForm`; make the form container and cancel button theme-aware; add
+  `1.5px solid rgba(0,0,0,0.18)` outline to stop badges in light mode for contrast;
+  fix table row hover (`hover:bg-slate-100` light / `hover:bg-gray-800/30` dark) and
+  dashed "Add Item" button hover.
+- `frontend/src/data/modelCatalog.ts`: Add `CATALOG_FOLDER_MAP` — maps 25 virtual
+  catalog keys (e.g. `Sofa`, `Dining_Table`, `Bookcase`) to their physical
+  `/public/models/` subdirectory, enabling per-prefix model partitions without
+  duplicating files; split the 9-key shared CATALOG into 25 non-overlapping per-prefix
+  keys, eliminating variant semantic mismatch (e.g. "Sofa" picker no longer
+  shows "Sectional" OBJ variants); update `CATALOG_AXIS_UP` and `PREFIX_TO_FOLDER`
+  to match the new key set.
+- `frontend/public/models/Bunk_Bed/`: Add second loft-bed OBJ model
+  (`1101146651cd32a1bd09c0f277d16187`, 96 KB) sourced from the furniture_extracted
+  ShapeNetSem dataset (original tag: "LoftBed"); registered in `CATALOG["Bunk_Bed"]`
+  with label "Loft Poster", giving the Bunk Bed picker two selectable variants.
+- `frontend/src/data/planBuilder.ts`: Add mock plan builder for `VITE_USE_MOCK` mode.
+
 ---
 
 ## Sprint 5 — 2026-04-28 · 3D Furniture Models, Animate Mode, and Manifest UX
