@@ -1,4 +1,4 @@
-import mockPlanJson from "../../../docs/mockPlan.json";
+import mockPlanJson from "./mockPlan.json";
 import type { PackingPlan } from "../types";
 
 const RATIONALES = {

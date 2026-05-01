@@ -36,6 +36,14 @@ const blankItem = (): FurnitureItem => ({
   item_id: "", w: 800, l: 600, h: 1000, weight_kg: 30, stop_id: 1, side_up: false,
 });
 
+const DEFAULT_ITEMS: FurnitureItem[] = [
+  { item_id: "wardrobe_01",     w: 1200, l: 600, h: 1800, weight_kg: 90, stop_id: 3, side_up: true  },
+  { item_id: "desk_01",         w: 1200, l: 600, h: 750,  weight_kg: 40, stop_id: 3, side_up: false },
+  { item_id: "dining_table_01", w: 1500, l: 900, h: 750,  weight_kg: 50, stop_id: 2, side_up: false },
+  { item_id: "sofa_01",         w: 2000, l: 900, h: 850,  weight_kg: 80, stop_id: 1, side_up: false },
+  { item_id: "bookshelf_01",    w: 800,  l: 300, h: 1800, weight_kg: 30, stop_id: 1, side_up: true  },
+];
+
 // ── Shared micro-styles ────────────────────────────────────────────────────────
 const inputCls =
   "w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-100 " +
@@ -231,7 +239,7 @@ interface ManifestFormProps {
 export function ManifestForm({ onSolve, loading }: ManifestFormProps) {
   const [truck, setTruck]   = useState<TruckSpec>(DEFAULT_TRUCK);
   const [stops, setStops]   = useState<DeliveryStop[]>(DEFAULT_STOPS);
-  const [items, setItems]   = useState<FurnitureItem[]>([]);
+  const [items, setItems]   = useState<FurnitureItem[]>(DEFAULT_ITEMS);
   const [draft, setDraft]   = useState<FurnitureItem>(blankItem());
   const [showAdd, setShowAdd]   = useState(false);
   const [itemError, setItemError] = useState<string | null>(null);
