@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type {
   DeliveryStop,
@@ -12,6 +12,22 @@ import {
   FURNITURE_OPTIONS,
   getCatalogVariants,
 } from "../data/modelCatalog";
+import { ModelPreview } from "./ModelPreview";
+import {
+  downloadManifestTemplate,
+  importManifestFile,
+} from "../data/manifestImport";
+
+/** Strip the trailing "_NN" from an item_id. Used by the edit flow. */
+function prefixOf(item_id: string): string | undefined {
+  const m = item_id.toLowerCase().match(/^(.+)_(\d+)$/);
+  return m ? m[1] : undefined;
+}
+
+/** Pad an integer to a 2-digit zero-prefixed string ("3" → "03"). */
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
 
 // ── Palette (mirrors tailwind.config stop colours) ────────────────────────────
 const STOP_BADGE: Record<number, string> = {
@@ -35,6 +51,7 @@ const DEFAULT_STOPS: DeliveryStop[] = [
 
 const blankItem = (): FurnitureItem => ({
   item_id: "", w: 800, l: 600, h: 1000, weight_kg: 30, stop_id: 1, side_up: false,
+  boxed: false, fragile: false,
 });
 
 const DEFAULT_ITEMS: FurnitureItem[] = [
@@ -88,6 +105,8 @@ function AddItemForm({
   stops,
   existingIds,
   error,
+  quantity,
+  onQuantityChange,
   onChange,
   onConfirm,
   onCancel,
@@ -96,11 +115,14 @@ function AddItemForm({
   inputCls,
   labelCls,
   lightMode,
+  isEditing,
 }: {
   value: FurnitureItem;
   stops: DeliveryStop[];
   existingIds: string[];
   error: string | null;
+  quantity: number;
+  onQuantityChange: (n: number) => void;
   onChange: (v: FurnitureItem) => void;
   onConfirm: () => void;
   onCancel: () => void;
@@ -109,8 +131,11 @@ function AddItemForm({
   inputCls: string;
   labelCls: string;
   lightMode?: boolean;
+  isEditing: boolean;
 }) {
   const [selectedPrefix, setSelectedPrefix] = useState(initialPrefix ?? "");
+  /** Variant index that the user is currently hovering over — drives the preview. */
+  const [hoverVariant, setHoverVariant] = useState<number | null>(null);
 
   function set<K extends keyof FurnitureItem>(k: K, v: FurnitureItem[K]) {
     onChange({ ...value, [k]: v });
@@ -129,12 +154,15 @@ function AddItemForm({
       .map(Number);
     let n = 1;
     while (used.includes(n)) n++;
-    const newId = `${prefix}_${String(n).padStart(2, "0")}`;
+    const newId = `${prefix}_${pad2(n)}`;
     const def = FURNITURE_DEFAULTS[prefix];
     onChange({ ...value, item_id: newId, model_variant: undefined, ...(def ?? {}) });
   }
 
   const variants = getCatalogVariants(selectedPrefix);
+  /** Variant rendered in the preview — hover wins, selection second, first variant last. */
+  const previewVariant =
+    hoverVariant ?? value.model_variant ?? (variants.length > 0 ? 0 : undefined);
 
   return (
     <div className={`border rounded-lg p-4 space-y-3 ${lightMode ? "border-gray-300 bg-slate-50" : "border-gray-700 bg-gray-900/30"}`}>
@@ -171,6 +199,28 @@ function AddItemForm({
         </div>
       )}
 
+      {/* Inline 3D preview — shows the hovered/selected variant as a turntable thumbnail */}
+      {selectedPrefix && previewVariant !== undefined && (
+        <div className="flex items-center gap-3">
+          <ModelPreview
+            prefix={selectedPrefix}
+            variantIdx={previewVariant}
+            size={140}
+            lightMode={lightMode}
+          />
+          <div className="text-sm flex-1">
+            <div className={`font-semibold mb-1 ${lightMode ? "text-gray-800" : "text-gray-200"}`}>
+              Preview
+            </div>
+            <p className={`leading-relaxed ${lightMode ? "text-gray-600" : "text-gray-400"}`}>
+              {variants.length > 1
+                ? "Hover a variant below to preview it. Click to select."
+                : "Selected model — appears in the 3D viewer once packed."}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Model variant picker — only shown when there is a real choice */}
       {variants.length > 1 && (
         <div>
@@ -183,10 +233,16 @@ function AddItemForm({
                   key={v.index}
                   type="button"
                   onClick={() => onChange({ ...value, model_variant: v.index })}
+                  onMouseEnter={() => setHoverVariant(v.index)}
+                  onMouseLeave={() => setHoverVariant(null)}
                   className={`px-3 py-2 text-sm rounded-md border transition-colors ${
                     active
-                      ? "border-blue-500 bg-blue-950/40 text-blue-300"
-                      : "border-gray-700 bg-gray-900 text-gray-400 hover:border-gray-600"
+                      ? lightMode
+                        ? "border-blue-500 bg-blue-100 text-blue-700"
+                        : "border-blue-500 bg-blue-950 text-blue-300"
+                      : lightMode
+                        ? "border-gray-300 bg-white text-gray-700 hover:border-gray-400"
+                        : "border-gray-700 bg-gray-900 text-gray-300 hover:border-gray-600"
                   }`}
                 >
                   {v.label}
@@ -254,6 +310,65 @@ function AddItemForm({
         </div>
       </div>
 
+      {/* Boxed / Fragile / Quantity row */}
+      <div className="grid grid-cols-3 gap-3 items-end">
+        <div className="flex items-center gap-2 pb-0.5">
+          <input
+            id="new_boxed"
+            type="checkbox"
+            className="accent-blue-500 cursor-pointer"
+            checked={!!value.boxed}
+            onChange={(e) => set("boxed", e.target.checked)}
+          />
+          <label htmlFor="new_boxed" className={`${labelCls} mb-0 cursor-pointer`}>
+            Boxed
+          </label>
+        </div>
+        <div className="flex items-center gap-2 pb-0.5">
+          <input
+            id="new_fragile"
+            type="checkbox"
+            className="accent-amber-500 cursor-pointer"
+            checked={!!value.fragile}
+            onChange={(e) => set("fragile", e.target.checked)}
+          />
+          <label htmlFor="new_fragile" className={`${labelCls} mb-0 cursor-pointer`}>
+            Fragile
+          </label>
+        </div>
+        <div>
+          <label className={labelCls}>Quantity</label>
+          <input
+            className={inputCls}
+            type="number"
+            min={1}
+            max={99}
+            disabled={isEditing}
+            title={isEditing ? "Quantity only applies when adding new items." : "Number of identical items to add."}
+            value={quantity}
+            onChange={(e) =>
+              onQuantityChange(Math.max(1, Math.min(99, parseInt(e.target.value) || 1)))
+            }
+          />
+        </div>
+      </div>
+
+      {/* Fragile handling notice — only shown when checked */}
+      {value.fragile && (
+        <div className={`rounded-md border p-2.5 text-xs leading-relaxed ${
+          lightMode
+            ? "border-amber-300 bg-amber-50 text-amber-800"
+            : "border-amber-700 bg-amber-950 text-amber-200"
+        }`}>
+          <div className="font-bold mb-1 flex items-center gap-1.5">
+            <span>⚠</span> Fragile handling required
+          </div>
+          Wrap with moving blankets, foam, or bubble wrap. Secure corners with
+          cardboard and use heavy-duty straps. The packing solver will not stack
+          other items against this one.
+        </div>
+      )}
+
       {error && <p className="text-sm text-red-400">{error}</p>}
 
       <div className="flex gap-2 pt-1">
@@ -303,9 +418,48 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
   const [stops, setStops]   = useState<DeliveryStop[]>(DEFAULT_STOPS);
   const [items, setItems]   = useState<FurnitureItem[]>(DEFAULT_ITEMS);
   const [draft, setDraft]   = useState<FurnitureItem>(blankItem());
-  const [showAdd, setShowAdd]     = useState(false);
+  const [draftQty, setDraftQty]     = useState<number>(1);
+  const [showAdd, setShowAdd]       = useState(false);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
-  const [itemError, setItemError] = useState<string | null>(null);
+  const [itemError, setItemError]   = useState<string | null>(null);
+
+  // Import flow — file input, drag-overlay, last-import digest
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [importMessage, setImportMessage] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  async function handleFile(file: File) {
+    setImportMessage(null);
+    try {
+      const result = await importManifestFile(file);
+      if (result.truck) setTruck(result.truck);
+      if (result.stops && result.stops.length > 0) setStops(result.stops);
+      if (result.items) setItems(result.items);
+
+      const parts: string[] = [];
+      if (result.truck) parts.push("truck");
+      if (result.stops?.length) parts.push(`${result.stops.length} stop${result.stops.length === 1 ? "" : "s"}`);
+      if (result.items?.length) parts.push(`${result.items.length} item${result.items.length === 1 ? "" : "s"}`);
+      const digest = parts.length ? parts.join(", ") : "no recognised data";
+      const warn = result.warnings.length ? ` (${result.warnings.length} warning${result.warnings.length === 1 ? "" : "s"})` : "";
+      setImportMessage({ kind: "ok", text: `Imported ${digest} from ${file.name}${warn}.` });
+    } catch (e) {
+      setImportMessage({ kind: "err", text: (e as Error).message });
+    }
+  }
+
+  function onFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (f) void handleFile(f);
+    e.target.value = "";
+  }
+
+  function onDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setIsDragging(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f) void handleFile(f);
+  }
 
   const truckVol = (truck.W * truck.L * truck.H) / 1e9;
   const itemsVol = items.reduce((s, it) => s + (it.w * it.l * it.h) / 1e9, 0);
@@ -340,24 +494,56 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
   // ── Item helpers ──
   function commitAdd() {
     setItemError(null);
-    if (!draft.item_id.trim())
+    const baseId = draft.item_id.trim();
+    if (!baseId)
       return setItemError("Select a furniture type.");
-    if (items.some((it, j) => it.item_id === draft.item_id.trim() && j !== editingIdx))
-      return setItemError("Item ID must be unique.");
     if (draft.w <= 0 || draft.l <= 0 || draft.h <= 0)
       return setItemError("All dimensions must be > 0.");
     if (!stops.some((s) => s.stop_id === draft.stop_id))
       return setItemError("Stop ID does not exist in the stop list.");
 
+    // ── Edit path: single update, quantity is irrelevant ──────────────────
     if (editingIdx !== null) {
+      if (items.some((it, j) => it.item_id === baseId && j !== editingIdx))
+        return setItemError("Item ID must be unique.");
       setItems((its) =>
-        its.map((it, j) => j === editingIdx ? { ...draft, item_id: draft.item_id.trim() } : it),
+        its.map((it, j) => j === editingIdx ? { ...draft, item_id: baseId } : it),
       );
       setEditingIdx(null);
-    } else {
-      setItems((its) => [...its, { ...draft, item_id: draft.item_id.trim() }]);
+      setDraft(blankItem());
+      setDraftQty(1);
+      setShowAdd(false);
+      return;
     }
+
+    // ── Add path: replicate the draft `draftQty` times, auto-incrementing
+    // the trailing _NN suffix so each clone has a unique item_id.
+    const qty = Math.max(1, Math.min(99, draftQty));
+
+    // Either append to an existing prefix (e.g. "chair_01" → next free chair_NN)
+    // or, if the user typed a free-form id without a numeric suffix, just
+    // append "_01", "_02", … starting from 1.
+    const m = baseId.match(/^(.+)_(\d+)$/);
+    const prefix = m ? m[1] : baseId;
+
+    const usedSuffixes = new Set<number>();
+    for (const it of items) {
+      const mm = it.item_id.toLowerCase().match(new RegExp(`^${prefix.toLowerCase()}_(\\d+)$`));
+      if (mm) usedSuffixes.add(Number(mm[1]));
+    }
+
+    const generated: FurnitureItem[] = [];
+    let n = m ? Number(m[2]) : 1;
+    while (generated.length < qty) {
+      while (usedSuffixes.has(n)) n++;
+      usedSuffixes.add(n);
+      generated.push({ ...draft, item_id: `${prefix}_${pad2(n)}` });
+      n++;
+    }
+
+    setItems((its) => [...its, ...generated]);
     setDraft(blankItem());
+    setDraftQty(1);
     setShowAdd(false);
   }
 
@@ -366,17 +552,84 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
     setEditingIdx(null);
     setItemError(null);
     setDraft(blankItem());
+    setDraftQty(1);
   }
 
   function startEdit(idx: number) {
     setEditingIdx(idx);
     setDraft({ ...items[idx] });
+    setDraftQty(1);
     setShowAdd(true);
     setItemError(null);
   }
 
   return (
-    <div className={`flex flex-col pb-4 ${lightMode ? "bg-slate-50" : ""}`}>
+    <div
+      className={`relative flex flex-col pb-4 ${lightMode ? "bg-slate-50" : ""}`}
+      onDragOver={(e) => { e.preventDefault(); if (!isDragging) setIsDragging(true); }}
+      onDragLeave={(e) => {
+        // only clear when leaving the container itself (not a child)
+        if (e.currentTarget === e.target) setIsDragging(false);
+      }}
+      onDrop={onDrop}
+    >
+      {/* Drag-and-drop overlay */}
+      {isDragging && (
+        <div className={`absolute inset-0 z-30 flex flex-col items-center justify-center pointer-events-none border-2 border-dashed rounded-lg ${
+          lightMode
+            ? "bg-blue-50/95 border-blue-400 text-blue-700"
+            : "bg-blue-950/95 border-blue-500 text-blue-200"
+        }`}>
+          <div className="text-2xl font-bold mb-1">Drop manifest file</div>
+          <div className="text-sm opacity-80">.xlsx · .xls · .json</div>
+        </div>
+      )}
+
+      {/* ── Import bar ──────────────────────────────────────────────────────── */}
+      <div className={`flex items-center gap-2 px-4 py-3 border-b ${border} ${bg2}`}>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx,.xls,.json,application/json,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          className="hidden"
+          onChange={onFilePicked}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-md border transition-colors ${
+            lightMode
+              ? "border-gray-300 bg-white text-gray-700 hover:bg-gray-100 hover:border-gray-400"
+              : "border-gray-600 bg-gray-900 text-gray-200 hover:bg-gray-800 hover:border-gray-500"
+          }`}
+          title="Import a .xlsx, .xls, or .json manifest"
+        >
+          <span>↑</span> Import Manifest
+        </button>
+        <button
+          type="button"
+          onClick={downloadManifestTemplate}
+          className={`text-sm px-2.5 py-1.5 rounded-md transition-colors ${
+            lightMode
+              ? "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+              : "text-gray-400 hover:text-gray-100 hover:bg-gray-800"
+          }`}
+          title="Download a starter .xlsx template"
+        >
+          Template
+        </button>
+        <span className={`ml-auto text-xs ${muted}`}>or drop a file here</span>
+      </div>
+      {importMessage && (
+        <div className={`px-4 py-2 text-sm border-b ${border} ${
+          importMessage.kind === "ok"
+            ? lightMode ? "bg-green-50 text-green-800" : "bg-green-950 text-green-300"
+            : lightMode ? "bg-red-50 text-red-800"   : "bg-red-950 text-red-300"
+        }`}>
+          {importMessage.text}
+        </div>
+      )}
+
       {/* ── Truck Spec ─────────────────────────────────────────────────────── */}
       <Section title="Truck Specification" bg2={bg2} border={border} muted={muted}>
         <div className="grid grid-cols-2 gap-3 mb-3">
@@ -501,7 +754,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
                     W×L×H
                   </th>
                   <th className="text-center px-1 py-2 font-semibold text-sm w-8">Stp</th>
-                  <th className="text-center px-1 py-2 font-semibold text-sm w-6">↑</th>
+                  <th className="text-center px-1 py-2 font-semibold text-sm w-12" title="Side-up · Boxed · Fragile">Flags</th>
                   <th className="w-12" />
                 </tr>
               </thead>
@@ -529,8 +782,36 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
                         {item.stop_id}
                       </span>
                     </td>
-                    <td className={`px-1 py-2 text-center ${muted} text-sm`}>
-                      {item.side_up && <span title="Upright only">↑</span>}
+                    <td className={`px-1 py-2 text-center text-sm`}>
+                      <div className="flex items-center justify-center gap-1">
+                        {item.side_up && (
+                          <span className={muted} title="Upright only">↑</span>
+                        )}
+                        {item.boxed && (
+                          <span
+                            className={`inline-block text-[10px] font-bold px-1 rounded ${
+                              lightMode
+                                ? "bg-blue-100 text-blue-700 border border-blue-300"
+                                : "bg-blue-950 text-blue-300 border border-blue-800"
+                            }`}
+                            title="Boxed (renders cardboard wrapper in viewer)"
+                          >
+                            BOX
+                          </span>
+                        )}
+                        {item.fragile && (
+                          <span
+                            className={`inline-block text-[10px] font-bold px-1 rounded ${
+                              lightMode
+                                ? "bg-amber-100 text-amber-700 border border-amber-300"
+                                : "bg-amber-950 text-amber-300 border border-amber-800"
+                            }`}
+                            title="Fragile — solver will not stack against this item"
+                          >
+                            FRG
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="pr-2 text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -566,14 +847,23 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
             stops={stops}
             existingIds={items.filter((_, j) => j !== editingIdx).map((it) => it.item_id)}
             error={itemError}
+            quantity={draftQty}
+            onQuantityChange={setDraftQty}
             onChange={setDraft}
             onConfirm={commitAdd}
             onCancel={cancelAdd}
             initialPrefix={editingIdx !== null ? prefixOf(items[editingIdx].item_id) : undefined}
-            confirmLabel={editingIdx !== null ? "Save" : "Add"}
+            confirmLabel={
+              editingIdx !== null
+                ? "Save"
+                : draftQty > 1
+                  ? `Add ${draftQty}`
+                  : "Add"
+            }
             inputCls={inputCls}
             labelCls={labelCls}
             lightMode={lightMode}
+            isEditing={editingIdx !== null}
           />
         ) : stops.length > 0 ? (
           <button

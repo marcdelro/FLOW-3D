@@ -10,44 +10,117 @@ until the sprint is closed, then move to a dated sprint block.
 
 > Add new entries here as you work. Move to a sprint block when the sprint ends.
 
+---
+
+## Sprint 9 — 2026-05-01 · Light Mode, Manifest Import, Model Preview, and ILP Floor Lock
+
+**Goal:** Land full light-mode support across the dashboard, ship Excel/JSON
+manifest import with quantity + boxed/fragile item flags, add a hover 3D
+preview to the AddItem form, harden the dev pipeline (Postgres + Vite polling),
+and lock the ILP solver to single-layer ground packing so items no longer
+float inside the truck.
+
 ### Added
 
+**Backend**
+- `backend/api/models.py`: Add `model_variant: int | None`, `boxed: bool`, and
+  `fragile: bool` fields to `FurnitureItem`. `boxed` triggers a cardboard wrapper
+  in the viewer; `fragile` is reserved for the no-stack support disjunction
+  scheduled with the proper 3DBPP support constraint.
+
 **Frontend**
-- `frontend/src/App.tsx`: Add conditional classes for every hardcoded dark element
-  (logo text, version badge, tabs, `V_util` badge, error banner, loading text, empty
-  state); inline `EmptyState` JSX directly in `App` so the `lightMode` state is in
-  scope; replace emoji `🌙/☀️` toggle with a borderless SVG moon + sun pill where the
-  active icon renders at full opacity and the inactive one at 35 %; thread `lightMode`
-  prop to `PlanSelector` and `Dashboard`.
-- `frontend/src/components/Dashboard.tsx`: Add `lightMode` prop to `DashboardProps`,
-  `SectionHeader`, and `StatCard`; make every bg/border/text Tailwind class conditional
-  on `lightMode`; extend per-stop colour palette with `bgLight` and `borderLight`
-  variants for legible stop cards on white backgrounds; redesign LIFO load-sequence
-  section with numbered step-counter cards (`w-10 h-10 rounded-xl`), a contextual
-  instruction card ("Loading order — rear to door"), and an annotated REAR → DOOR
-  gradient bar — all sized for 50+ readability.
+- `frontend/src/components/ModelPreview.tsx`: New mini Three.js turntable
+  (140-200 px) for the AddItem form. Resolves `(prefix, variantIdx)` against
+  `resolvePreviewMeta()`, loads the OBJ via `OBJLoader`, fits to a unit cube,
+  and rotates slowly. Auto-detects ShapeNetSem Z-up convention from the native
+  bounding box (`nSize.z >= nSize.y * 0.9`) and applies `-π/2` X rotation so
+  chairs, bookshelves, and wardrobes preview upright instead of on their side.
+  Module-level `previewCache: Map<string, THREE.Group | null>` shares loaded
+  groups across renders and caches load failures as `null`.
+- `frontend/src/data/manifestImport.ts`: New module — `importManifestFile(file)`
+  parses Excel (`.xlsx`/`.xls`) via `xlsx` SheetJS and JSON manifests into
+  `{ truck, stops, items }`; recognises sheets named `Truck`, `Stops`, `Items`.
+  `downloadManifestTemplate()` exports a 3-sheet Excel template for users.
+- `frontend/src/components/ManifestForm.tsx`: Drag-and-drop file overlay over
+  the manifest editor; "Import Manifest" + "Template" buttons; AddItem form
+  extended with quantity (auto-incrementing `_NN` suffix replication), boxed +
+  fragile checkboxes, and an inline `<ModelPreview>` thumbnail that switches
+  on hover/selection of furniture type and variant; items table renders BOX
+  and FRG badges; restored the missing `prefixOf()` helper used by the edit flow.
+- `frontend/src/types/index.ts`: Add optional `boxed?: boolean` and
+  `fragile?: boolean` on `FurnitureItem`, mirroring the backend Pydantic fields.
+- `frontend/src/components/TruckViewer.tsx`: Render a brown cardboard wrapper
+  (`0xc69c6d`) around `boxed` items and a red wireframe halo around `fragile`
+  items via a per-item `itemMeta: Map<item_id, {boxed, fragile}>` derived from
+  the new `items` prop. Tooltip shows BOXED / FRAGILE badges. Labels upgraded
+  to a 512×80 canvas with 34 px bold text on a rounded pill background and
+  110×22 sprite scale for legibility on both themes; all `/90` `/95` `/97`
+  `/98` `/99` opacity modifiers replaced with solid colours.
+- `frontend/src/components/Dashboard.tsx`: Add `STRATEGY_BADGE_LIGHT` palette
+  and thread `lightMode` into the previously-missed "Why This Plan"
+  `SectionHeader`; replace alpha-hex `STOP_STYLE` (`#F0997B0f` etc.) with
+  fully-opaque colours so the load-order legend and unplaced-items section
+  stay readable on white.
+- `frontend/src/data/modelCatalog.ts`: Export `resolvePreviewMeta(prefix,
+  variantIdx)` returning `{ path, axisUp }` for `ModelPreview`; mark
+  refrigerator/fridge defaults as `fragile: true`.
+- `frontend/src/App.tsx`: Add `solveItems` state and pass `items={solveItems}`
+  to `<TruckViewer>` so the viewer can read per-item `boxed` / `fragile`.
+- `frontend/src/App.tsx`: Add conditional classes for every hardcoded dark
+  element (logo text, version badge, tabs, `V_util` badge, error banner,
+  loading text, empty state); inline `EmptyState` so `lightMode` is in scope;
+  replace the emoji `🌙/☀️` toggle with a borderless SVG moon + sun pill where
+  the active icon renders at full opacity and the inactive one at 35 %; thread
+  `lightMode` to `PlanSelector` and `Dashboard`.
+- `frontend/src/components/Dashboard.tsx`: Add `lightMode` to `DashboardProps`,
+  `SectionHeader`, and `StatCard`; per-stop palette extended with `bgLight`
+  and `borderLight`; LIFO load-sequence redesigned with numbered step-counter
+  cards, a "Loading order — rear to door" instruction card, and an annotated
+  REAR → DOOR gradient bar.
   Thesis ref: section 3.5.2.1 E — Route-Sequenced LIFO (step counter reflects `stop_id` load order)
-- `frontend/src/components/PlanSelector.tsx`: Add `lightMode` prop; make card
-  background, border, hover state, solver mode badge, progress bar track, and all
-  label/value text classes conditional on `lightMode`.
+- `frontend/src/components/PlanSelector.tsx`: Add `lightMode`; card background,
+  border, hover state, solver-mode badge, progress-bar track, and all
+  label/value text classes are now theme-conditional.
 - `frontend/src/components/ManifestForm.tsx`: Update theme helpers
-  (`bg2 → slate-100`, `muted → text-gray-700` in light mode); add `lightMode` prop
-  to `AddItemForm`; make the form container and cancel button theme-aware; add
-  `1.5px solid rgba(0,0,0,0.18)` outline to stop badges in light mode for contrast;
-  fix table row hover (`hover:bg-slate-100` light / `hover:bg-gray-800/30` dark) and
-  dashed "Add Item" button hover.
-- `frontend/src/data/modelCatalog.ts`: Add `CATALOG_FOLDER_MAP` — maps 25 virtual
-  catalog keys (e.g. `Sofa`, `Dining_Table`, `Bookcase`) to their physical
-  `/public/models/` subdirectory, enabling per-prefix model partitions without
-  duplicating files; split the 9-key shared CATALOG into 25 non-overlapping per-prefix
-  keys, eliminating variant semantic mismatch (e.g. "Sofa" picker no longer
-  shows "Sectional" OBJ variants); update `CATALOG_AXIS_UP` and `PREFIX_TO_FOLDER`
-  to match the new key set.
+  (`bg2 → slate-100`, `muted → text-gray-700` in light mode); `lightMode` prop
+  on `AddItemForm`; `1.5 px solid rgba(0,0,0,0.18)` stop-badge outline in
+  light mode; fix table row hover (`hover:bg-slate-100` / `hover:bg-gray-800/30`).
+- `frontend/src/data/modelCatalog.ts`: Add `CATALOG_FOLDER_MAP` — maps 25
+  virtual catalog keys to their physical `/public/models/` subdirectory;
+  splits the 9-key shared CATALOG into 25 non-overlapping per-prefix keys,
+  eliminating variant semantic mismatch (the "Sofa" picker no longer shows
+  "Sectional" OBJ variants); `CATALOG_AXIS_UP` and `PREFIX_TO_FOLDER`
+  updated to match.
 - `frontend/public/models/Bunk_Bed/`: Add second loft-bed OBJ model
-  (`1101146651cd32a1bd09c0f277d16187`, 96 KB) sourced from the furniture_extracted
-  ShapeNetSem dataset (original tag: "LoftBed"); registered in `CATALOG["Bunk_Bed"]`
-  with label "Loft Poster", giving the Bunk Bed picker two selectable variants.
-- `frontend/src/data/planBuilder.ts`: Add mock plan builder for `VITE_USE_MOCK` mode.
+  (`1101146651cd32a1bd09c0f277d16187`, 96 KB) from the furniture_extracted
+  ShapeNetSem dataset (original tag: "LoftBed"); registered in
+  `CATALOG["Bunk_Bed"]` as "Loft Poster" — Bunk Bed picker now has two variants.
+- `frontend/src/data/planBuilder.ts`: Mock plan builder for `VITE_USE_MOCK` mode.
+
+**Config & Tooling**
+- `docker-compose.yml`: Add `db` service (`postgres:16-alpine`) with
+  `pg_isready` healthcheck and a `DATABASE_URL=postgresql://flow3d:flow3d@db/flow3d`
+  env var on both the `backend` and `celery` services; `depends_on` extended
+  with `db: service_healthy` so the API and worker start only after Postgres
+  accepts connections. Fixes the `psycopg2.OperationalError: Connection refused`
+  on `localhost:5432` that blocked live-mode bring-up.
+- `frontend/vite.config.ts`: Bind dev server to `0.0.0.0:5173` and enable
+  `server.watch.usePolling = true` (`interval: 300`) so Windows hosts running
+  Vite inside Docker pick up file edits — inotify events do not propagate
+  across the host → container volume mount.
+- `frontend/package.json`: Add `xlsx ^0.18.5` for Excel manifest parsing.
+
+### Fixed
+
+**Backend**
+- `backend/solver/ilp_solver.py::_variable_domains()`: Lock `z_i = 0` for every
+  item (single-layer ground packing). Previously `z_ubs` was set to
+  `max(0, H - h_min)` and nothing in the boundary or non-overlap blocks pulled
+  items down, so the ILP would leave packed items floating mid-air. The proper
+  3DBPP support constraint requires a disjunction binding each `z_i` to either
+  `0` or the top face of a supporting item — out of scope for this milestone
+  and tracked for a follow-up.
+  Thesis ref: section 3.5.2.1 D — variable domains (single-layer simplification)
 
 ---
 

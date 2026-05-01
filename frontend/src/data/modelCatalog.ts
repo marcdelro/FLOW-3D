@@ -95,7 +95,7 @@ export const FURNITURE_OPTIONS: FurnitureGroup[] = [
 /** Default dimensions (mm), weight, and orientation per prefix — auto-fills AddItemForm. */
 export const FURNITURE_DEFAULTS: Record<
   string,
-  { w: number; l: number; h: number; weight_kg: number; side_up: boolean }
+  { w: number; l: number; h: number; weight_kg: number; side_up: boolean; fragile?: boolean }
 > = {
   bed:           { w: 1600, l: 2000, h: 500,  weight_kg: 60,  side_up: false },
   bunk_bed:      { w: 1000, l: 2000, h: 1700, weight_kg: 80,  side_up: true  },
@@ -106,8 +106,8 @@ export const FURNITURE_DEFAULTS: Record<
   chair:         { w: 550,  l: 550,  h: 900,  weight_kg: 8,   side_up: false },
   desk:          { w: 1200, l: 600,  h: 750,  weight_kg: 40,  side_up: false },
   writing_desk:  { w: 1000, l: 500,  h: 750,  weight_kg: 30,  side_up: false },
-  refrigerator:  { w: 700,  l: 700,  h: 1800, weight_kg: 80,  side_up: true  },
-  fridge:        { w: 600,  l: 650,  h: 1700, weight_kg: 70,  side_up: true  },
+  refrigerator:  { w: 700,  l: 700,  h: 1800, weight_kg: 80,  side_up: true,  fragile: true },
+  fridge:        { w: 600,  l: 650,  h: 1700, weight_kg: 70,  side_up: true,  fragile: true },
   sofa:          { w: 2000, l: 900,  h: 850,  weight_kg: 80,  side_up: false },
   couch:         { w: 1800, l: 850,  h: 800,  weight_kg: 70,  side_up: false },
   loveseat:      { w: 1400, l: 850,  h: 800,  weight_kg: 60,  side_up: false },
@@ -404,6 +404,28 @@ export function resolveModelPath(item_id: string): string | null {
   const physicalFolder = CATALOG_FOLDER_MAP[catalogKey] ?? catalogKey;
   const modelId = models[hashItemId(item_id.toLowerCase()) % models.length];
   return `/models/${physicalFolder}/${modelId}.obj`;
+}
+
+/**
+ * Resolves a `(prefix, variantIdx)` pair directly to an OBJ path + axis-up
+ * convention — used by the hover-preview component, which doesn't have a real
+ * item_id yet. When variantIdx is omitted, the first model in the catalog is
+ * returned so the dropdown hover still produces a thumbnail.
+ */
+export function resolvePreviewMeta(
+  prefix: string,
+  variantIdx?: number,
+): { path: string; axisUp: AxisUp } | null {
+  const catalogKey = PREFIX_TO_FOLDER[prefix];
+  if (!catalogKey) return null;
+  const models = CATALOG[catalogKey];
+  if (!models?.length) return null;
+  const idx = variantIdx !== undefined && variantIdx >= 0
+    ? variantIdx % models.length
+    : 0;
+  const physicalFolder = CATALOG_FOLDER_MAP[catalogKey] ?? catalogKey;
+  const axisUp: AxisUp = CATALOG_AXIS_UP[catalogKey] ?? "auto";
+  return { path: `/models/${physicalFolder}/${models[idx]}.obj`, axisUp };
 }
 
 /**

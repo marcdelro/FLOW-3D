@@ -10,12 +10,28 @@ services:
       timeout: 3s
       retries: 5
 
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: flow3d
+      POSTGRES_PASSWORD: flow3d
+      POSTGRES_DB: flow3d
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flow3d -d flow3d"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
     build: ./backend
     ports:
       - "8000:8000"
     environment:
       REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://flow3d:flow3d@db/flow3d
       USE_MOCK_SOLVER: "False"
       SOLVER_THRESHOLD: "20"
     volumes:
@@ -25,12 +41,15 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      db:
+        condition: service_healthy
 
   celery:
     build: ./backend
     command: celery -A worker.celery_app worker --loglevel=info --pool=solo
     environment:
       REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://flow3d:flow3d@db/flow3d
       USE_MOCK_SOLVER: "False"
       SOLVER_THRESHOLD: "20"
     volumes:
@@ -39,6 +58,8 @@ services:
       - C:/Users/user/gurobi.lic:/root/gurobi.lic
     depends_on:
       redis:
+        condition: service_healthy
+      db:
         condition: service_healthy
 
   frontend:

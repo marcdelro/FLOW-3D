@@ -59,6 +59,10 @@ export interface FurnitureItem {
   side_up: boolean;
   /** 0-based index into the CATALOG model array for this category */
   model_variant?: number;
+  /** Item is packed inside a cardboard box — viewer renders box wrapper around model */
+  boxed?: boolean;
+  /** Fragile — may not be stacked against; requires protective wrapping */
+  fragile?: boolean;
 }
 
 export interface TruckSpec {

@@ -5,7 +5,7 @@ import { Dashboard } from "./components/Dashboard";
 import { ManifestForm } from "./components/ManifestForm";
 import { PlanSelector } from "./components/PlanSelector";
 import { TruckViewer } from "./components/TruckViewer";
-import type { PackingPlan, SolveRequest, TruckSpec } from "./types";
+import type { FurnitureItem, PackingPlan, SolveRequest, TruckSpec } from "./types";
 
 type Tab = "manifest" | "results";
 
@@ -19,6 +19,7 @@ function App() {
   const [truckSpec, setTruckSpec]       = useState<TruckSpec>({
     W: 2400, L: 13600, H: 2440, payload_kg: 3000,
   });
+  const [solveItems, setSolveItems]     = useState<FurnitureItem[]>([]);
 
   const selectedPlan = plans[selectedIdx] ?? null;
 
@@ -26,6 +27,7 @@ function App() {
     setLoading(true);
     setError(null);
     setTruckSpec(req.truck);
+    setSolveItems(req.items);
     try {
       const results = await fetchSolutions(req);
       setPlans(results);
@@ -190,6 +192,7 @@ function App() {
           <TruckViewer
             plan={selectedPlan}
             truck={{ W: truckSpec.W, L: truckSpec.L, H: truckSpec.H }}
+            items={solveItems}
             lightMode={lightMode}
           />
         ) : loading ? (

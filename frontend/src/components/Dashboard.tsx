@@ -7,11 +7,16 @@ const STRATEGY_LABEL: Record<SolveStrategy, string> = {
   stability: "Stability",
 };
 
-// Tailwind colour pair per strategy for the rationale callout.
-const STRATEGY_BADGE: Record<SolveStrategy, string> = {
-  optimal: "bg-violet-950 text-violet-300",
-  balanced: "bg-teal-950 text-teal-300",
+// Strategy badge — separate dark/light pairs so both themes are readable.
+const STRATEGY_BADGE_DARK: Record<SolveStrategy, string> = {
+  optimal:   "bg-violet-950 text-violet-300",
+  balanced:  "bg-teal-950 text-teal-300",
   stability: "bg-amber-950 text-amber-300",
+};
+const STRATEGY_BADGE_LIGHT: Record<SolveStrategy, string> = {
+  optimal:   "bg-violet-100 text-violet-700 border border-violet-400",
+  balanced:  "bg-teal-100 text-teal-700 border border-teal-400",
+  stability: "bg-amber-100 text-amber-700 border border-amber-400",
 };
 
 function downloadPlan(plan: PackingPlan) {
@@ -25,15 +30,16 @@ function downloadPlan(plan: PackingPlan) {
 }
 
 // ── Stop palette (mirrors TruckViewer / tailwind config) ──────────────────────
+// All bg/border values are fully opaque — no alpha — for maximum readability.
 const STOP_STYLE: Record<number, { bg: string; border: string; text: string; bgLight: string; borderLight: string }> = {
-  1: { bg: "#F0997B0f", border: "#F0997B35", text: "#F0997B", bgLight: "#FEF0EB", borderLight: "#F0997B60" },
-  2: { bg: "#5DCAA50f", border: "#5DCAA535", text: "#5DCAA5", bgLight: "#EDFAF5", borderLight: "#5DCAA560" },
-  3: { bg: "#AFA9EC0f", border: "#AFA9EC35", text: "#8B82D8", bgLight: "#F3F2FC", borderLight: "#AFA9EC60" },
-  4: { bg: "#60A5FA0f", border: "#60A5FA35", text: "#60A5FA", bgLight: "#EFF6FF", borderLight: "#60A5FA60" },
-  5: { bg: "#FBBF240f", border: "#FBBF2435", text: "#D97706", bgLight: "#FFFBEB", borderLight: "#FBBF2460" },
-  6: { bg: "#F472B60f", border: "#F472B635", text: "#F472B6", bgLight: "#FDF2F8", borderLight: "#F472B660" },
+  1: { bg: "#2d1a0e", border: "#7a4020", text: "#F0997B", bgLight: "#FEF0EB", borderLight: "#d4845a" },
+  2: { bg: "#0e2420", border: "#2d6050", text: "#5DCAA5", bgLight: "#EDFAF5", borderLight: "#3da882" },
+  3: { bg: "#1a1830", border: "#5a5895", text: "#8B82D8", bgLight: "#F3F2FC", borderLight: "#8880cc" },
+  4: { bg: "#0d1e35", border: "#2a5085", text: "#60A5FA", bgLight: "#EFF6FF", borderLight: "#4488d8" },
+  5: { bg: "#2a1e08", border: "#7a5510", text: "#D97706", bgLight: "#FFFBEB", borderLight: "#c49020" },
+  6: { bg: "#2a0e20", border: "#7a3060", text: "#F472B6", bgLight: "#FDF2F8", borderLight: "#d05898" },
 };
-const DEFAULT_STYLE = { bg: "#8887800f", border: "#88878035", text: "#888780", bgLight: "#F9F9F9", borderLight: "#88878060" };
+const DEFAULT_STYLE = { bg: "#1e1e1e", border: "#555550", text: "#888780", bgLight: "#F5F5F5", borderLight: "#aaaaaa" };
 const stopStyle = (sid: number) => STOP_STYLE[sid] ?? DEFAULT_STYLE;
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
@@ -124,17 +130,22 @@ export function Dashboard({ plan, lightMode = false }: DashboardProps) {
       {/* ── Why this plan? ────────────────────────────────────────────────── */}
       {plan.rationale && (
         <>
-          <SectionHeader title="Why This Plan" />
+          <SectionHeader title="Why This Plan" lightMode={lightMode} />
           <div className="px-4 py-3">
-            <div className="rounded-lg border border-gray-800 bg-gray-900/50 p-3 space-y-2">
+            <div className={`rounded-lg border p-3 space-y-2 ${
+              lightMode
+                ? "border-gray-300 bg-gray-50"
+                : "border-gray-700 bg-gray-900"
+            }`}>
               <span
                 className={`inline-block text-xs font-bold px-2 py-0.5 rounded leading-none ${
-                  STRATEGY_BADGE[plan.strategy] ?? "bg-gray-800 text-gray-300"
+                  (lightMode ? STRATEGY_BADGE_LIGHT : STRATEGY_BADGE_DARK)[plan.strategy]
+                  ?? (lightMode ? "bg-gray-200 text-gray-700" : "bg-gray-800 text-gray-300")
                 }`}
               >
                 {STRATEGY_LABEL[plan.strategy] ?? plan.strategy}
               </span>
-              <p className="text-xs text-gray-400 leading-relaxed">
+              <p className={`text-xs leading-relaxed ${lightMode ? "text-gray-700" : "text-gray-300"}`}>
                 {plan.rationale}
               </p>
             </div>
@@ -286,12 +297,12 @@ export function Dashboard({ plan, lightMode = false }: DashboardProps) {
                 {its.map((p) => (
                   <span
                     key={p.item_id}
-                    className={`text-sm font-mono rounded-md px-2.5 py-1 border ${
-                      lightMode ? "text-gray-700" : "text-gray-200"
+                    className={`text-sm font-mono font-medium rounded-md px-2.5 py-1 border ${
+                      lightMode ? "text-gray-800" : "text-gray-100"
                     }`}
                     style={{
                       backgroundColor: lightMode ? s.bgLight : s.bg,
-                      borderColor: lightMode ? s.borderLight : s.border,
+                      borderColor:     lightMode ? s.borderLight : s.border,
                     }}
                   >
                     {p.item_id}
@@ -332,15 +343,19 @@ export function Dashboard({ plan, lightMode = false }: DashboardProps) {
         <>
           <SectionHeader title="Unplaced Items" lightMode={lightMode} />
           <div className="px-4 py-4">
-            <div className="bg-amber-950/20 border border-amber-900/40 rounded-lg p-3.5">
-              <p className="text-sm text-amber-400 mb-2 leading-relaxed">
+            <div className={`rounded-lg p-3.5 border ${
+              lightMode
+                ? "bg-amber-50 border-amber-300"
+                : "bg-amber-950 border-amber-800"
+            }`}>
+              <p className={`text-sm mb-2 leading-relaxed ${lightMode ? "text-amber-800" : "text-amber-300"}`}>
                 {plan.unplaced_items.length} item
                 {plan.unplaced_items.length > 1 ? "s" : ""} could not be
                 packed — truck capacity exceeded.
               </p>
               <ul className="space-y-1">
                 {plan.unplaced_items.map((id) => (
-                  <li key={id} className="text-sm font-mono text-amber-300/70">
+                  <li key={id} className={`text-sm font-mono ${lightMode ? "text-amber-700" : "text-amber-400"}`}>
                     · {id}
                   </li>
                 ))}

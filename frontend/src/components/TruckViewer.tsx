@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 
-import type { PackingPlan, Placement } from "../types";
+import type { FurnitureItem, PackingPlan, Placement } from "../types";
 import { resolveModelMeta } from "../data/modelCatalog";
 import type { AxisUp } from "../data/modelCatalog";
 
@@ -35,15 +35,29 @@ function hexCss(n: number): string {
 /** Render item_id text as a billboard sprite above the item. */
 function makeTextSprite(text: string, lightMode?: boolean): THREE.Sprite {
   const canvas = document.createElement("canvas");
-  canvas.width  = 256;
-  canvas.height = 48;
+  canvas.width  = 512;
+  canvas.height = 80;
   const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = lightMode ? "rgba(240,244,248,0.92)" : "rgba(11,13,18,0.88)";
-  ctx.fillRect(0, 0, 256, 48);
-  ctx.fillStyle = lightMode ? "#1e293b" : "#e5e7eb";
-  ctx.font = "bold 20px 'Segoe UI', system-ui, sans-serif";
-  const label = text.length > 16 ? text.slice(0, 14) + "…" : text;
-  ctx.fillText(label, 10, 32);
+
+  // Rounded pill background with strong border for readability on both themes
+  const bgColor  = lightMode ? "rgba(255,255,255,0.98)" : "rgba(8,10,20,0.97)";
+  const bdrColor = lightMode ? "rgba(71,85,105,0.75)"   : "rgba(148,163,184,0.55)";
+  ctx.fillStyle = bgColor;
+  ctx.beginPath();
+  ctx.roundRect(4, 4, canvas.width - 8, canvas.height - 8, 12);
+  ctx.fill();
+  ctx.strokeStyle = bdrColor;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Bold label — white on dark, near-black on light
+  ctx.font = "bold 34px 'Segoe UI', system-ui, sans-serif";
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
+  ctx.fillStyle = lightMode ? "#0f172a" : "#ffffff";
+  const label = text.length > 22 ? text.slice(0, 20) + "…" : text;
+  ctx.fillText(label, 18, canvas.height / 2);
+
   const texture = new THREE.CanvasTexture(canvas);
   const mat = new THREE.SpriteMaterial({
     map: texture,
@@ -51,7 +65,7 @@ function makeTextSprite(text: string, lightMode?: boolean): THREE.Sprite {
     sizeAttenuation: true,
   });
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(55, 10, 1);
+  sprite.scale.set(110, 22, 1);
   return sprite;
 }
 
@@ -119,6 +133,8 @@ function fitModelToBox(
 interface TruckViewerProps {
   plan:      PackingPlan;
   truck:     { W: number; L: number; H: number };
+  /** Original input items — used to look up boxed/fragile metadata for visualization. */
+  items?:    FurnitureItem[];
   lightMode?: boolean;
 }
 
@@ -126,6 +142,7 @@ type ViewMode = "3d" | "exploded" | "labels" | "animate";
 
 interface TooltipState {
   placement: Placement;
+  meta?:     { boxed?: boolean; fragile?: boolean };
   x: number;
   y: number;
   mountWidth: number;
@@ -133,7 +150,11 @@ interface TooltipState {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function TruckViewer({ plan, truck, lightMode = false }: TruckViewerProps) {
+export function TruckViewer({ plan, truck, items = [], lightMode = false }: TruckViewerProps) {
+  // item_id → input metadata so we can render boxed wrappers / fragile decals
+  // without round-tripping the data through the solver.
+  const itemMeta = new Map<string, { boxed?: boolean; fragile?: boolean }>();
+  for (const it of items) itemMeta.set(it.item_id, { boxed: it.boxed, fragile: it.fragile });
   const mountRef        = useRef<HTMLDivElement | null>(null);
   const cameraPosRef    = useRef(new THREE.Vector3(-600, 600, 1400));
   const cameraTargetRef = useRef<THREE.Vector3 | null>(null);
@@ -309,8 +330,8 @@ export function TruckViewer({ plan, truck, lightMode = false }: TruckViewerProps
 
     // Door label sprite
     const doorSprite = makeTextSprite("DOOR →", lightMode);
-    doorSprite.position.set(truckW / 2, truckH + 8, truckL);
-    doorSprite.scale.set(40, 8, 1);
+    doorSprite.position.set(truckW / 2, truckH + 10, truckL);
+    doorSprite.scale.set(60, 14, 1);
     scene.add(doorSprite);
 
     // ── Exploded-view offset ───────────────────────────────────────────────
@@ -414,6 +435,43 @@ export function TruckViewer({ plan, truck, lightMode = false }: TruckViewerProps
         scene.add(edges);
       }
 
+      // ── Boxed wrapper — translucent cardboard-coloured shell over the model ─
+      const flags = itemMeta.get(p.item_id);
+      if (flags?.boxed) {
+        const boxGeom = new THREE.BoxGeometry(w * 1.02, h * 1.02, l * 1.02);
+        const boxMat  = new THREE.MeshLambertMaterial({
+          color: 0xc69c6d,         // cardboard brown
+          transparent: true,
+          opacity: 0.32,
+          depthWrite: false,
+        });
+        const boxMesh = new THREE.Mesh(boxGeom, boxMat);
+        boxMesh.position.set(cx, cy, cz);
+        scene.add(boxMesh);
+        geos.push(boxGeom);
+        mats.push(boxMat);
+
+        // Cardboard seam edges so the box is legible at a glance
+        const seamGeo = new THREE.EdgesGeometry(boxGeom);
+        const seamMat = new THREE.LineBasicMaterial({ color: 0x8b5a2b, transparent: true, opacity: 0.7 });
+        const seam    = new THREE.LineSegments(seamGeo, seamMat);
+        seam.position.set(cx, cy, cz);
+        scene.add(seam);
+        geos.push(seamGeo);
+        mats.push(seamMat);
+      }
+
+      // ── Fragile decal — bright red outline + sprite tag ───────────────────
+      if (flags?.fragile) {
+        const fragileGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(w * 1.04, h * 1.04, l * 1.04));
+        const fragileMat = new THREE.LineBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.85 });
+        const fragileWire = new THREE.LineSegments(fragileGeo, fragileMat);
+        fragileWire.position.set(cx, cy, cz);
+        scene.add(fragileWire);
+        geos.push(fragileGeo);
+        mats.push(fragileMat);
+      }
+
       // ── Label sprite ─────────────────────────────────────────────────────
       if (mode === "labels") {
         const sprite = makeTextSprite(p.item_id, lightMode);
@@ -464,6 +522,7 @@ export function TruckViewer({ plan, truck, lightMode = false }: TruckViewerProps
         const placement = hits[0].object.userData.placement as Placement;
         setTooltip({
           placement,
+          meta: itemMeta.get(placement.item_id),
           x: e.clientX - rect.left,
           y: e.clientY - rect.top,
           mountWidth: rect.width,
@@ -497,7 +556,7 @@ export function TruckViewer({ plan, truck, lightMode = false }: TruckViewerProps
       setTooltip(null);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, truck, mode, modelsVersion, animStep, lightMode]);
+  }, [plan, truck, mode, modelsVersion, animStep, lightMode, items]);
 
   return (
     <div className="relative w-full h-full">
@@ -516,10 +575,12 @@ export function TruckViewer({ plan, truck, lightMode = false }: TruckViewerProps
               }
               setMode(m);
             }}
-            className={`px-3 py-1 text-xs font-medium rounded border transition-colors ${
+            className={`px-3 py-1.5 text-sm font-semibold rounded border transition-colors ${
               mode === m
                 ? "bg-blue-600 border-blue-500 text-white shadow"
-                : "bg-gray-900/90 border-gray-700 text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+                : lightMode
+                  ? "bg-white border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                  : "bg-gray-900 border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white"
             }`}
           >
             {m === "3d" ? "3D" : m === "exploded" ? "Exploded" : m === "labels" ? "Labels" : "▶ Animate"}
@@ -529,15 +590,14 @@ export function TruckViewer({ plan, truck, lightMode = false }: TruckViewerProps
 
       {/* ── Animate: currently-placing badge (top-center) ── */}
       {mode === "animate" && latestItem && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 bg-gray-900/95 border border-gray-700 rounded-lg px-3 py-1.5 pointer-events-none">
-          <span className="text-xs text-gray-500">Placing:</span>
-          <span className="text-xs font-mono text-white">{latestItem.item_id}</span>
+        <div className={`absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 border rounded-lg px-3 py-1.5 pointer-events-none ${lightMode ? "bg-white border-gray-300" : "bg-gray-900 border-gray-600"}`}>
+          <span className={`text-sm font-medium ${lightMode ? "text-gray-500" : "text-gray-400"}`}>Placing:</span>
+          <span className={`text-sm font-mono font-bold ${lightMode ? "text-gray-900" : "text-white"}`}>{latestItem.item_id}</span>
           <span
-            className="text-xs font-bold px-1.5 py-0.5 rounded border"
+            className="text-xs font-bold px-1.5 py-0.5 rounded border text-gray-950"
             style={{
-              color:           hexCss(colorForStop(latestItem.stop_id)),
-              backgroundColor: hexCss(colorForStop(latestItem.stop_id)) + "22",
-              borderColor:     hexCss(colorForStop(latestItem.stop_id)) + "55",
+              backgroundColor: hexCss(colorForStop(latestItem.stop_id)),
+              borderColor:     hexCss(colorForStop(latestItem.stop_id)),
             }}
           >
             Stop {latestItem.stop_id}
@@ -545,27 +605,27 @@ export function TruckViewer({ plan, truck, lightMode = false }: TruckViewerProps
         </div>
       )}
       {mode === "animate" && animStep === 0 && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 bg-gray-900/95 border border-gray-700 rounded-lg px-3 py-1.5 pointer-events-none">
-          <span className="text-xs text-gray-500">Press play to begin loading sequence</span>
+        <div className={`absolute top-3 left-1/2 -translate-x-1/2 z-10 border rounded-lg px-3 py-1.5 pointer-events-none ${lightMode ? "bg-white border-gray-300" : "bg-gray-900 border-gray-600"}`}>
+          <span className={`text-sm font-medium ${lightMode ? "text-gray-600" : "text-gray-400"}`}>Press play to begin loading sequence</span>
         </div>
       )}
       {mode === "animate" && animStep >= animSorted.length && animSorted.length > 0 && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 bg-gray-900/95 border border-green-900/60 rounded-lg px-3 py-1.5 pointer-events-none">
-          <span className="text-xs text-green-400">All {animSorted.length} items loaded</span>
+        <div className={`absolute top-3 left-1/2 -translate-x-1/2 z-10 border rounded-lg px-3 py-1.5 pointer-events-none ${lightMode ? "bg-green-50 border-green-300" : "bg-gray-900 border-green-800"}`}>
+          <span className={`text-sm font-semibold ${lightMode ? "text-green-700" : "text-green-400"}`}>All {animSorted.length} items loaded</span>
         </div>
       )}
 
       {/* ── Animate: playback controls (bottom-center) ── */}
       {mode === "animate" && (
-        <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 bg-gray-900/98 border border-gray-700 rounded-xl px-4 py-2 shadow-2xl">
+        <div className={`absolute bottom-12 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 border rounded-xl px-4 py-2 shadow-2xl ${lightMode ? "bg-white border-gray-300" : "bg-gray-900 border-gray-700"}`}>
           <button
             onClick={() => { setAnimStep(0); setIsPlaying(false); }}
-            className="text-gray-500 hover:text-white transition-colors text-sm px-1"
+            className={`transition-colors text-base px-1 ${lightMode ? "text-gray-500 hover:text-gray-900" : "text-gray-500 hover:text-white"}`}
             title="Restart"
           >⏮</button>
           <button
             onClick={() => { setIsPlaying(false); setAnimStep((s) => Math.max(0, s - 1)); }}
-            className="text-gray-500 hover:text-white transition-colors text-sm px-1"
+            className={`transition-colors text-base px-1 ${lightMode ? "text-gray-500 hover:text-gray-900" : "text-gray-500 hover:text-white"}`}
             title="Previous item"
           >⏪</button>
           <button
@@ -580,16 +640,16 @@ export function TruckViewer({ plan, truck, lightMode = false }: TruckViewerProps
           </button>
           <button
             onClick={() => { setIsPlaying(false); setAnimStep((s) => Math.min(animSorted.length, s + 1)); }}
-            className="text-gray-500 hover:text-white transition-colors text-sm px-1"
+            className={`transition-colors text-base px-1 ${lightMode ? "text-gray-500 hover:text-gray-900" : "text-gray-500 hover:text-white"}`}
             title="Next item"
           >⏩</button>
           <button
             onClick={() => { setIsPlaying(false); setAnimStep(animSorted.length); }}
-            className="text-gray-500 hover:text-white transition-colors text-sm px-1"
+            className={`transition-colors text-base px-1 ${lightMode ? "text-gray-500 hover:text-gray-900" : "text-gray-500 hover:text-white"}`}
             title="Show all"
           >⏭</button>
 
-          <div className="w-px h-4 bg-gray-700 mx-1" />
+          <div className={`w-px h-4 mx-1 ${lightMode ? "bg-gray-300" : "bg-gray-700"}`} />
 
           <input
             type="range"
@@ -599,16 +659,16 @@ export function TruckViewer({ plan, truck, lightMode = false }: TruckViewerProps
             onChange={(e) => { setIsPlaying(false); setAnimStep(parseInt(e.target.value)); }}
             className="w-28 accent-blue-500 cursor-pointer"
           />
-          <span className="text-xs font-mono text-gray-400 min-w-[36px] text-center">
+          <span className={`text-sm font-mono font-semibold min-w-[36px] text-center ${lightMode ? "text-gray-700" : "text-gray-300"}`}>
             {animStep}/{animSorted.length}
           </span>
 
-          <div className="w-px h-4 bg-gray-700 mx-1" />
+          <div className={`w-px h-4 mx-1 ${lightMode ? "bg-gray-300" : "bg-gray-700"}`} />
 
           <select
             value={animSpeed}
             onChange={(e) => setAnimSpeed(parseInt(e.target.value))}
-            className="text-xs bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-300 cursor-pointer"
+            className={`text-sm rounded px-2 py-1 cursor-pointer border ${lightMode ? "bg-white border-gray-300 text-gray-700" : "bg-gray-800 border-gray-700 text-gray-300"}`}
           >
             <option value={1500}>Slow</option>
             <option value={900}>Normal</option>
@@ -618,8 +678,8 @@ export function TruckViewer({ plan, truck, lightMode = false }: TruckViewerProps
       )}
 
       {/* ── Stop legend (bottom-right) ── */}
-      <div className="absolute bottom-4 right-4 z-10 bg-gray-950/90 border border-gray-800 rounded-lg px-3 py-2.5 text-xs space-y-1.5 min-w-[120px]">
-        <div className="text-gray-600 text-xs font-semibold uppercase tracking-wider mb-2">
+      <div className={`absolute bottom-4 right-4 z-10 border rounded-lg px-3 py-2.5 space-y-1.5 min-w-[130px] ${lightMode ? "bg-white border-gray-300" : "bg-gray-950 border-gray-700"}`}>
+        <div className={`text-xs font-bold uppercase tracking-wider mb-2 ${lightMode ? "text-gray-500" : "text-gray-400"}`}>
           Load Order
         </div>
         {uniqueStops
@@ -628,13 +688,13 @@ export function TruckViewer({ plan, truck, lightMode = false }: TruckViewerProps
           .map((sid, i, arr) => (
             <div key={sid} className="flex items-center gap-2">
               <span
-                className="w-2.5 h-2.5 rounded-sm shrink-0"
+                className="w-3 h-3 rounded-sm shrink-0"
                 style={{ backgroundColor: hexCss(colorForStop(sid)) }}
               />
-              <span className="text-gray-300">Stop {sid}</span>
-              {i === 0 && <span className="text-gray-700 text-xs">(rear)</span>}
+              <span className={`text-sm font-medium ${lightMode ? "text-gray-800" : "text-gray-200"}`}>Stop {sid}</span>
+              {i === 0 && <span className={`text-xs ${lightMode ? "text-gray-400" : "text-gray-500"}`}>(rear)</span>}
               {i === arr.length - 1 && arr.length > 1 && (
-                <span className="text-gray-700 text-xs">(door)</span>
+                <span className={`text-xs ${lightMode ? "text-gray-400" : "text-gray-500"}`}>(door)</span>
               )}
             </div>
           ))}
@@ -642,7 +702,7 @@ export function TruckViewer({ plan, truck, lightMode = false }: TruckViewerProps
 
       {/* ── Door label (bottom-left) ── */}
       <div className="absolute bottom-4 left-4 z-10">
-        <span className="text-xs bg-blue-950/60 border border-blue-900/50 text-blue-400 px-2 py-1 rounded">
+        <span className={`text-sm font-semibold border px-2.5 py-1 rounded ${lightMode ? "bg-blue-50 border-blue-300 text-blue-700" : "bg-blue-950 border-blue-700 text-blue-300"}`}>
           ← DOOR
         </span>
       </div>
@@ -651,9 +711,11 @@ export function TruckViewer({ plan, truck, lightMode = false }: TruckViewerProps
       {tooltip && (
         <ItemTooltip
           placement={tooltip.placement}
+          meta={tooltip.meta}
           x={tooltip.x}
           y={tooltip.y}
           mountWidth={tooltip.mountWidth}
+          lightMode={lightMode}
         />
       )}
 
@@ -666,14 +728,18 @@ export function TruckViewer({ plan, truck, lightMode = false }: TruckViewerProps
 
 function ItemTooltip({
   placement: p,
+  meta,
   x,
   y,
   mountWidth,
+  lightMode = false,
 }: {
   placement: Placement;
+  meta?: { boxed?: boolean; fragile?: boolean };
   x: number;
   y: number;
   mountWidth: number;
+  lightMode?: boolean;
 }) {
   const flipLeft = x > mountWidth * 0.6;
   const color = `#${(STOP_PALETTE[(p.stop_id - 1) % STOP_PALETTE.length] ?? FALLBACK_COLOR)
@@ -689,47 +755,69 @@ function ItemTooltip({
         transform: flipLeft ? "translateX(-100%)" : "none",
       }}
     >
-      <div className="bg-gray-900/98 border border-gray-700 rounded-lg px-3 py-2.5 shadow-2xl min-w-[180px]">
-        <div className="font-mono font-bold text-white text-sm mb-2 truncate max-w-[200px]">
+      <div className={`border rounded-lg px-3 py-2.5 shadow-2xl min-w-[180px] ${lightMode ? "bg-white border-gray-300" : "bg-gray-900 border-gray-600"}`}>
+        <div className={`font-mono font-bold text-sm mb-2 truncate max-w-[200px] ${lightMode ? "text-gray-900" : "text-white"}`}>
           {p.item_id}
         </div>
 
         <div className="space-y-1 text-xs">
           <div className="flex justify-between gap-4">
-            <span className="text-gray-500">W × L × H</span>
-            <span className="font-mono text-gray-300">
+            <span className={lightMode ? "text-gray-500" : "text-gray-400"}>W × L × H</span>
+            <span className={`font-mono ${lightMode ? "text-gray-800" : "text-gray-200"}`}>
               {p.w} × {p.l} × {p.h}
-              <span className="text-gray-600 ml-0.5">mm</span>
+              <span className={`ml-0.5 ${lightMode ? "text-gray-400" : "text-gray-500"}`}>mm</span>
             </span>
           </div>
 
           <div className="flex justify-between gap-4">
-            <span className="text-gray-500">Volume</span>
-            <span className="font-mono text-gray-300">
+            <span className={lightMode ? "text-gray-500" : "text-gray-400"}>Volume</span>
+            <span className={`font-mono ${lightMode ? "text-gray-800" : "text-gray-200"}`}>
               {((p.w * p.l * p.h) / 1e9).toFixed(3)}
-              <span className="text-gray-600 ml-0.5">m³</span>
+              <span className={`ml-0.5 ${lightMode ? "text-gray-400" : "text-gray-500"}`}>m³</span>
             </span>
           </div>
 
           <div className="flex justify-between gap-4">
-            <span className="text-gray-500">Position</span>
-            <span className="font-mono text-gray-300">
+            <span className={lightMode ? "text-gray-500" : "text-gray-400"}>Position</span>
+            <span className={`font-mono ${lightMode ? "text-gray-800" : "text-gray-200"}`}>
               ({p.x}, {p.y}, {p.z})
             </span>
           </div>
 
           <div className="flex justify-between gap-4">
-            <span className="text-gray-500">Orientation</span>
-            <span className="font-mono text-gray-300">#{p.orientation_index}</span>
+            <span className={lightMode ? "text-gray-500" : "text-gray-400"}>Orientation</span>
+            <span className={`font-mono ${lightMode ? "text-gray-800" : "text-gray-200"}`}>#{p.orientation_index}</span>
           </div>
 
-          <div className="border-t border-gray-800 pt-1 mt-1">
+          {(meta?.boxed || meta?.fragile) && (
+            <div className="flex justify-between gap-4">
+              <span className={lightMode ? "text-gray-500" : "text-gray-400"}>Handling</span>
+              <span className="flex gap-1">
+                {meta.boxed && (
+                  <span className={`text-[10px] font-bold px-1.5 rounded ${
+                    lightMode
+                      ? "bg-blue-100 text-blue-700 border border-blue-300"
+                      : "bg-blue-950 text-blue-300 border border-blue-800"
+                  }`}>BOXED</span>
+                )}
+                {meta.fragile && (
+                  <span className={`text-[10px] font-bold px-1.5 rounded ${
+                    lightMode
+                      ? "bg-amber-100 text-amber-700 border border-amber-300"
+                      : "bg-amber-950 text-amber-300 border border-amber-800"
+                  }`}>FRAGILE</span>
+                )}
+              </span>
+            </div>
+          )}
+
+          <div className={`border-t pt-1 mt-1 ${lightMode ? "border-gray-200" : "border-gray-700"}`}>
             <div className="flex items-center gap-1.5">
               <span
-                className="w-2 h-2 rounded-sm shrink-0"
+                className="w-2.5 h-2.5 rounded-sm shrink-0"
                 style={{ backgroundColor: color }}
               />
-              <span style={{ color }}>Stop {p.stop_id}</span>
+              <span className="text-sm font-semibold" style={{ color }}>Stop {p.stop_id}</span>
             </div>
           </div>
         </div>

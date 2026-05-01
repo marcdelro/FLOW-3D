@@ -133,15 +133,20 @@ class ILPSolver(AbstractSolver):
         # Per-item upper bounds: a packed item cannot start past
         # truck_dim - min_eff_dim. Items that cannot fit at all collapse to
         # ub=0, so Gurobi presolve will fix them as unpackable when feasible.
-        x_ubs, y_ubs, z_ubs = [], [], []
+        x_ubs, y_ubs = [], []
         for item in self._items:
-            w_min, l_min, h_min = self._min_effective_dims(item)
+            w_min, l_min, _ = self._min_effective_dims(item)
             x_ubs.append(max(0, W - w_min))
             y_ubs.append(max(0, L - l_min))
-            z_ubs.append(max(0, H - h_min))
         self._x = m.addVars(n, vtype=GRB.INTEGER, lb=0, ub=x_ubs, name="x")
         self._y = m.addVars(n, vtype=GRB.INTEGER, lb=0, ub=y_ubs, name="y")
-        self._z = m.addVars(n, vtype=GRB.INTEGER, lb=0, ub=z_ubs, name="z")
+        # Single-layer ground packing: lock z_i = 0 so items rest on the truck
+        # floor. The proper 3DBPP support constraint requires a disjunction
+        # binding each z_i to either 0 or the top of a supporting item — out
+        # of scope for this milestone. Without this lock, nothing in the
+        # boundary or non-overlap blocks pulls items down, so the solver can
+        # leave packed items floating mid-air. Relax to enable stacking.
+        self._z = m.addVars(n, vtype=GRB.INTEGER, lb=0, ub=0, name="z")
         self._s = m.addVars(
             [(i, j, k) for i in range(n) for j in range(i + 1, n) for k in range(1, 7)],
             vtype=GRB.BINARY,

@@ -28,6 +28,18 @@ class FurnitureItem(BaseModel):
         False,
         description="If true, restricts orientation_index to upright poses",
     )
+    model_variant: int | None = Field(
+        None,
+        description="Optional 0-based index into the catalog variants for this prefix",
+    )
+    boxed: bool = Field(
+        False,
+        description="Item is packed in a cardboard box — viewer renders a box wrapper",
+    )
+    fragile: bool = Field(
+        False,
+        description="Fragile — solver must not stack other items on top of this one",
+    )
 
 
 class TruckSpec(BaseModel):
