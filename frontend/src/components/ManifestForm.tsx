@@ -10,6 +10,7 @@ import type {
 import {
   FURNITURE_DEFAULTS,
   FURNITURE_OPTIONS,
+  getCatalogVariants,
 } from "../data/modelCatalog";
 
 // ── Palette (mirrors tailwind.config stop colours) ────────────────────────────
@@ -55,27 +56,33 @@ function Section({
   title,
   badge,
   children,
+  bg2,
+  border,
+  muted,
 }: {
   title: string;
   badge?: number;
   children: ReactNode;
+  bg2: string;
+  border: string;
+  muted: string;
 }) {
   return (
     <>
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-950 sticky top-0 z-10">
-        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+      <div className={`flex items-center justify-between px-4 py-3 border-b ${border} ${bg2} sticky top-0 z-10`}>
+        <span className={`text-sm font-semibold ${muted} uppercase tracking-wider`}>
           {title}
         </span>
         {badge !== undefined && (
-          <span className="text-xs font-mono text-gray-700">{badge}</span>
+          <span className={`text-xs font-mono ${muted}`}>{badge}</span>
         )}
       </div>
-      <div className="px-4 py-3">{children}</div>
+      <div className="px-4 py-4">{children}</div>
     </>
   );
 }
 
-// ── Add-Item inline form ───────────────────────────────────────────────────────
+// ── Add / Edit Item inline form ────────────────────────────────────────────────
 function AddItemForm({
   value,
   stops,
@@ -84,6 +91,11 @@ function AddItemForm({
   onChange,
   onConfirm,
   onCancel,
+  initialPrefix,
+  confirmLabel,
+  inputCls,
+  labelCls,
+  lightMode,
 }: {
   value: FurnitureItem;
   stops: DeliveryStop[];
@@ -92,8 +104,13 @@ function AddItemForm({
   onChange: (v: FurnitureItem) => void;
   onConfirm: () => void;
   onCancel: () => void;
+  initialPrefix?: string;
+  confirmLabel: string;
+  inputCls: string;
+  labelCls: string;
+  lightMode?: boolean;
 }) {
-  const [selectedPrefix, setSelectedPrefix] = useState("");
+  const [selectedPrefix, setSelectedPrefix] = useState(initialPrefix ?? "");
 
   function set<K extends keyof FurnitureItem>(k: K, v: FurnitureItem[K]) {
     onChange({ ...value, [k]: v });
@@ -102,10 +119,9 @@ function AddItemForm({
   function handlePrefixChange(prefix: string) {
     setSelectedPrefix(prefix);
     if (!prefix) {
-      onChange({ ...value, item_id: "" });
+      onChange({ ...value, item_id: "", model_variant: undefined });
       return;
     }
-    // Find the smallest unused numeric suffix for this prefix
     const pattern = new RegExp(`^${prefix}_(\\d+)$`);
     const used = existingIds
       .map((id) => pattern.exec(id.toLowerCase())?.[1])
@@ -115,11 +131,13 @@ function AddItemForm({
     while (used.includes(n)) n++;
     const newId = `${prefix}_${String(n).padStart(2, "0")}`;
     const def = FURNITURE_DEFAULTS[prefix];
-    onChange({ ...value, item_id: newId, ...(def ?? {}) });
+    onChange({ ...value, item_id: newId, model_variant: undefined, ...(def ?? {}) });
   }
 
+  const variants = getCatalogVariants(selectedPrefix);
+
   return (
-    <div className="border border-gray-700 rounded p-3 space-y-2 bg-gray-900/30">
+    <div className={`border rounded-lg p-4 space-y-3 ${lightMode ? "border-gray-300 bg-slate-50" : "border-gray-700 bg-gray-900/30"}`}>
       {/* Furniture type dropdown grouped by category */}
       <div>
         <label className={labelCls}>Furniture Type</label>
@@ -127,7 +145,7 @@ function AddItemForm({
           className={`${inputCls} cursor-pointer`}
           value={selectedPrefix}
           // eslint-disable-next-line jsx-a11y/no-autofocus
-          autoFocus
+          autoFocus={!initialPrefix}
           onChange={(e) => handlePrefixChange(e.target.value)}
         >
           <option value="">— select furniture type —</option>
@@ -146,14 +164,40 @@ function AddItemForm({
       {/* Auto-generated item ID badge */}
       {value.item_id && (
         <div className="flex items-center gap-1.5 py-0.5">
-          <span className="text-xs text-gray-600">ID:</span>
-          <span className="font-mono text-xs text-blue-400 bg-blue-950/40 border border-blue-900/40 px-2 py-0.5 rounded">
+          <span className="text-sm text-gray-400">ID:</span>
+          <span className="font-mono text-sm text-blue-400 bg-blue-950/40 border border-blue-900/40 px-2 py-1 rounded">
             {value.item_id}
           </span>
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-2">
+      {/* Model variant picker — only shown when there is a real choice */}
+      {variants.length > 1 && (
+        <div>
+          <label className={labelCls}>Model Variant</label>
+          <div className="flex flex-wrap gap-1.5">
+            {variants.map((v) => {
+              const active = value.model_variant === v.index;
+              return (
+                <button
+                  key={v.index}
+                  type="button"
+                  onClick={() => onChange({ ...value, model_variant: v.index })}
+                  className={`px-3 py-2 text-sm rounded-md border transition-colors ${
+                    active
+                      ? "border-blue-500 bg-blue-950/40 text-blue-300"
+                      : "border-gray-700 bg-gray-900 text-gray-400 hover:border-gray-600"
+                  }`}
+                >
+                  {v.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-3">
         {(["w", "l", "h"] as const).map((k) => (
           <div key={k}>
             <label className={labelCls}>{k.toUpperCase()} (mm)</label>
@@ -170,7 +214,7 @@ function AddItemForm({
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-2 items-end">
+      <div className="grid grid-cols-3 gap-3 items-end">
         <div>
           <label className={labelCls}>Weight (kg)</label>
           <input
@@ -210,20 +254,24 @@ function AddItemForm({
         </div>
       </div>
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-sm text-red-400">{error}</p>}
 
       <div className="flex gap-2 pt-1">
         <button
           onClick={onCancel}
-          className="flex-1 py-1.5 text-xs rounded border border-gray-700 text-gray-400 hover:bg-gray-800 transition-colors"
+          className={`flex-1 py-2.5 text-sm rounded-md border font-medium transition-colors ${
+            lightMode
+              ? "border-gray-300 text-gray-700 hover:bg-gray-100"
+              : "border-gray-700 text-gray-300 hover:bg-gray-800"
+          }`}
         >
           Cancel
         </button>
         <button
           onClick={onConfirm}
-          className="flex-1 py-1.5 text-xs rounded bg-blue-700 hover:bg-blue-600 text-white font-medium transition-colors"
+          className="flex-1 py-2.5 text-sm rounded-md bg-blue-700 hover:bg-blue-600 text-white font-semibold transition-colors"
         >
-          Add
+          {confirmLabel}
         </button>
       </div>
     </div>
@@ -234,22 +282,35 @@ function AddItemForm({
 interface ManifestFormProps {
   onSolve: (req: SolveRequest) => void;
   loading: boolean;
+  lightMode?: boolean;
 }
 
-export function ManifestForm({ onSolve, loading }: ManifestFormProps) {
+export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFormProps) {
+  // ── Theme helpers ──
+  const bg     = lightMode ? "bg-white"        : "bg-gray-900";
+  const bg2    = lightMode ? "bg-slate-100"    : "bg-gray-950";
+  const border = lightMode ? "border-gray-300" : "border-gray-700";
+  const text   = lightMode ? "text-gray-900"   : "text-gray-100";
+  const muted  = lightMode ? "text-gray-700"   : "text-gray-400";
+
+  const inputCls =
+    `w-full ${bg} border ${border} rounded-md px-3 py-2 text-sm ${text} ` +
+    `focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 font-mono ` +
+    (lightMode ? "shadow-sm placeholder-gray-400" : "placeholder-gray-500");
+  const labelCls = `block text-sm font-medium ${muted} mb-1.5`;
+
   const [truck, setTruck]   = useState<TruckSpec>(DEFAULT_TRUCK);
   const [stops, setStops]   = useState<DeliveryStop[]>(DEFAULT_STOPS);
   const [items, setItems]   = useState<FurnitureItem[]>(DEFAULT_ITEMS);
   const [draft, setDraft]   = useState<FurnitureItem>(blankItem());
-  const [showAdd, setShowAdd]   = useState(false);
+  const [showAdd, setShowAdd]     = useState(false);
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [itemError, setItemError] = useState<string | null>(null);
 
-  // Theoretical packing density info
   const truckVol = (truck.W * truck.L * truck.H) / 1e9;
   const itemsVol = items.reduce((s, it) => s + (it.w * it.l * it.h) / 1e9, 0);
   const theoPct  = truckVol > 0 ? Math.round((itemsVol / truckVol) * 100) : 0;
 
-  // ── Truck field updater ──
   function setTruckField(k: keyof TruckSpec, v: number) {
     setTruck((t) => ({ ...t, [k]: v }));
   }
@@ -266,33 +327,59 @@ export function ManifestForm({ onSolve, loading }: ManifestFormProps) {
     setItems((its) => its.filter((it) => it.stop_id !== removed));
   }
 
+  function moveStop(idx: number, dir: -1 | 1) {
+    const next = idx + dir;
+    if (next < 0 || next >= stops.length) return;
+    setStops((s) => {
+      const arr = [...s];
+      [arr[idx], arr[next]] = [arr[next], arr[idx]];
+      return arr;
+    });
+  }
+
   // ── Item helpers ──
   function commitAdd() {
     setItemError(null);
     if (!draft.item_id.trim())
       return setItemError("Select a furniture type.");
-    if (items.some((it) => it.item_id === draft.item_id.trim()))
+    if (items.some((it, j) => it.item_id === draft.item_id.trim() && j !== editingIdx))
       return setItemError("Item ID must be unique.");
     if (draft.w <= 0 || draft.l <= 0 || draft.h <= 0)
       return setItemError("All dimensions must be > 0.");
     if (!stops.some((s) => s.stop_id === draft.stop_id))
       return setItemError("Stop ID does not exist in the stop list.");
-    setItems((its) => [...its, { ...draft, item_id: draft.item_id.trim() }]);
+
+    if (editingIdx !== null) {
+      setItems((its) =>
+        its.map((it, j) => j === editingIdx ? { ...draft, item_id: draft.item_id.trim() } : it),
+      );
+      setEditingIdx(null);
+    } else {
+      setItems((its) => [...its, { ...draft, item_id: draft.item_id.trim() }]);
+    }
     setDraft(blankItem());
     setShowAdd(false);
   }
 
   function cancelAdd() {
     setShowAdd(false);
+    setEditingIdx(null);
     setItemError(null);
     setDraft(blankItem());
   }
 
+  function startEdit(idx: number) {
+    setEditingIdx(idx);
+    setDraft({ ...items[idx] });
+    setShowAdd(true);
+    setItemError(null);
+  }
+
   return (
-    <div className="flex flex-col pb-4">
+    <div className={`flex flex-col pb-4 ${lightMode ? "bg-slate-50" : ""}`}>
       {/* ── Truck Spec ─────────────────────────────────────────────────────── */}
-      <Section title="Truck Specification">
-        <div className="grid grid-cols-2 gap-2 mb-2">
+      <Section title="Truck Specification" bg2={bg2} border={border} muted={muted}>
+        <div className="grid grid-cols-2 gap-3 mb-3">
           {(["W", "L", "H"] as const).map((k) => (
             <div key={k}>
               <label className={labelCls}>
@@ -323,19 +410,23 @@ export function ManifestForm({ onSolve, loading }: ManifestFormProps) {
             />
           </div>
         </div>
-        <div className="text-xs text-gray-700 font-mono bg-gray-900/40 rounded px-2 py-1">
+        <div className={`text-sm ${muted} font-mono ${bg2} rounded-md px-3 py-2`}>
           Vol:&nbsp;{truckVol.toFixed(2)}&nbsp;m³ &nbsp;·&nbsp; Cargo:&nbsp;~{theoPct}%&nbsp;theoretical
         </div>
       </Section>
 
       {/* ── Delivery Stops ─────────────────────────────────────────────────── */}
-      <Section title="Delivery Stops" badge={stops.length}>
+      <Section title="Delivery Stops" badge={stops.length} bg2={bg2} border={border} muted={muted}>
         <div className="space-y-2 mb-2">
           {stops.map((stop, i) => (
-            <div key={stop.stop_id} className="flex items-center gap-2">
+            <div key={stop.stop_id} className="flex items-center gap-1.5">
               <span
-                className="w-5 h-5 rounded text-xs font-bold flex items-center justify-center shrink-0 text-gray-950 leading-none"
-                style={{ backgroundColor: badgeColor(stop.stop_id) }}
+                className="w-7 h-7 rounded text-sm font-bold flex items-center justify-center shrink-0 text-gray-950 leading-none"
+                style={{
+                  backgroundColor: badgeColor(stop.stop_id),
+                  outline: lightMode ? "1.5px solid rgba(0,0,0,0.18)" : "none",
+                  outlineOffset: "1px",
+                }}
               >
                 {stop.stop_id}
               </span>
@@ -352,11 +443,30 @@ export function ManifestForm({ onSolve, loading }: ManifestFormProps) {
                   )
                 }
               />
+              {/* Reorder buttons */}
+              <div className="flex flex-col gap-px shrink-0">
+                <button
+                  onClick={() => moveStop(i, -1)}
+                  disabled={i === 0}
+                  title="Move up"
+                  className="text-gray-500 hover:text-gray-200 disabled:opacity-20 disabled:cursor-default transition-colors text-sm leading-none px-1"
+                >
+                  ▲
+                </button>
+                <button
+                  onClick={() => moveStop(i, 1)}
+                  disabled={i === stops.length - 1}
+                  title="Move down"
+                  className="text-gray-500 hover:text-gray-200 disabled:opacity-20 disabled:cursor-default transition-colors text-sm leading-none px-1"
+                >
+                  ▼
+                </button>
+              </div>
               {stops.length > 1 && (
                 <button
                   onClick={() => removeStop(i)}
                   title="Remove stop"
-                  className="text-gray-700 hover:text-red-400 transition-colors text-xs shrink-0"
+                  className="text-gray-500 hover:text-red-400 transition-colors text-sm shrink-0"
                 >
                   ✕
                 </button>
@@ -366,64 +476,81 @@ export function ManifestForm({ onSolve, loading }: ManifestFormProps) {
         </div>
         <button
           onClick={addStop}
-          className="w-full text-xs text-gray-600 hover:text-gray-300 border border-dashed border-gray-800 hover:border-gray-600 rounded py-1.5 transition-colors"
+          className={`w-full text-sm ${muted} border border-dashed ${border} rounded-md py-2.5 transition-colors font-medium ${
+            lightMode
+              ? "hover:text-gray-900 hover:border-gray-400 hover:bg-white"
+              : "hover:text-gray-200 hover:border-gray-500"
+          }`}
         >
           + Add Stop
         </button>
-        <p className="text-xs text-gray-700 mt-2">
+        <p className={`text-sm ${muted} mt-2 leading-relaxed`}>
           Stop&nbsp;1&nbsp;=&nbsp;first delivery (near door). Higher&nbsp;#&nbsp;=&nbsp;deeper in truck&nbsp;(LIFO).
         </p>
       </Section>
 
       {/* ── Cargo Items ────────────────────────────────────────────────────── */}
-      <Section title="Cargo Items" badge={items.length}>
+      <Section title="Cargo Items" badge={items.length} bg2={bg2} border={border} muted={muted}>
         {items.length > 0 && (
-          <div className="rounded border border-gray-800 overflow-hidden mb-2">
+          <div className={`rounded border ${border} overflow-hidden mb-2`}>
             <table className="w-full text-xs">
               <thead>
-                <tr className="bg-gray-900 text-gray-600">
-                  <th className="text-left px-2 py-1.5 font-medium">ID</th>
-                  <th className="text-right px-2 py-1.5 font-medium whitespace-nowrap">
+                <tr className={`${bg2} ${muted}`}>
+                  <th className="text-left px-2 py-2 font-semibold text-sm">ID</th>
+                  <th className="text-right px-2 py-2 font-semibold text-sm whitespace-nowrap">
                     W×L×H
                   </th>
-                  <th className="text-center px-1 py-1.5 font-medium w-8">Stp</th>
-                  <th className="text-center px-1 py-1.5 font-medium w-6">↑</th>
-                  <th className="w-5" />
+                  <th className="text-center px-1 py-2 font-semibold text-sm w-8">Stp</th>
+                  <th className="text-center px-1 py-2 font-semibold text-sm w-6">↑</th>
+                  <th className="w-12" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-800/40">
+              <tbody className={`divide-y ${border}/40`}>
                 {items.map((item, i) => (
-                  <tr key={item.item_id} className="hover:bg-gray-900/40">
+                  <tr key={item.item_id} className={lightMode ? "hover:bg-slate-100" : "hover:bg-gray-800/30"}>
                     <td
-                      className="px-2 py-1.5 font-mono text-gray-200 max-w-[100px] truncate"
+                      className={`px-2 py-2 font-mono text-sm ${text} max-w-[100px] truncate`}
                       title={item.item_id}
                     >
                       {item.item_id}
                     </td>
-                    <td className="px-2 py-1.5 text-right font-mono text-gray-500 whitespace-nowrap">
+                    <td className={`px-2 py-2 text-right font-mono text-sm ${muted} whitespace-nowrap`}>
                       {item.w}×{item.l}×{item.h}
                     </td>
-                    <td className="px-1 py-1.5 text-center">
+                    <td className="px-1 py-2 text-center">
                       <span
-                        className="inline-flex w-4 h-4 rounded text-xs font-bold items-center justify-center text-gray-950 leading-none"
-                        style={{ backgroundColor: badgeColor(item.stop_id) }}
+                        className="inline-flex w-6 h-6 rounded text-sm font-bold items-center justify-center text-gray-950 leading-none"
+                        style={{
+                          backgroundColor: badgeColor(item.stop_id),
+                          outline: lightMode ? "1.5px solid rgba(0,0,0,0.18)" : "none",
+                          outlineOffset: "1px",
+                        }}
                       >
                         {item.stop_id}
                       </span>
                     </td>
-                    <td className="px-1 py-1.5 text-center text-gray-600 text-xs">
+                    <td className={`px-1 py-2 text-center ${muted} text-sm`}>
                       {item.side_up && <span title="Upright only">↑</span>}
                     </td>
                     <td className="pr-2 text-right">
-                      <button
-                        onClick={() =>
-                          setItems((its) => its.filter((_, j) => j !== i))
-                        }
-                        title="Remove item"
-                        className="text-gray-700 hover:text-red-400 transition-colors"
-                      >
-                        ✕
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => startEdit(i)}
+                          title="Edit item"
+                          className="text-gray-500 hover:text-blue-400 transition-colors text-sm p-1"
+                        >
+                          ✎
+                        </button>
+                        <button
+                          onClick={() =>
+                            setItems((its) => its.filter((_, j) => j !== i))
+                          }
+                          title="Remove item"
+                          className="text-gray-500 hover:text-red-400 transition-colors text-sm p-1"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -434,23 +561,33 @@ export function ManifestForm({ onSolve, loading }: ManifestFormProps) {
 
         {showAdd ? (
           <AddItemForm
+            key={editingIdx ?? "new"}
             value={draft}
             stops={stops}
-            existingIds={items.map((it) => it.item_id)}
+            existingIds={items.filter((_, j) => j !== editingIdx).map((it) => it.item_id)}
             error={itemError}
             onChange={setDraft}
             onConfirm={commitAdd}
             onCancel={cancelAdd}
+            initialPrefix={editingIdx !== null ? prefixOf(items[editingIdx].item_id) : undefined}
+            confirmLabel={editingIdx !== null ? "Save" : "Add"}
+            inputCls={inputCls}
+            labelCls={labelCls}
+            lightMode={lightMode}
           />
         ) : stops.length > 0 ? (
           <button
             onClick={() => setShowAdd(true)}
-            className="w-full text-xs text-gray-600 hover:text-gray-300 border border-dashed border-gray-800 hover:border-gray-600 rounded py-1.5 transition-colors"
+            className={`w-full text-sm ${muted} border border-dashed ${border} rounded-md py-2.5 transition-colors font-medium ${
+              lightMode
+                ? "hover:text-gray-900 hover:border-gray-400 hover:bg-white"
+                : "hover:text-gray-200 hover:border-gray-500"
+            }`}
           >
             + Add Item
           </button>
         ) : (
-          <p className="text-xs text-gray-700 text-center py-2">
+          <p className={`text-sm ${muted} text-center py-2`}>
             Add at least one stop before adding items.
           </p>
         )}
@@ -461,7 +598,7 @@ export function ManifestForm({ onSolve, loading }: ManifestFormProps) {
         <button
           onClick={() => onSolve({ items, truck, stops })}
           disabled={loading || items.length === 0}
-          className="w-full py-2.5 text-sm font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-600 text-white transition-colors flex items-center justify-center gap-2"
+          className="w-full py-3.5 text-base font-bold rounded-lg bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-white transition-colors flex items-center justify-center gap-2"
         >
           {loading ? (
             <>
@@ -473,7 +610,7 @@ export function ManifestForm({ onSolve, loading }: ManifestFormProps) {
           )}
         </button>
         {items.length === 0 && !loading && (
-          <p className="text-xs text-gray-700 text-center mt-2">
+          <p className={`text-sm ${muted} text-center mt-2`}>
             Add at least one item to solve.
           </p>
         )}

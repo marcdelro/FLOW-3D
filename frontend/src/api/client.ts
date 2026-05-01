@@ -24,7 +24,7 @@ export async function fetchSolutions(
 ): Promise<PackingPlan[]> {
   if (USE_MOCK) {
     await delay(MOCK_DELAY_MS);
-    return mockPlans;
+    return buildPlansFromRequest(request);
   }
   // Real API: 3 parallel requests, each with a different DSS strategy so the
   // backend produces three structurally distinct plans (optimal / balanced /
@@ -39,7 +39,7 @@ export async function fetchSolution(
 ): Promise<PackingPlan> {
   if (USE_MOCK) {
     await delay(MOCK_DELAY_MS);
-    return mockPlan;
+    return buildPlansFromRequest(request)[0];
   }
 
   const solveResponse = await fetch(`${API_URL}/api/solve`, {

@@ -4,7 +4,8 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 
 import type { PackingPlan, Placement } from "../types";
-import { resolveModelPath } from "../data/modelCatalog";
+import { resolveModelMeta } from "../data/modelCatalog";
+import type { AxisUp } from "../data/modelCatalog";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -32,14 +33,14 @@ function hexCss(n: number): string {
 }
 
 /** Render item_id text as a billboard sprite above the item. */
-function makeTextSprite(text: string): THREE.Sprite {
+function makeTextSprite(text: string, lightMode?: boolean): THREE.Sprite {
   const canvas = document.createElement("canvas");
   canvas.width  = 256;
   canvas.height = 48;
   const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "rgba(11,13,18,0.88)";
+  ctx.fillStyle = lightMode ? "rgba(240,244,248,0.92)" : "rgba(11,13,18,0.88)";
   ctx.fillRect(0, 0, 256, 48);
-  ctx.fillStyle = "#e5e7eb";
+  ctx.fillStyle = lightMode ? "#1e293b" : "#e5e7eb";
   ctx.font = "bold 20px 'Segoe UI', system-ui, sans-serif";
   const label = text.length > 16 ? text.slice(0, 14) + "…" : text;
   ctx.fillText(label, 10, 32);
@@ -55,40 +56,70 @@ function makeTextSprite(text: string): THREE.Sprite {
 }
 
 /**
- * Scale a loaded OBJ group so its bounding box exactly fills (w_mm × h_mm × l_mm),
- * then shift it so the bbox centre sits at the Three.js origin.
- * The caller is responsible for positioning at the placement centre afterwards.
+ * Scale and orient a loaded OBJ group so its bounding box exactly fills
+ * (w_mm × h_mm × l_mm) in Three.js space (X = truck width, Y = up, Z = truck depth).
+ * After the call, the bbox min-corner sits at world origin so the caller can
+ * position by adding the placement corner (p.x/10, p.z/10, p.y/10 + zOffset).
  */
 function fitModelToBox(
   obj: THREE.Group,
   w_mm: number,
   l_mm: number,
   h_mm: number,
+  axisUp: AxisUp = "auto",
 ): void {
+  obj.position.set(0, 0, 0);
+  obj.rotation.set(0, 0, 0);
+  obj.scale.set(1, 1, 1);
   obj.updateMatrixWorld(true);
-  const bbox = new THREE.Box3().setFromObject(obj);
-  const size = bbox.getSize(new THREE.Vector3());
 
+  const raw = new THREE.Box3().setFromObject(obj);
+  if (raw.isEmpty()) return;
+
+  const size = raw.getSize(new THREE.Vector3());
   if (size.x < 1e-6 || size.y < 1e-6 || size.z < 1e-6) return;
 
-  // Three.js axes: X = width, Y = height (up), Z = depth (truck length)
   const tW = w_mm / MM_PER_UNIT;
   const tH = h_mm / MM_PER_UNIT;
   const tL = l_mm / MM_PER_UNIT;
 
-  obj.scale.set(tW / size.x, tH / size.y, tL / size.z);
+  const resolved: "y" | "z" | "x" =
+    axisUp === "auto"
+      ? (h_mm >= w_mm && h_mm >= l_mm && size.z > size.y * 1.2 ? "z" : "y")
+      : axisUp;
 
-  // Re-centre so bbox midpoint is at origin → caller places at (cx, cy, cz)
+  let sx: number, sy: number, sz: number;
+
+  if (resolved === "z") {
+    obj.rotation.x = -Math.PI / 2;
+    sx = tW / size.x;
+    sz = tH / size.z;
+    sy = tL / size.y;
+  } else if (resolved === "x") {
+    obj.rotation.z = Math.PI / 2;
+    sx = tH / size.x;
+    sy = tW / size.y;
+    sz = tL / size.z;
+  } else {
+    sx = tW / size.x;
+    sy = tH / size.y;
+    sz = tL / size.z;
+  }
+
+  obj.scale.set(sx, sy, sz);
   obj.updateMatrixWorld(true);
-  const centre = new THREE.Box3().setFromObject(obj).getCenter(new THREE.Vector3());
-  obj.position.sub(centre);
+
+  const placed = new THREE.Box3().setFromObject(obj);
+  const mn = placed.min;
+  obj.position.set(-mn.x, -mn.y, -mn.z);
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface TruckViewerProps {
-  plan:  PackingPlan;
-  truck: { W: number; L: number; H: number };
+  plan:      PackingPlan;
+  truck:     { W: number; L: number; H: number };
+  lightMode?: boolean;
 }
 
 type ViewMode = "3d" | "exploded" | "labels" | "animate";
@@ -102,43 +133,36 @@ interface TooltipState {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function TruckViewer({ plan, truck }: TruckViewerProps) {
+export function TruckViewer({ plan, truck, lightMode = false }: TruckViewerProps) {
   const mountRef        = useRef<HTMLDivElement | null>(null);
   const cameraPosRef    = useRef(new THREE.Vector3(-600, 600, 1400));
   const cameraTargetRef = useRef<THREE.Vector3 | null>(null);
 
-  // Persistent OBJ cache: path → loaded Group (null = load failed)
   const modelCacheRef = useRef<Map<string, THREE.Group | null>>(new Map());
 
   const [mode, setMode]           = useState<ViewMode>("3d");
   const [tooltip, setTooltip]     = useState<TooltipState | null>(null);
-  // Bumped each time new models finish loading → triggers scene rebuild
   const [modelsVersion, setModelsVersion] = useState(0);
 
   // ── Animation state ────────────────────────────────────────────────────────
-  const [animStep,    setAnimStep]    = useState(0);   // items revealed (0 = none)
+  const [animStep,    setAnimStep]    = useState(0);
   const [isPlaying,   setIsPlaying]   = useState(false);
-  const [animSpeed,   setAnimSpeed]   = useState(900); // ms per item
+  const [animSpeed,   setAnimSpeed]   = useState(900);
 
   const packed      = plan.placements.filter((p) => p.is_packed);
   const uniqueStops = [...new Set(packed.map((p) => p.stop_id))].sort((a, b) => a - b);
 
-  // LIFO load order: highest stop first (sits deepest); stable within same stop
   const animSorted = [...packed].sort((a, b) => b.stop_id - a.stop_id);
-  // Items visible in scene — all in static modes, sliced in animate mode
   const displayItems = mode === "animate" ? animSorted.slice(0, animStep) : packed;
-  // The item that just appeared (for highlighting)
   const latestItem   = mode === "animate" && animStep > 0
     ? animSorted[animStep - 1]
     : null;
 
-  // ── Reset animation when a new plan arrives ────────────────────────────────
   useEffect(() => {
     setAnimStep(0);
     setIsPlaying(false);
   }, [plan]);
 
-  // ── Playback timer (advances animStep once per animSpeed ms) ───────────────
   useEffect(() => {
     if (!isPlaying || mode !== "animate") return;
     if (animStep >= animSorted.length) { setIsPlaying(false); return; }
@@ -152,10 +176,14 @@ export function TruckViewer({ plan, truck }: TruckViewerProps) {
     const toLoad: string[] = [];
 
     for (const p of packed) {
-      const path = resolveModelPath(p.item_id);
-      if (path && !modelCacheRef.current.has(path)) {
-        modelCacheRef.current.set(path, null); // mark as in-flight
-        toLoad.push(path);
+      const metaDefault = resolveModelMeta(p.item_id);
+      const metaVariant = resolveModelMeta(p.item_id, p.model_variant);
+
+      for (const meta of [metaDefault, metaVariant]) {
+        if (meta && !modelCacheRef.current.has(meta.path)) {
+          modelCacheRef.current.set(meta.path, null);
+          toLoad.push(meta.path);
+        }
       }
     }
 
@@ -180,8 +208,6 @@ export function TruckViewer({ plan, truck }: TruckViewerProps) {
 
     return () => {
       cancelled = true;
-      // Remove in-flight (null) entries so a Strict Mode remount or plan change
-      // can restart loading rather than finding them already "in cache".
       for (const path of toLoad) {
         if (modelCacheRef.current.get(path) === null) {
           modelCacheRef.current.delete(path);
@@ -199,9 +225,8 @@ export function TruckViewer({ plan, truck }: TruckViewerProps) {
     const width  = mount.clientWidth  || 800;
     const height = mount.clientHeight || 600;
 
-    // ── Scene / camera / renderer ──────────────────────────────────────────
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0b0d12);
+    scene.background = new THREE.Color(lightMode ? 0xf3f4f6 : 0x0b0d12);
 
     const camera = new THREE.PerspectiveCamera(45, width / height, 1, 20000);
     camera.position.copy(cameraPosRef.current);
@@ -212,7 +237,7 @@ export function TruckViewer({ plan, truck }: TruckViewerProps) {
     mount.appendChild(renderer.domElement);
 
     // ── Lighting ───────────────────────────────────────────────────────────
-    scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+    scene.add(new THREE.AmbientLight(0xffffff, lightMode ? 1.2 : 0.9));
     const sun = new THREE.DirectionalLight(0xffffff, 0.65);
     sun.position.set(400, 800, 600);
     scene.add(sun);
@@ -226,7 +251,10 @@ export function TruckViewer({ plan, truck }: TruckViewerProps) {
 
     // ── Floor grid ─────────────────────────────────────────────────────────
     const gridHelper = new THREE.GridHelper(
-      Math.max(truckW, truckL) * 1.5, 20, 0x1e2533, 0x1a2030,
+      Math.max(truckW, truckL) * 1.5,
+      20,
+      lightMode ? 0xcbd5e1 : 0x1e2533,
+      lightMode ? 0xbfc9d6 : 0x1a2030,
     );
     gridHelper.position.set(truckW / 2, -0.3, truckL / 2);
     scene.add(gridHelper);
@@ -234,7 +262,10 @@ export function TruckViewer({ plan, truck }: TruckViewerProps) {
     // ── Truck interior floor ───────────────────────────────────────────────
     const floorGeo = new THREE.PlaneGeometry(truckW, truckL);
     const floorMat = new THREE.MeshBasicMaterial({
-      color: 0x111827, transparent: true, opacity: 0.45, side: THREE.DoubleSide,
+      color: lightMode ? 0xdde1ea : 0x111827,
+      transparent: true,
+      opacity: 0.45,
+      side: THREE.DoubleSide,
     });
     const floorMesh = new THREE.Mesh(floorGeo, floorMat);
     floorMesh.rotation.x = -Math.PI / 2;
@@ -246,28 +277,50 @@ export function TruckViewer({ plan, truck }: TruckViewerProps) {
     const truckEdgeGeo = new THREE.EdgesGeometry(truckGeo);
     const truckWire    = new THREE.LineSegments(
       truckEdgeGeo,
-      new THREE.LineBasicMaterial({ color: 0x2d3748 }),
+      new THREE.LineBasicMaterial({ color: lightMode ? 0x94a3b8 : 0x2d3748 }),
     );
     truckWire.position.set(truckW / 2, truckH / 2, truckL / 2);
     scene.add(truckWire);
 
-    // ── Door face (tinted blue, at z = truckL) ─────────────────────────────
-    const doorGeo  = new THREE.PlaneGeometry(truckW, truckH);
-    const doorMat  = new THREE.MeshBasicMaterial({
-      color: 0x1e3a5f, transparent: true, opacity: 0.1, side: THREE.DoubleSide,
+    // ── Door face — stronger tint at z = truckL (thesis: y = L is loading door) ─
+    const doorGeo = new THREE.PlaneGeometry(truckW, truckH);
+    const doorMat = new THREE.MeshBasicMaterial({
+      color: 0x1e3a5f, transparent: true, opacity: 0.28, side: THREE.DoubleSide,
     });
     const doorMesh = new THREE.Mesh(doorGeo, doorMat);
     doorMesh.position.set(truckW / 2, truckH / 2, truckL);
     scene.add(doorMesh);
+
+    // Door frame — bright blue edge outline
+    const doorFrameGeo = new THREE.EdgesGeometry(new THREE.PlaneGeometry(truckW, truckH));
+    const doorFrameMat = new THREE.LineBasicMaterial({ color: 0x3b82f6, transparent: true, opacity: 0.7 });
+    const doorFrame = new THREE.LineSegments(doorFrameGeo, doorFrameMat);
+    doorFrame.position.set(truckW / 2, truckH / 2, truckL);
+    scene.add(doorFrame);
+
+    // Door centre split line (vertical — suggests double doors)
+    const splitPoints = [
+      new THREE.Vector3(truckW / 2, 0, truckL),
+      new THREE.Vector3(truckW / 2, truckH, truckL),
+    ];
+    const splitGeo = new THREE.BufferGeometry().setFromPoints(splitPoints);
+    const splitMat = new THREE.LineBasicMaterial({ color: 0x3b82f6, transparent: true, opacity: 0.45 });
+    scene.add(new THREE.Line(splitGeo, splitMat));
+
+    // Door label sprite
+    const doorSprite = makeTextSprite("DOOR →", lightMode);
+    doorSprite.position.set(truckW / 2, truckH + 8, truckL);
+    doorSprite.scale.set(40, 8, 1);
+    scene.add(doorSprite);
 
     // ── Exploded-view offset ───────────────────────────────────────────────
     const stopOrder = [...new Set(packed.map((p) => p.stop_id))].sort((a, b) => b - a);
     const EXPLODE_GAP = 120;
 
     // ── Disposal lists ─────────────────────────────────────────────────────
-    const geos:       THREE.BufferGeometry[] = [truckGeo, truckEdgeGeo, floorGeo, doorGeo];
-    const mats:       THREE.Material[]       = [floorMat, truckWire.material as THREE.Material, doorMat];
-    const spriteMats: THREE.SpriteMaterial[] = [];
+    const geos: THREE.BufferGeometry[] = [truckGeo, truckEdgeGeo, floorGeo, doorGeo, doorFrameGeo, splitGeo];
+    const mats: THREE.Material[]       = [floorMat, truckWire.material as THREE.Material, doorMat, doorFrameMat, splitMat];
+    const spriteMats: THREE.SpriteMaterial[] = [doorSprite.material as THREE.SpriteMaterial];
 
     // ── Item meshes for raycasting ─────────────────────────────────────────
     const itemMeshes: THREE.Mesh[] = [];
@@ -275,7 +328,7 @@ export function TruckViewer({ plan, truck }: TruckViewerProps) {
     // ── Render each visible item ───────────────────────────────────────────
     for (let i = 0; i < displayItems.length; i++) {
       const p        = displayItems[i];
-      const isLatest = p === latestItem; // most recently placed in animate mode
+      const isLatest = p === latestItem;
 
       const w = p.w / MM_PER_UNIT;
       const l = p.l / MM_PER_UNIT;
@@ -284,30 +337,38 @@ export function TruckViewer({ plan, truck }: TruckViewerProps) {
       const stopIdx = stopOrder.indexOf(p.stop_id);
       const zOffset = mode === "exploded" ? stopIdx * EXPLODE_GAP : 0;
 
-      // Placement centre in Three.js units
       const cx = p.x / MM_PER_UNIT + w / 2;
       const cy = p.z / MM_PER_UNIT + h / 2;
       const cz = p.y / MM_PER_UNIT + l / 2 + zOffset;
 
       const color   = colorForStop(p.stop_id);
-      // Dim older items during animation so the newest one pops
       const opacity = mode === "labels"   ? 0.65
                     : mode === "animate" && !isLatest ? 0.50
                     : 0.88;
-      // Blue outline for the latest item, dark for all others
       const outlineColor   = isLatest ? 0x60a5fa : 0x0b0d12;
       const outlineOpacity = isLatest ? 0.90    : 0.45;
 
-      const path        = resolveModelPath(p.item_id);
-      const cachedModel = path !== null ? modelCacheRef.current.get(path) : undefined;
+      const meta        = resolveModelMeta(p.item_id, p.model_variant);
+      const cachedModel = meta !== null ? modelCacheRef.current.get(meta.path) : undefined;
+      const hasModel    = cachedModel !== null && cachedModel !== undefined;
 
-      if (cachedModel) {
+      let useModel = false;
+      let clone: THREE.Group | null = null;
+
+      if (hasModel) {
+        clone = (cachedModel as THREE.Group).clone(true);
+        fitModelToBox(clone, p.w, p.l, p.h, meta!.axisUp);
+        const cloneBbox = new THREE.Box3().setFromObject(clone);
+        useModel = !cloneBbox.isEmpty();
+      }
+
+      if (useModel && clone) {
         // ── 3D model path ────────────────────────────────────────────────
-        const clone = cachedModel.clone(true);
-        fitModelToBox(clone, p.w, p.l, p.h);
-        // fitModelToBox centres the bbox at world origin by offsetting position;
-        // add (cx,cy,cz) so the bbox centre lands at the placement centre.
-        clone.position.add(new THREE.Vector3(cx, cy, cz));
+        clone.position.add(new THREE.Vector3(
+          p.x / MM_PER_UNIT,
+          p.z / MM_PER_UNIT,
+          p.y / MM_PER_UNIT + zOffset,
+        ));
 
         clone.traverse((child) => {
           if (child instanceof THREE.Mesh) {
@@ -321,7 +382,6 @@ export function TruckViewer({ plan, truck }: TruckViewerProps) {
 
         scene.add(clone);
 
-        // Wireframe outline using the placement bounding box
         const eGeo  = new THREE.BoxGeometry(w, h, l);
         const eEdge = new THREE.EdgesGeometry(eGeo);
         const eMat  = new THREE.LineBasicMaterial({ color: outlineColor, transparent: true, opacity: outlineOpacity });
@@ -332,7 +392,7 @@ export function TruckViewer({ plan, truck }: TruckViewerProps) {
         scene.add(edges);
 
       } else {
-        // ── Fallback: coloured box (model not yet loaded or unrecognised) ─
+        // ── Fallback: coloured box (model not loaded or geometry invalid) ─
         const geom = new THREE.BoxGeometry(w, h, l);
         geos.push(geom);
 
@@ -356,7 +416,7 @@ export function TruckViewer({ plan, truck }: TruckViewerProps) {
 
       // ── Label sprite ─────────────────────────────────────────────────────
       if (mode === "labels") {
-        const sprite = makeTextSprite(p.item_id);
+        const sprite = makeTextSprite(p.item_id, lightMode);
         sprite.position.set(cx, cy + h / 2 + 7, cz);
         scene.add(sprite);
         spriteMats.push(sprite.material as THREE.SpriteMaterial);
@@ -437,7 +497,7 @@ export function TruckViewer({ plan, truck }: TruckViewerProps) {
       setTooltip(null);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, truck, mode, modelsVersion, animStep]);
+  }, [plan, truck, mode, modelsVersion, animStep, lightMode]);
 
   return (
     <div className="relative w-full h-full">
@@ -498,19 +558,16 @@ export function TruckViewer({ plan, truck }: TruckViewerProps) {
       {/* ── Animate: playback controls (bottom-center) ── */}
       {mode === "animate" && (
         <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 bg-gray-900/98 border border-gray-700 rounded-xl px-4 py-2 shadow-2xl">
-          {/* Skip to start */}
           <button
             onClick={() => { setAnimStep(0); setIsPlaying(false); }}
             className="text-gray-500 hover:text-white transition-colors text-sm px-1"
             title="Restart"
           >⏮</button>
-          {/* Step back */}
           <button
             onClick={() => { setIsPlaying(false); setAnimStep((s) => Math.max(0, s - 1)); }}
             className="text-gray-500 hover:text-white transition-colors text-sm px-1"
             title="Previous item"
           >⏪</button>
-          {/* Play / Pause */}
           <button
             onClick={() => {
               if (animStep >= animSorted.length) { setAnimStep(0); setIsPlaying(true); }
@@ -521,13 +578,11 @@ export function TruckViewer({ plan, truck }: TruckViewerProps) {
           >
             {isPlaying ? "⏸" : "▶"}
           </button>
-          {/* Step forward */}
           <button
             onClick={() => { setIsPlaying(false); setAnimStep((s) => Math.min(animSorted.length, s + 1)); }}
             className="text-gray-500 hover:text-white transition-colors text-sm px-1"
             title="Next item"
           >⏩</button>
-          {/* Skip to end */}
           <button
             onClick={() => { setIsPlaying(false); setAnimStep(animSorted.length); }}
             className="text-gray-500 hover:text-white transition-colors text-sm px-1"
@@ -536,7 +591,6 @@ export function TruckViewer({ plan, truck }: TruckViewerProps) {
 
           <div className="w-px h-4 bg-gray-700 mx-1" />
 
-          {/* Progress slider */}
           <input
             type="range"
             min={0}
@@ -551,7 +605,6 @@ export function TruckViewer({ plan, truck }: TruckViewerProps) {
 
           <div className="w-px h-4 bg-gray-700 mx-1" />
 
-          {/* Speed selector */}
           <select
             value={animSpeed}
             onChange={(e) => setAnimSpeed(parseInt(e.target.value))}

@@ -24,6 +24,8 @@ export interface Placement {
   stop_id: number;
   /** b_i packing status */
   is_packed: boolean;
+  /** 0-based index into the CATALOG model array — overrides hash when set */
+  model_variant?: number;
 }
 
 /** DSS plan-selection strategy — see backend/core/optimizer.py. */
@@ -55,6 +57,8 @@ export interface FurnitureItem {
   stop_id: number;
   /** If true, restricts orientation_index to upright poses */
   side_up: boolean;
+  /** 0-based index into the CATALOG model array for this category */
+  model_variant?: number;
 }
 
 export interface TruckSpec {
