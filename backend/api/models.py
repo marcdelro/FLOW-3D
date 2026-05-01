@@ -10,6 +10,12 @@ from typing import List, Literal
 
 from pydantic import BaseModel, Field
 
+# DSS plan-selection strategies (thesis section 3.5.2 — decision support layer).
+# Each strategy maps to a distinct objective trade-off: optimal = max V_util via
+# ILP, balanced = fast deterministic FFD by volume, stability = FFD by weight so
+# heavy items sit at the bottom (low center of gravity).
+SolveStrategy = Literal["optimal", "balanced", "stability"]
+
 
 class FurnitureItem(BaseModel):
     item_id: str = Field(..., description="Unique item identifier")
@@ -40,6 +46,10 @@ class SolveRequest(BaseModel):
     items: List[FurnitureItem]
     truck: TruckSpec = Field(default_factory=TruckSpec)
     stops: List[DeliveryStop] = Field(default_factory=list)
+    strategy: SolveStrategy = Field(
+        "optimal",
+        description="Plan-selection strategy: optimal | balanced | stability",
+    )
 
 
 class Placement(BaseModel):
@@ -61,3 +71,11 @@ class PackingPlan(BaseModel):
     t_exec_ms: int = Field(..., description="T_exec in milliseconds")
     solver_mode: Literal["ILP", "FFD"]
     unplaced_items: List[str] = Field(default_factory=list)
+    strategy: SolveStrategy = Field(
+        "optimal",
+        description="DSS strategy that produced this plan",
+    )
+    rationale: str = Field(
+        "",
+        description="Human-readable justification for choosing this plan",
+    )

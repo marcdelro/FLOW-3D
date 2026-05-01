@@ -66,6 +66,80 @@ running. To talk to the real API, copy `.env.local.example` to `.env.local`
 and set `VITE_USE_MOCK=false` — Vite picks `.env.local` up automatically
 on the next `npm run dev`.
 
+## Gurobi WLS Academic License (required for true ILP)
+
+FLOW-3D's hybrid engine routes small manifests (≤ `SOLVER_THRESHOLD` items) through an
+exact ILP solver powered by Gurobi. **Without a valid Gurobi license the ILP path cannot
+run** — the engine automatically falls back to FFD for all manifest sizes so the system
+stays operational, but optimality guarantees are lost.
+
+To enable true ILP:
+
+1. Go to [gurobi.com](https://www.gurobi.com) and sign in with your academic email.
+2. Navigate to **Licenses** and request a **WLS Academic License** (free for students).
+3. Download the generated `gurobi.lic` file and place it at:
+   - Windows: `C:\Users\<you>\gurobi.lic`
+   - macOS / Linux: `~/gurobi.lic`
+4. If running via Docker, mount the license file into the containers — see the
+   Docker Compose section below.
+
+> **Note:** WLS licenses authenticate against Gurobi's own servers over the internet.
+> A university VPN may be required if your institution's license is network-restricted.
+> Contact FEU Tech IT or your thesis adviser for VPN access if needed.
+
+## Running with Docker Compose (recommended)
+
+Docker Compose is the easiest way to bring up the full stack — Redis, the FastAPI
+backend, the Celery worker, and the Vite frontend all start in the correct order with
+a single command. Docker Desktop must be running on Windows.
+
+### Without a Gurobi license
+
+All manifests use the real FFD heuristic solver. No extra setup needed.
+
+```
+docker compose up
+```
+
+### With a Gurobi WLS license
+
+Mount your `gurobi.lic` file into the backend and celery services by adding the
+following volume line under both services in `docker-compose.yml`:
+
+```yaml
+volumes:
+  - ./backend:/app
+  - ./docs:/docs
+  - C:/Users/<you>/gurobi.lic:/root/gurobi.lic   # Windows path
+  # - /Users/<you>/gurobi.lic:/root/gurobi.lic   # macOS path
+```
+
+Then bring everything up:
+
+```
+docker compose up
+```
+
+### Common commands
+
+| Action | Command |
+|---|---|
+| First-time build | `docker compose build` |
+| Start all services (foreground) | `docker compose up` |
+| Start all services (background) | `docker compose up -d` |
+| Stop all services | `docker compose down` |
+| Stream logs for a service | `docker compose logs -f backend` |
+| Rebuild a single service | `docker compose build backend` |
+
+### Services and ports
+
+| Service | URL | Notes |
+|---|---|---|
+| Frontend (Vite) | http://localhost:5173 | React + Three.js |
+| Backend (FastAPI) | http://localhost:8000 | Swagger docs at `/docs` |
+| Celery worker | — | Background solver jobs |
+| Redis | localhost:6379 | Job broker; health-checked before others start |
+
 ## End-to-end live demo (full pipeline)
 
 Bring everything up in this order — each step assumes the previous one is
@@ -103,11 +177,12 @@ python -m pytest tests/ -v
 
 - Never commit your `venv/` or `.venv/` folder.
 - Never commit `.env` — copy `.env.example` and fill in your values.
-- **Before every commit and push**, run these two slash commands inside Claude Code:
-  - `/check-git-push` — runs lint, tests, secret scan, conflict markers, and large-file
-    checks; generates a ready-to-copy conventional commit message.
-  - `/update-changelog` — classifies new commits, updates `CHANGELOG.md`, and proposes
-    the next semver tag. Run this when closing a sprint or tagging a release.
-- Both commands are defined in `.claude/commands/` and work identically on Windows and
-  macOS. If Claude Code is not open, ask the optimization engineer to run them before
-  the PR is merged.
+- **Before every commit and push**, run the `/ship` slash command inside Claude Code:
+  - `/ship` (commit mode) — runs lint, tests, secret scan, conflict markers, and
+    large-file checks; generates a ready-to-copy conventional commit message.
+  - `/ship release` (release mode) — does everything above plus classifies new
+    commits, updates `CHANGELOG.md`, and proposes the next semver tag. Use this when
+    closing a sprint or tagging a release.
+- The command is defined in `.claude/commands/ship.md` and works identically on
+  Windows and macOS. If Claude Code is not open, ask the optimization engineer to
+  run it before the PR is merged.

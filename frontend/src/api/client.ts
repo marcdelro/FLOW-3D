@@ -1,5 +1,11 @@
-import { buildPlansFromRequest } from "../data/planBuilder";
-import type { PackingPlan, SolveRequest } from "../types";
+import { mockPlan, mockPlans } from "../data/mockPlan";
+import type { PackingPlan, SolveRequest, SolveStrategy } from "../types";
+
+/**
+ * The three DSS strategies presented to the user as Plan A / B / C.
+ * Order is meaningful — A is shown first and selected by default.
+ */
+const STRATEGIES: SolveStrategy[] = ["optimal", "balanced", "stability"];
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
@@ -12,7 +18,7 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Returns 3 alternative packing plans for comparison. */
+/** Returns 3 alternative packing plans (one per DSS strategy). */
 export async function fetchSolutions(
   request: SolveRequest,
 ): Promise<PackingPlan[]> {
@@ -20,13 +26,12 @@ export async function fetchSolutions(
     await delay(MOCK_DELAY_MS);
     return buildPlansFromRequest(request);
   }
-  // Real API: 3 parallel requests — backend may return identical plans for
-  // deterministic solvers; UI still handles all three correctly.
-  return Promise.all([
-    fetchSolution(request),
-    fetchSolution(request),
-    fetchSolution(request),
-  ]);
+  // Real API: 3 parallel requests, each with a different DSS strategy so the
+  // backend produces three structurally distinct plans (optimal / balanced /
+  // stability). Plans are returned in STRATEGIES order to match the A/B/C UI.
+  return Promise.all(
+    STRATEGIES.map((strategy) => fetchSolution({ ...request, strategy })),
+  );
 }
 
 export async function fetchSolution(

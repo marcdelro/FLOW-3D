@@ -1,10 +1,12 @@
-import type { PackingPlan } from "../types";
+import type { PackingPlan, SolveStrategy } from "../types";
 
 const PLAN_LABELS = ["A", "B", "C"] as const;
 
-const PLAN_NAMES: Record<string, string> = {
-  ILP: "Optimal",
-  FFD: "Heuristic",
+// DSS strategy → user-facing name. Drives the bottom tag in each card.
+const STRATEGY_NAMES: Record<SolveStrategy, string> = {
+  optimal: "Optimal",
+  balanced: "Balanced",
+  stability: "Stability",
 };
 
 interface PlanSelectorProps {
@@ -100,13 +102,9 @@ export function PlanSelector({ plans, selectedIdx, onSelect, lightMode = false }
                 </div>
               </div>
 
-              {/* Plan name tag */}
-              <div className={`text-sm font-medium ${
-                selected
-                  ? lightMode ? "text-blue-600" : "text-blue-400"
-                  : lightMode ? "text-gray-500" : "text-gray-400"
-              }`}>
-                {PLAN_NAMES[plan.solver_mode] ?? plan.solver_mode}
+              {/* Strategy name tag */}
+              <div className={`text-xs ${selected ? "text-blue-400" : "text-gray-600"}`}>
+                {STRATEGY_NAMES[plan.strategy] ?? plan.strategy}
               </div>
             </button>
           );

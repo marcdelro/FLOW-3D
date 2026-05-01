@@ -33,7 +33,9 @@ def solve_task(self, request_dict: dict) -> dict:
     """
     try:
         request = SolveRequest.model_validate(request_dict)
-        plan: PackingPlan = _engine.optimize(request.items, request.truck)
+        plan: PackingPlan = _engine.optimize(
+            request.items, request.truck, request.strategy
+        )
 
         log_job(
             job_id=self.request.id,

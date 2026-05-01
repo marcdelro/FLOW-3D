@@ -51,7 +51,124 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
-## Sprint 5 — 2026-04-28 · 3D Furniture Models, Animate Mode, and Manifest UX
+## Sprint 8 — 2026-04-29 · True 3-Strategy DSS Plan Diversity and Playwright Smoke Harness
+
+**Goal:** Replace the three-identical-plan output with three structurally distinct
+packing plans — each driven by a different DSS objective (optimal utilization,
+balanced speed, transit stability) — and add a Playwright browser smoke harness
+that verifies the UI end-to-end in mock mode.
+
+### Added
+
+**Backend**
+- `backend/api/models.py`: Add `SolveStrategy = Literal["optimal","balanced","stability"]`
+  type alias; add `strategy` and `rationale` fields to `SolveRequest` and `PackingPlan`
+  with safe defaults (`"optimal"` / `""`) so existing fixtures and tests remain valid.
+- `backend/core/optimizer.py`: Extend `OptimizationEngine.optimize()` with a
+  `strategy: SolveStrategy` parameter and `STRATEGY_RATIONALES` dict; dispatch
+  `"optimal"` → ILP (auto-degrades to FFD-volume without Gurobi), `"balanced"` →
+  FFD volume-desc, `"stability"` → FFD weight-desc; stamp `strategy` and `rationale`
+  on every returned `PackingPlan`.
+- `backend/solver/ffd_solver.py`: Add `FFDSolver(presort="volume" | "weight")`
+  constructor; weight-desc presort key `(-stop_id, -weight_kg, -volume)` places the
+  heaviest items first within each `stop_id` group, lowering the center of gravity
+  for transit stability without changing `V_util`.
+  Thesis ref: section 3.5.2.2 — Route-Sequential FFD Phase 1 presort variants
+
+**Frontend**
+- `frontend/src/types/index.ts`: Add `SolveStrategy` type; add `strategy` and
+  `rationale` fields to `PackingPlan`; add optional `strategy` to `SolveRequest`.
+- `frontend/src/api/client.ts`: `fetchSolutions()` now fires 3 parallel
+  `POST /api/solve` requests with `STRATEGIES = ["optimal","balanced","stability"]`
+  instead of 3 identical requests — each plan is structurally distinct in real mode.
+- `frontend/src/components/Dashboard.tsx`: Add "Why This Plan" section rendering
+  a colour-coded strategy badge (violet/teal/amber) and the full rationale paragraph
+  above Performance metrics when a plan is selected.
+- `frontend/src/components/PlanSelector.tsx`: Replace `solver_mode`-derived card
+  label with `STRATEGY_NAMES` map (Optimal / Balanced / Stability).
+- `frontend/src/data/mockPlan.ts`: Stamp all 3 mock plans with `strategy` and
+  `rationale` fields matching the live backend contract; Plan C `t_exec_ms`
+  corrected from 15 ms to 18 ms.
+- `frontend/src/App.tsx`: Replace generic feature chips on empty state with
+  `StrategyCard` components (violet Optimal, teal Balanced, amber Stability)
+  advertising each decision criterion; updated copy to reference "different decision
+  criterion" instead of "3 alternative plans".
+
+**Config & Tooling**
+- `frontend/e2e/strategies.spec.ts`: Playwright smoke test covering empty-state
+  strategy cards, 3-plan output with per-card strategy labels, rationale text
+  switching on card click, `ILP`/`FFD` solver-mode badges, and unplaced-items
+  section visibility for Plan C.
+- `frontend/playwright.config.ts`: Playwright config with Chromium, `webServer`
+  block that boots Vite in mock mode via `cross-env VITE_USE_MOCK=true` on port 5174,
+  `reuseExistingServer` for local dev, traces and screenshots retained on failure.
+- `frontend/package.json`: Add `@playwright/test` devDependency; add `npm run e2e`
+  and `npm run e2e:ui` scripts.
+- `.gitignore`: Add `playwright-report/`, `test-results/`, and `.claude/*.lock`.
+
+### Changed
+
+**Backend**
+- `backend/worker/tasks.py`: Thread `request.strategy` through to
+  `OptimizationEngine.optimize()` so each Celery job respects its per-request
+  strategy.
+- `backend/core/optimizer.py`: `OptimizationEngine` now instantiates two `FFDSolver`
+  instances (`_ffd_volume` and `_ffd_weight`) instead of one, owned for their
+  respective strategy paths.
+
+---
+
+## Sprint 7 — 2026-04-28 · Unified Pre-Push Gate and Docker Compose Dev Pipeline
+
+**Goal:** Consolidate the two-step pre-push gate into a single `/ship` slash
+command with a mode flag, and containerize the full live pipeline
+(Redis + FastAPI + Celery + Vite) into a one-command `docker compose up`
+workflow so members no longer juggle four terminals.
+
+### Added
+
+**Config & Tooling**
+- `.claude/commands/ship.md`: New unified slash command — `/ship` (commit
+  mode) runs gitignore audit, lint, tests, type check, secret/conflict/
+  large-file scans, and emits a ready-to-copy conventional commit message;
+  `/ship release` adds Sprint-aware `CHANGELOG.md` regeneration and a
+  semver tag proposal.
+- `docker-compose.yml`: New stack — `redis:7-alpine` with healthcheck,
+  FastAPI on `:8000`, Celery worker on `--pool=solo`, Vite dev server on
+  `:5173`; bind mounts on `./backend` and `./frontend` preserve hot
+  reload; `depends_on: service_healthy` ensures the broker is up before
+  the api and worker start.
+- `backend/Dockerfile`, `backend/.dockerignore`: Containerize FastAPI and
+  Celery on `python:3.11-slim` with `libpq-dev` for `psycopg2-binary`;
+  the same image is reused by both the `backend` and `celery` compose
+  services with a different `command`.
+- `frontend/Dockerfile`, `frontend/.dockerignore`: Containerize the Vite
+  dev server on `node:20-alpine`, bound to `0.0.0.0:5173` so the host
+  browser can reach it from `http://localhost:5173`.
+
+### Changed
+
+**Config & Docs**
+- `README.md`: Replace `/check-git-push` and `/update-changelog`
+  references with the unified `/ship` command (commit + release modes).
+- `.gitignore`: Add `gurobi.lic` so WLS / named-user license files are
+  never committed when mounted into containers via docker-compose.
+- `backend/api/routes.py`, `backend/main.py`, `backend/api/models.py`:
+  Drop unused imports surfaced by `ruff check`.
+- `.gitignore`: Add `.env.local` and `scratch_*.py` so the
+  `VITE_USE_MOCK=false` override and ad-hoc scratch scripts never reach
+  the remote.
+
+### Removed
+
+**Config & Tooling**
+- `.claude/commands/check-git-push.md`: Superseded by `/ship`
+  (commit mode).
+- `.claude/commands/update-changelog.md`: Superseded by `/ship release`.
+
+---
+
+## Sprint 6 — 2026-04-28 · 3D Furniture Models, Animate Mode, and Manifest UX
 
 **Goal:** Render ShapeNetSem 3D furniture meshes in the loading viewer, add LIFO
 animate-mode playback, replace the free-text item input with a structured furniture
@@ -106,7 +223,7 @@ dropdown, and provide one-click JSON plan export.
 
 ---
 
-## Sprint 4 — 2026-04-27 · Async Pipeline, Payload Constraint, and Live Demo Bring-up
+## Sprint 5 — 2026-04-27 · Async Pipeline, Payload Constraint, and Live Demo Bring-up
 
 **Goal:** Wire the FastAPI ↔ Celery ↔ Redis ↔ PostgreSQL async pipeline end-to-end,
 add the missing payload-weight constraint to both solvers and the independent
@@ -201,7 +318,7 @@ demonstrated outside of mock mode.
 
 ---
 
-## Sprint 3 — 2026-04-25 · FFD Heuristic, Post-Solve Safety Net, and Template Method
+## Sprint 4 — 2026-04-25 · FFD Heuristic, Post-Solve Safety Net, and Template Method
 
 **Goal:** Ship the live Route-Sequential FFD heuristic (thesis 3.5.2.2), convert
 `AbstractSolver.solve()` into a post-solve safety-net template method, and confirm the
@@ -260,7 +377,7 @@ full pipeline (FFD → ConstraintValidator → PackingPlan) through the smoke te
 
 ---
 
-## Sprint 2 — 2026-04-24 · Live ILP Model and ConstraintValidator
+## Sprint 3 — 2026-04-24 · Live ILP Model and ConstraintValidator
 
 **Goal:** Implement the complete Gurobi ILP formulation (constraints A–E plus Rigid
 Orientation) and the independent ConstraintValidator, replacing all solver stubs with

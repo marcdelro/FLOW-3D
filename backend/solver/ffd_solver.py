@@ -21,7 +21,19 @@ class FFDSolver(AbstractSolver):
     """Deterministic greedy heuristic; O(n^2) worst case.
 
     Worst-case time complexity: O(n^2) (thesis section 3.5.2.4, path 3).
+
+    The `presort` argument selects the secondary sort key inside each
+    stop_id group during Phase 1 (thesis 3.5.2.2):
+        "volume" — largest items first (default; maximizes early packing density).
+        "weight" — heaviest items first (heavies land at z=0, lowering CoG).
+    Stop-id ordering is always descending so the LIFO Y-axis layout is preserved.
     """
+
+    def __init__(self, presort: str = "volume") -> None:
+        super().__init__()
+        if presort not in ("volume", "weight"):
+            raise ValueError(f"Unknown FFD presort strategy: {presort!r}")
+        self._presort = presort
 
     def _solve(self, items: List[FurnitureItem], truck: TruckSpec) -> PackingPlan:
         if USE_MOCK_SOLVER:
@@ -54,12 +66,18 @@ class FFDSolver(AbstractSolver):
     def _lifo_presort(self, items: List[FurnitureItem]) -> List[FurnitureItem]:
         """Phase 1 — LIFO pre-sort.
 
-        Group items by stop_id, sort groups descending so the final stop
-        is processed first, then sort items within each group by volume
-        descending. Flatten to produce the placement sequence S.
+        Group items by stop_id (descending so the final stop is processed
+        first), then sort items within each group by either volume or
+        weight descending depending on `self._presort`. Flatten to produce
+        the placement sequence S.
 
         Thesis section 3.5.2.2, Phase 1.
         """
+        if self._presort == "weight":
+            return sorted(
+                items,
+                key=lambda it: (-it.stop_id, -it.weight_kg, -(it.w * it.l * it.h)),
+            )
         return sorted(
             items,
             key=lambda it: (-it.stop_id, -(it.w * it.l * it.h)),

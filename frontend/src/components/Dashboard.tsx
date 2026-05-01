@@ -1,5 +1,18 @@
 import React from "react";
-import type { PackingPlan, Placement } from "../types";
+import type { PackingPlan, Placement, SolveStrategy } from "../types";
+
+const STRATEGY_LABEL: Record<SolveStrategy, string> = {
+  optimal: "Optimal",
+  balanced: "Balanced",
+  stability: "Stability",
+};
+
+// Tailwind colour pair per strategy for the rationale callout.
+const STRATEGY_BADGE: Record<SolveStrategy, string> = {
+  optimal: "bg-violet-950 text-violet-300",
+  balanced: "bg-teal-950 text-teal-300",
+  stability: "bg-amber-950 text-amber-300",
+};
 
 function downloadPlan(plan: PackingPlan) {
   const blob = new Blob([JSON.stringify(plan, null, 2)], { type: "application/json" });
@@ -107,6 +120,27 @@ export function Dashboard({ plan, lightMode = false }: DashboardProps) {
 
   return (
     <div className="flex flex-col">
+
+      {/* ── Why this plan? ────────────────────────────────────────────────── */}
+      {plan.rationale && (
+        <>
+          <SectionHeader title="Why This Plan" />
+          <div className="px-4 py-3">
+            <div className="rounded-lg border border-gray-800 bg-gray-900/50 p-3 space-y-2">
+              <span
+                className={`inline-block text-xs font-bold px-2 py-0.5 rounded leading-none ${
+                  STRATEGY_BADGE[plan.strategy] ?? "bg-gray-800 text-gray-300"
+                }`}
+              >
+                {STRATEGY_LABEL[plan.strategy] ?? plan.strategy}
+              </span>
+              <p className="text-xs text-gray-400 leading-relaxed">
+                {plan.rationale}
+              </p>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ── Performance metrics ───────────────────────────────────────────── */}
       <SectionHeader

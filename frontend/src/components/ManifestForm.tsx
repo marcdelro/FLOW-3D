@@ -37,8 +37,19 @@ const blankItem = (): FurnitureItem => ({
   item_id: "", w: 800, l: 600, h: 1000, weight_kg: 30, stop_id: 1, side_up: false,
 });
 
-/** Extracts prefix from an item_id like "sofa_01" → "sofa" */
-const prefixOf = (id: string) => id.replace(/_\d+$/, "");
+const DEFAULT_ITEMS: FurnitureItem[] = [
+  { item_id: "wardrobe_01",     w: 1200, l: 600, h: 1800, weight_kg: 90, stop_id: 3, side_up: true  },
+  { item_id: "desk_01",         w: 1200, l: 600, h: 750,  weight_kg: 40, stop_id: 3, side_up: false },
+  { item_id: "dining_table_01", w: 1500, l: 900, h: 750,  weight_kg: 50, stop_id: 2, side_up: false },
+  { item_id: "sofa_01",         w: 2000, l: 900, h: 850,  weight_kg: 80, stop_id: 1, side_up: false },
+  { item_id: "bookshelf_01",    w: 800,  l: 300, h: 1800, weight_kg: 30, stop_id: 1, side_up: true  },
+];
+
+// ── Shared micro-styles ────────────────────────────────────────────────────────
+const inputCls =
+  "w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-100 " +
+  "focus:outline-none focus:border-blue-600 font-mono placeholder-gray-700";
+const labelCls = "block text-xs text-gray-500 mb-1";
 
 // ── Section header (sticky within the scrollable sidebar) ─────────────────────
 function Section({
@@ -290,7 +301,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
 
   const [truck, setTruck]   = useState<TruckSpec>(DEFAULT_TRUCK);
   const [stops, setStops]   = useState<DeliveryStop[]>(DEFAULT_STOPS);
-  const [items, setItems]   = useState<FurnitureItem[]>([]);
+  const [items, setItems]   = useState<FurnitureItem[]>(DEFAULT_ITEMS);
   const [draft, setDraft]   = useState<FurnitureItem>(blankItem());
   const [showAdd, setShowAdd]     = useState(false);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);

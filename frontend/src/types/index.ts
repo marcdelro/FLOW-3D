@@ -28,6 +28,9 @@ export interface Placement {
   model_variant?: number;
 }
 
+/** DSS plan-selection strategy — see backend/core/optimizer.py. */
+export type SolveStrategy = "optimal" | "balanced" | "stability";
+
 export interface PackingPlan {
   placements: Placement[];
   /** V_util in [0, 1] */
@@ -36,6 +39,10 @@ export interface PackingPlan {
   t_exec_ms: number;
   solver_mode: "ILP" | "FFD";
   unplaced_items: string[];
+  /** DSS strategy that produced this plan */
+  strategy: SolveStrategy;
+  /** Human-readable justification for choosing this plan */
+  rationale: string;
 }
 
 export interface FurnitureItem {
@@ -73,4 +80,6 @@ export interface SolveRequest {
   items: FurnitureItem[];
   truck: TruckSpec;
   stops: DeliveryStop[];
+  /** DSS strategy; defaults to "optimal" server-side when omitted */
+  strategy?: SolveStrategy;
 }
