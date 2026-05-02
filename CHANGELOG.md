@@ -12,6 +12,66 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 10 — 2026-05-02 · Vertical Stacking, FFD Support Parity, and Empirical Threshold Benchmark
+
+**Goal:** Replace the ILP single-layer floor lock with a rigorous vertical-stacking
+support disjunction, bring the FFD solver to parity by rejecting mid-air placements,
+and produce the empirical data required by thesis section 3.5.2.3 to justify the
+hybrid-switching threshold θ.
+
+### Added
+
+**Backend**
+- `backend/solver/ilp_solver.py::_support()`: New single-supporter disjunction
+  (implementation extension beyond thesis 3.5.2.1 A–E; load-bearing motivation from
+  thesis introduction). Adds `floor[i] ∈ {0,1}` and `u[i,j] ∈ {0,1}` binary variables
+  per item. Enforces `floor_i + Σ_{j≠i} u_{i,j} = b_i` (unique support per packed item);
+  when `u_{i,j} = 1`: vertical contact `z_i = z_j + h_eff_j` and xy-footprint containment
+  of `i` within `j`. Bortfeldt & Mack (2007) single-supporter simplification — rules out
+  spanning two adjacent bases but keeps the O(n²) binary count tractable in the ILP
+  regime (n ≤ 20).
+- `backend/solver/ffd_solver.py::_supported()`: New static helper mirroring ILP's
+  single-supporter rule for the greedy walk — accepts `z == 0` outright; otherwise
+  requires an already-placed item `p` with `p.z + p.h == z` whose xy footprint fully
+  contains the candidate's footprint. Wired into `_greedy_placement()` after
+  `_lifo_ok()` so FFD rejects mid-air placements. Both solver paths now enforce
+  identical support physics.
+- `backend/benchmarks/threshold_bench.py`: New benchmark harness — generates seeded
+  synthetic furniture manifests at n ∈ {4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24},
+  runs 3 trials per size against both ILP (60 s Gurobi TimeLimit) and FFD, records
+  median and max `t_exec_ms` and median `V_util`, and emits a Markdown report with
+  per-budget theta recommendations and a caveats section.
+  Thesis ref: section 3.5.2.3 — empirical threshold justification
+- `docs/benchmarks/threshold_bench_2026-05-02.md`: Pilot benchmark results. ILP median
+  1.7 s / max 1.9 s at n = 20 (current `SOLVER_THRESHOLD = 20`); `V_util` 0.143 vs FFD
+  0.118 confirming ILP adds density at the threshold boundary. Per-budget recommended θ:
+  1 s → 16, 5 s+ → 24. Caveats section flags 3-trial variance, low-density synthetic
+  items (3–22 % V_util), post-support ILP cost, and demo-machine re-run requirement.
+  Thesis ref: section 3.5.2.3 — empirical threshold justification
+
+**Tests**
+- `backend/tests/test_ffd_solver.py`: Add `test_every_placement_has_floor_or_supporter`
+  — heterogeneous 5-item manifest, asserts every `p.z > 0` placement has a single placed
+  item whose top surface meets `p.z` and whose xy footprint contains `p`'s.
+- `backend/tests/test_ffd_solver.py`: Add `test_supported_rejects_unsupported_overhang`
+  — direct unit test of `FFDSolver._supported()` covering floor acceptance, exact-fit
+  containment, x-axis overhang rejection, and wrong-z gap rejection.
+- `backend/tests/test_integration_solve.py`: Add Gurobi-gated
+  `test_ilp_supports_vertical_stacking` — footprint-tight 1×1×2 m truck forces two
+  same-stop 1×1×0.5 m boxes to stack; asserts `z_top == z_base + h_base` and
+  full xy-containment hold on the returned `PackingPlan`.
+
+### Changed
+
+**Backend**
+- `backend/solver/ilp_solver.py::_variable_domains()`: Remove `z_i = 0` floor lock
+  (single-layer ground packing temporary fix from Sprint 9). `z` upper bound is now
+  `max(0, H - h_min_eff)` per item, matching the x and y tightening already in place.
+  Items can now be placed at any supported height within the truck boundary.
+  Thesis ref: section 3.5.2.1 D — variable domains
+
+---
+
 ## Sprint 9 — 2026-05-01 · Light Mode, Manifest Import, Model Preview, and ILP Floor Lock
 
 **Goal:** Land full light-mode support across the dashboard, ship Excel/JSON

@@ -238,6 +238,49 @@ async def test_ilp_solve_round_trip_validates(
     ) is True
 
 
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    not _gurobi_available(), reason="gurobipy not installed or no usable license"
+)
+async def test_ilp_supports_vertical_stacking(
+    client: AsyncClient, live_solver: None, force_ilp: None
+) -> None:
+    """Single-supporter disjunction: every packed item rests on the floor or
+    on top of another packed item whose xy footprint contains it.
+
+    Truck is sized so two same-stop boxes only fit if stacked (W and L match a
+    single box). The optimum must therefore stack one on the other; the test
+    asserts that exactly one item is at z=0 and the other sits at z = h_floor.
+    """
+    payload = {
+        "items": [
+            _item_payload("lower", 1000, 1000, 500, stop_id=1),
+            _item_payload("upper", 1000, 1000, 500, stop_id=1),
+        ],
+        "truck": {"W": 1000, "L": 1000, "H": 2000, "payload_kg": 1000.0},
+    }
+    solve = await client.post("/api/solve", json=payload)
+    plan = PackingPlan(
+        **(await client.get(f"/api/result/{solve.json()['job_id']}")).json()["plan"]
+    )
+    assert plan.unplaced_items == []
+    assert plan.solver_mode == "ILP"
+
+    floors = [p for p in plan.placements if p.z == 0]
+    stacked = [p for p in plan.placements if p.z > 0]
+    assert len(floors) == 1
+    assert len(stacked) == 1
+    base = floors[0]
+    top = stacked[0]
+    # Top must rest exactly on base's top surface.
+    assert top.z == base.z + base.h
+    # XY footprint of top must be contained in base's footprint.
+    assert top.x >= base.x
+    assert top.y >= base.y
+    assert top.x + top.w <= base.x + base.w
+    assert top.y + top.l <= base.y + base.l
+
+
 # -- helpers ------------------------------------------------------------------
 
 def _truck_from_payload(truck_dict: Dict[str, object]):

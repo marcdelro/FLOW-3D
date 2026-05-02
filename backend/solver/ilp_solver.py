@@ -61,6 +61,7 @@ class ILPSolver(AbstractSolver):
         self._orientation()
         self._boundary()
         self._non_overlap()
+        self._support()
         self._lifo()
         self._weight()
         self._symmetry_breaking()
@@ -133,20 +134,15 @@ class ILPSolver(AbstractSolver):
         # Per-item upper bounds: a packed item cannot start past
         # truck_dim - min_eff_dim. Items that cannot fit at all collapse to
         # ub=0, so Gurobi presolve will fix them as unpackable when feasible.
-        x_ubs, y_ubs = [], []
+        x_ubs, y_ubs, z_ubs = [], [], []
         for item in self._items:
-            w_min, l_min, _ = self._min_effective_dims(item)
+            w_min, l_min, h_min = self._min_effective_dims(item)
             x_ubs.append(max(0, W - w_min))
             y_ubs.append(max(0, L - l_min))
+            z_ubs.append(max(0, H - h_min))
         self._x = m.addVars(n, vtype=GRB.INTEGER, lb=0, ub=x_ubs, name="x")
         self._y = m.addVars(n, vtype=GRB.INTEGER, lb=0, ub=y_ubs, name="y")
-        # Single-layer ground packing: lock z_i = 0 so items rest on the truck
-        # floor. The proper 3DBPP support constraint requires a disjunction
-        # binding each z_i to either 0 or the top of a supporting item — out
-        # of scope for this milestone. Without this lock, nothing in the
-        # boundary or non-overlap blocks pulls items down, so the solver can
-        # leave packed items floating mid-air. Relax to enable stacking.
-        self._z = m.addVars(n, vtype=GRB.INTEGER, lb=0, ub=0, name="z")
+        self._z = m.addVars(n, vtype=GRB.INTEGER, lb=0, ub=z_ubs, name="z")
         self._s = m.addVars(
             [(i, j, k) for i in range(n) for j in range(i + 1, n) for k in range(1, 7)],
             vtype=GRB.BINARY,
@@ -156,6 +152,18 @@ class ILPSolver(AbstractSolver):
             [(i, k) for i in range(n) for k in range(6)],
             vtype=GRB.BINARY,
             name="o",
+        )
+        # Support disjunction (implementation extension beyond thesis
+        # 3.5.2.1 A-E; the thesis introduction cites load-bearing physics
+        # but does not formalize a support constraint). floor[i] = 1 iff
+        # item i rests on the truck floor; u[i, j] = 1 iff item j directly
+        # supports item i (j is below i, z_i = z_j + h_eff_j, and i's xy
+        # footprint is fully contained within j's). See _support().
+        self._floor = m.addVars(n, vtype=GRB.BINARY, name="floor")
+        self._u = m.addVars(
+            [(i, j) for i in range(n) for j in range(n) if i != j],
+            vtype=GRB.BINARY,
+            name="u",
         )
 
     def _orientation(self) -> None:
@@ -321,6 +329,98 @@ class ILPSolver(AbstractSolver):
                         <= self._y[j] + L * (2 - self._b[i] - self._b[j]),
                         name=f"lifo_{i}_{j}",
                     )
+
+    def _support(self) -> None:
+        """Vertical support / single-supporter disjunction.
+
+        Implementation extension beyond thesis 3.5.2.1 A-E (the thesis
+        introduction discusses load-bearing fragility, but section 3.5.2.1
+        formalizes only objective, non-overlap, boundary, variable domains,
+        and LIFO). Without this block, nothing in the model penalizes
+        items floating mid-air — feasible per the thesis constraints, but
+        physically nonsensical.
+
+        For each packed item i, exactly one supporter is chosen:
+
+            floor_i + sum_{j != i} u_{i,j} = b_i
+
+        If floor_i = 1 the item rests on the truck floor (z_i = 0). If
+        u_{i,j} = 1, item j directly supports item i, which requires:
+
+            z_i = z_j + h_eff_j               (vertical contact)
+            x_i >= x_j                        (xy footprint of i fully
+            x_i + w_eff_i <= x_j + w_eff_j     contained within j's)
+            y_i >= y_j
+            y_i + l_eff_i <= y_j + l_eff_j
+            b_j = 1                           (supporter must be packed)
+
+        The "single-supporter" simplification (i rests entirely on one j)
+        is the standard Bortfeldt & Mack (2007) approximation — it rules
+        out spanning two adjacent boxes but keeps the formulation compact
+        (n^2 binaries, O(n^2) constraints, fine in the ILP regime n <= ~20).
+
+        Cycles are impossible: u_{i,j} = 1 forces z_i = z_j + h_eff_j > z_j
+        whenever j is packed with non-zero height, so u_{j,i} = 1 would
+        force z_j > z_i and contradict.
+        """
+        m = self._model
+        gp = self._gp
+        W, L, H = self._truck.W, self._truck.L, self._truck.H
+        n = len(self._items)
+
+        effs = [self._effective_dims(i) for i in range(n)]
+
+        for i in range(n):
+            # Unique support: floor or exactly one supporter, gated by b_i.
+            m.addConstr(
+                self._floor[i]
+                + gp.quicksum(self._u[i, j] for j in range(n) if j != i)
+                == self._b[i],
+                name=f"sup_unique_{i}",
+            )
+            # Floor lock: if floor_i = 1 then z_i = 0.
+            m.addConstr(
+                self._z[i] <= H * (1 - self._floor[i]),
+                name=f"sup_floor_{i}",
+            )
+
+            w_i, l_i, h_i = effs[i]
+            for j in range(n):
+                if j == i:
+                    continue
+                w_j, l_j, h_j = effs[j]
+                u_ij = self._u[i, j]
+
+                # Supporter must be packed.
+                m.addConstr(u_ij <= self._b[j], name=f"sup_packed_{i}_{j}")
+
+                # Vertical contact: z_i = z_j + h_eff_j when u_ij = 1.
+                m.addConstr(
+                    self._z[i] - self._z[j] - h_j <= H * (1 - u_ij),
+                    name=f"sup_zhi_{i}_{j}",
+                )
+                m.addConstr(
+                    self._z[j] + h_j - self._z[i] <= H * (1 - u_ij),
+                    name=f"sup_zlo_{i}_{j}",
+                )
+
+                # XY containment: footprint of i ⊆ footprint of j when u_ij = 1.
+                m.addConstr(
+                    self._x[j] - self._x[i] <= W * (1 - u_ij),
+                    name=f"sup_xlo_{i}_{j}",
+                )
+                m.addConstr(
+                    (self._x[i] + w_i) - (self._x[j] + w_j) <= W * (1 - u_ij),
+                    name=f"sup_xhi_{i}_{j}",
+                )
+                m.addConstr(
+                    self._y[j] - self._y[i] <= L * (1 - u_ij),
+                    name=f"sup_ylo_{i}_{j}",
+                )
+                m.addConstr(
+                    (self._y[i] + l_i) - (self._y[j] + l_j) <= L * (1 - u_ij),
+                    name=f"sup_yhi_{i}_{j}",
+                )
 
     def _weight(self) -> None:
         """Truck payload constraint.

@@ -151,6 +151,8 @@ class FFDSolver(AbstractSolver):
                         continue
                     if not self._lifo_ok(cy, l_eff, item.stop_id, placements):
                         continue
+                    if not self._supported(cx, cy, cz, w_eff, l_eff, placements):
+                        continue
                     chosen = (cx, cy, cz, w_eff, l_eff, h_eff, orientation_index)
                     break
                 if chosen is not None:
@@ -204,6 +206,33 @@ class FFDSolver(AbstractSolver):
             ):
                 continue
             return True
+        return False
+
+    @staticmethod
+    def _supported(
+        x: int,
+        y: int,
+        z: int,
+        w: int,
+        l: int,  # noqa: E741 — l_i matches thesis naming per CLAUDE.md
+        placements: List[Placement],
+    ) -> bool:
+        """Mirror ILPSolver._support for a single trial box.
+
+        A candidate is supported iff it sits on the truck floor (z == 0) or
+        there exists a single placed item p whose top surface is at z and
+        whose xy footprint fully contains the candidate's footprint
+        (single-supporter approximation). Without this check the FFD walk
+        could place a box at z > 0 when the floor row is blocked, leaving
+        items floating mid-air in the 3D viewer.
+        """
+        if z == 0:
+            return True
+        for p in placements:
+            if p.z + p.h != z:
+                continue
+            if p.x <= x and x + w <= p.x + p.w and p.y <= y and y + l <= p.y + p.l:
+                return True
         return False
 
     @staticmethod
