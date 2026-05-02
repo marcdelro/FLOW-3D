@@ -12,6 +12,88 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 11 — 2026-05-02 · Fragile No-Stacking and Model Extensions Documentation
+
+**Goal:** Honour the `FurnitureItem.fragile` data contract end-to-end across the
+ILP solver, the FFD heuristic, and the post-solve validator, and lock the
+panel-facing documentation for every implementation extension that goes beyond
+thesis 3.5.2.1 A–E into a single authoritative reference.
+
+### Added
+
+**Backend**
+- `backend/solver/ilp_solver.py::_support()`: New `sup_fragile_{i}_{j}`
+  constraint family. For every ordered pair `(i, j)` with `items[j].fragile == True`
+  fix `u_{i,j} = 0`, removing fragile items from every other item's support
+  disjunction. Combined with the unique-support equality
+  `floor_i + Σ_{j≠i} u_{i,j} = b_i`, this routes any item that would otherwise
+  rest on `j` onto the floor or a non-fragile supporter, or leaves it unpacked
+  (`b_i = 0`). Strictly tightening — removes only physically invalid optima.
+  Implementation extension beyond thesis 3.5.2.1 A–E (Extension G); see
+  `docs/model_extensions.md`.
+- `backend/core/validator.py::validate_no_stack_on_fragile()`: New post-solve
+  predicate. For every placed pair `(a, b)` with `b.fragile == True`, rejects
+  the plan when `a.z >= b.z + b.h` and the xy footprints of `a` and `b`
+  overlap. Strictly stronger than the support-level ILP/FFD constraints — acts
+  as the AbstractSolver template-method safety net for any future regression
+  on either solver path. Wired into `validate_all` and surfaces as
+  `"fragile_stacking"` from `first_failing_check` so `PlanValidationError`
+  carries a meaningful diagnostic. O(n²).
+
+**Docs**
+- `docs/model_extensions.md`: New authoritative reference for every
+  implementation extension that goes beyond thesis 3.5.2.1 A–E. Documents
+  Extension F (Vertical Support, Bortfeldt & Mack 2007), Extension G
+  (Fragile No-Stacking), and the Truck Payload extension. Each section covers
+  added decision variables, formal constraints, citations, cycle-freedom
+  proofs, test coverage tables, and a Defense Q&A block. Required reading per
+  CLAUDE.md before modifying `_support()`, `_weight()`, or
+  `validate_no_stack_on_fragile()`.
+- `CLAUDE.md`: New "Implementation extensions beyond thesis 3.5.2.1 A–E"
+  section linking the three deployed extensions to their reference
+  implementations and to `docs/model_extensions.md`. Adds the rule that any
+  new constraint beyond 3.5.2.1 A–E must be documented in
+  `model_extensions.md` as a new section — a constraint in the code without a
+  corresponding section is a defense liability.
+
+**Tests**
+- `backend/tests/test_ilp_solver.py`: New file. Pure-Python helper coverage
+  (`ORIENTATION_PERMUTATIONS`, `UPRIGHT_ORIENTATIONS`, `_min_effective_dims`
+  for both `side_up=True` and free orientation, mock-mode short-circuit) plus
+  Gurobi-gated end-to-end tests crafted to isolate one thesis 3.5.2.1
+  constraint per case: boundary (single fitting item, oversize item),
+  orientation (`side_up` keeps `h` on z), LIFO (later stops deeper in y),
+  payload (overload excludes at least one item), non-overlap, fragile
+  supporter refusal (Extension G), and full-validator agreement. 13 tests.
+- `backend/tests/test_validator.py`: Add 4 fragile-predicate tests
+  (`test_fragile_rejects_stacked_load`, `test_fragile_allows_side_by_side`,
+  `test_fragile_allows_load_below`, `test_validate_all_flags_fragile_stacking`)
+  exercising `validate_no_stack_on_fragile` and the `"fragile_stacking"` label.
+- `backend/tests/test_ffd_solver.py`: Extend `test_supported_rejects_unsupported_overhang`
+  with a `fragile_ids` case (perfectly contained fragile base must still
+  refuse to support); add `test_ffd_does_not_stack_on_fragile_item`
+  end-to-end — narrow truck forces a same-column choice, fragile mirror
+  packs and crate appears in `unplaced_items`.
+
+### Changed
+
+**Backend**
+- `backend/solver/ffd_solver.py::_supported()`: New optional `fragile_ids`
+  parameter. When provided, any candidate placed supporter `p` whose
+  `p.item_id` appears in `fragile_ids` is excluded even with perfect xy
+  containment. `_greedy_placement` collects `fragile_ids` from the manifest
+  once and threads it through every supported-check call. Brings the FFD
+  path to parity with the ILP `sup_fragile_*` family so SOLVER_THRESHOLD
+  switching is contract-stable.
+- `backend/core/validator.py`: Extend `validate_all` and
+  `first_failing_check` to call `validate_no_stack_on_fragile` whenever the
+  optional `items` list is provided.
+- `backend/tests/test_smoke.py`: Update `POST /api/solve` assertion from
+  HTTP 200 to HTTP 202 to match the async job-creation semantics already
+  enforced by the API surface. Aligns the smoke test with the live contract.
+
+---
+
 ## Sprint 10 — 2026-05-02 · Vertical Stacking, FFD Support Parity, and Empirical Threshold Benchmark
 
 **Goal:** Replace the ILP single-layer floor lock with a rigorous vertical-stacking
