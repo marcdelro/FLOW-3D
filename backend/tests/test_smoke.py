@@ -30,7 +30,7 @@ async def test_post_solve_returns_job_id() -> None:
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post("/api/solve", json=payload)
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     body = response.json()
     assert "job_id" in body
 

@@ -194,6 +194,59 @@ def test_validate_all_flags_weight(validator: ConstraintValidator) -> None:
     assert validator.first_failing_check(plan, truck, items) == "weight"
 
 
+def test_fragile_rejects_stacked_load(validator: ConstraintValidator) -> None:
+    """Anything sitting at or above a fragile item's top with xy overlap fails."""
+    items = [
+        FurnitureItem(item_id="mirror", w=100, l=100, h=100, stop_id=1, fragile=True),
+        FurnitureItem(item_id="crate", w=100, l=100, h=100, stop_id=1),
+    ]
+    plan = _plan([
+        _placement(item_id="mirror", x=0, y=0, z=0),
+        _placement(item_id="crate", x=0, y=0, z=100),  # directly on the mirror
+    ])
+    assert validator.validate_no_stack_on_fragile(plan, items) is False
+
+
+def test_fragile_allows_side_by_side(validator: ConstraintValidator) -> None:
+    """A fragile item with no xy footprint overlap from above is fine."""
+    items = [
+        FurnitureItem(item_id="mirror", w=100, l=100, h=100, stop_id=1, fragile=True),
+        FurnitureItem(item_id="crate", w=100, l=100, h=100, stop_id=1),
+    ]
+    plan = _plan([
+        _placement(item_id="mirror", x=0, y=0, z=0),
+        _placement(item_id="crate", x=200, y=0, z=0),
+    ])
+    assert validator.validate_no_stack_on_fragile(plan, items) is True
+
+
+def test_fragile_allows_load_below(validator: ConstraintValidator) -> None:
+    """A fragile item *on top* with nothing above it is fine — only loads above fail."""
+    items = [
+        FurnitureItem(item_id="base", w=100, l=100, h=100, stop_id=1),
+        FurnitureItem(item_id="mirror", w=100, l=100, h=100, stop_id=1, fragile=True),
+    ]
+    plan = _plan([
+        _placement(item_id="base", x=0, y=0, z=0),
+        _placement(item_id="mirror", x=0, y=0, z=100),  # mirror above the base
+    ])
+    assert validator.validate_no_stack_on_fragile(plan, items) is True
+
+
+def test_validate_all_flags_fragile_stacking(validator: ConstraintValidator) -> None:
+    truck = TruckSpec()
+    items = [
+        FurnitureItem(item_id="mirror", w=100, l=100, h=100, stop_id=1, fragile=True),
+        FurnitureItem(item_id="crate", w=100, l=100, h=100, stop_id=1),
+    ]
+    plan = _plan([
+        _placement(item_id="mirror", x=0, y=0, z=0),
+        _placement(item_id="crate", x=0, y=0, z=100),
+    ])
+    assert validator.validate_all(plan, truck, items) is False
+    assert validator.first_failing_check(plan, truck, items) == "fragile_stacking"
+
+
 def test_unpacked_items_ignored_by_spatial_checks(
     validator: ConstraintValidator, truck: TruckSpec
 ) -> None:

@@ -105,6 +105,28 @@ order.
 The `side_up` flag restricts which `orientation_index` values (0–5) are admissible
 for rigid items (e.g. refrigerators, wardrobes).
 
+## Implementation extensions beyond thesis 3.5.2.1 A–E
+
+The deployed ILP and FFD solvers honor three additional constraint blocks not
+formalized in 3.5.2.1. Each is documented in full
+(variables, formal constraints, citations, test coverage, and defense Q&A) in
+**@docs/model_extensions.md** — read that file before modifying `_support()`,
+`_weight()`, or `validate_no_stack_on_fragile()`.
+
+- **Extension F — Vertical Support** (`ilp_solver.py::_support()`,
+  `ffd_solver.py::_supported()`): single-supporter disjunction so packed items
+  rest on the floor or on top of a containing supporter. Bortfeldt & Mack (2007).
+- **Extension G — Fragile No-Stacking** (`sup_fragile_{i}_{j}` family,
+  `validator.py::validate_no_stack_on_fragile()`): honours the
+  `FurnitureItem.fragile` data-contract field by forbidding any item from
+  using a fragile item as a supporter.
+- **Truck Payload** (`ilp_solver.py::_weight()`,
+  `validator.py::validate_weight()`): `Σ_i weight_kg_i · b_i ≤ payload_kg`.
+
+Any new constraint that goes beyond 3.5.2.1 A–E **must** be added to
+`docs/model_extensions.md` as a new section in the same format. A constraint in
+the code without a corresponding section is a defense liability.
+
 ## Module separation rules (mandatory)
 
 - `solver/` **never** imports from `api/` or `main.py`.

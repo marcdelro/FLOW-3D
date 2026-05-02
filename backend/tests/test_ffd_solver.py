@@ -130,3 +130,35 @@ def test_supported_rejects_unsupported_overhang() -> None:
     assert FFDSolver._supported(0, 0, 400, 600, 500, [base]) is False
     # Wrong z (gap above base's top) — not supported.
     assert FFDSolver._supported(0, 0, 401, 500, 500, [base]) is False
+    # Fragile base — refuses to support anything even with perfect containment.
+    assert (
+        FFDSolver._supported(0, 0, 400, 500, 500, [base], fragile_ids={"base"})
+        is False
+    )
+
+
+def test_ffd_does_not_stack_on_fragile_item(
+    solver: FFDSolver, truck: TruckSpec
+) -> None:
+    """A fragile base must not be used as a supporter for later items.
+
+    Truck width forces both items into the same xy column, so the only
+    geometric option for the second item is to stack on the first. Because
+    the first is fragile, the second must instead be marked unplaced and
+    the post-solve validator must accept the resulting plan.
+    """
+    narrow = TruckSpec(W=500, L=500, H=2000, payload_kg=1000.0)
+    items = [
+        FurnitureItem(
+            item_id="mirror", w=500, l=500, h=400, weight_kg=10.0,
+            stop_id=1, fragile=True,
+        ),
+        FurnitureItem(
+            item_id="crate", w=500, l=500, h=400, weight_kg=10.0, stop_id=1,
+        ),
+    ]
+    plan = solver.solve(items, narrow)
+
+    assert "crate" in plan.unplaced_items
+    assert any(p.item_id == "mirror" for p in plan.placements)
+    assert ConstraintValidator().validate_all(plan, narrow, items) is True

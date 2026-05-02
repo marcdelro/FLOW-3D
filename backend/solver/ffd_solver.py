@@ -129,6 +129,7 @@ class FFDSolver(AbstractSolver):
         candidates: List[Tuple[int, int, int]] = [(0, 0, 0)]
         placed_weight: float = 0.0
         weight_cap = truck.payload_kg if truck.payload_kg > 0 else float("inf")
+        fragile_ids = {it.item_id for it in sequence if it.fragile}
 
         for item in sequence:
             if placed_weight + item.weight_kg > weight_cap:
@@ -151,7 +152,9 @@ class FFDSolver(AbstractSolver):
                         continue
                     if not self._lifo_ok(cy, l_eff, item.stop_id, placements):
                         continue
-                    if not self._supported(cx, cy, cz, w_eff, l_eff, placements):
+                    if not self._supported(
+                        cx, cy, cz, w_eff, l_eff, placements, fragile_ids
+                    ):
                         continue
                     chosen = (cx, cy, cz, w_eff, l_eff, h_eff, orientation_index)
                     break
@@ -216,20 +219,26 @@ class FFDSolver(AbstractSolver):
         w: int,
         l: int,  # noqa: E741 — l_i matches thesis naming per CLAUDE.md
         placements: List[Placement],
+        fragile_ids: "set[str] | None" = None,
     ) -> bool:
         """Mirror ILPSolver._support for a single trial box.
 
         A candidate is supported iff it sits on the truck floor (z == 0) or
-        there exists a single placed item p whose top surface is at z and
-        whose xy footprint fully contains the candidate's footprint
-        (single-supporter approximation). Without this check the FFD walk
-        could place a box at z > 0 when the floor row is blocked, leaving
-        items floating mid-air in the 3D viewer.
+        there exists a single placed item p whose top surface is at z,
+        whose xy footprint fully contains the candidate's footprint, and
+        which is not itself fragile (single-supporter approximation, with
+        fragile items excluded as supporters per the FurnitureItem.fragile
+        contract). Without this check the FFD walk could place a box at
+        z > 0 when the floor row is blocked, leaving items floating
+        mid-air or crushing fragile cargo.
         """
         if z == 0:
             return True
+        fragile = fragile_ids or set()
         for p in placements:
             if p.z + p.h != z:
+                continue
+            if p.item_id in fragile:
                 continue
             if p.x <= x and x + w <= p.x + p.w and p.y <= y and y + l <= p.y + p.l:
                 return True

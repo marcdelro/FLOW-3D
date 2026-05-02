@@ -333,12 +333,16 @@ class ILPSolver(AbstractSolver):
     def _support(self) -> None:
         """Vertical support / single-supporter disjunction.
 
-        Implementation extension beyond thesis 3.5.2.1 A-E (the thesis
-        introduction discusses load-bearing fragility, but section 3.5.2.1
-        formalizes only objective, non-overlap, boundary, variable domains,
-        and LIFO). Without this block, nothing in the model penalizes
-        items floating mid-air — feasible per the thesis constraints, but
-        physically nonsensical.
+        Implementation extension beyond thesis 3.5.2.1 A-E. Full formal
+        statement, citations (Bortfeldt & Mack 2007), and defense Q&A
+        live in docs/model_extensions.md (Extension F). Update that
+        document if this method's constraints change.
+
+        The thesis introduction discusses load-bearing fragility, but
+        section 3.5.2.1 formalizes only objective, non-overlap, boundary,
+        variable domains, and LIFO. Without this block, nothing in the
+        model penalizes items floating mid-air — feasible per the thesis
+        constraints, but physically nonsensical.
 
         For each packed item i, exactly one supporter is chosen:
 
@@ -362,6 +366,13 @@ class ILPSolver(AbstractSolver):
         Cycles are impossible: u_{i,j} = 1 forces z_i = z_j + h_eff_j > z_j
         whenever j is packed with non-zero height, so u_{j,i} = 1 would
         force z_j > z_i and contradict.
+
+        Fragile items (item.fragile == True) additionally fix u_{i,j} = 0
+        for every i — nothing may rest on a fragile supporter. This honors
+        the FurnitureItem.fragile contract ("solver must not stack other
+        items on top of this one"). Implementation extension beyond thesis
+        3.5.2.1 A-E, motivated by the same load-bearing fragility argument
+        that justifies the support disjunction itself.
         """
         m = self._model
         gp = self._gp
@@ -393,6 +404,13 @@ class ILPSolver(AbstractSolver):
 
                 # Supporter must be packed.
                 m.addConstr(u_ij <= self._b[j], name=f"sup_packed_{i}_{j}")
+
+                # Fragile items refuse to support anything (FurnitureItem.fragile
+                # contract). Forcing u_ij = 0 collapses the entire support
+                # disjunction onto j for any i, so an item above a fragile j
+                # must instead rest on the floor or on a non-fragile supporter.
+                if self._items[j].fragile:
+                    m.addConstr(u_ij == 0, name=f"sup_fragile_{i}_{j}")
 
                 # Vertical contact: z_i = z_j + h_eff_j when u_ij = 1.
                 m.addConstr(
@@ -426,6 +444,9 @@ class ILPSolver(AbstractSolver):
         """Truck payload constraint.
 
             sum(weight_kg_i * b_i) <= payload_kg
+
+        Implementation extension beyond thesis 3.5.2.1 A-E; documented
+        alongside the other extensions in docs/model_extensions.md.
 
         Manifest-level capacity bound on the chosen subset of items. Linear
         in b_i so it adds no integer variables — Gurobi presolve usually

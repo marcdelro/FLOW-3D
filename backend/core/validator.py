@@ -123,6 +123,48 @@ class ConstraintValidator:
         total = sum(weights.get(p.item_id, 0.0) for p in plan.placements if p.is_packed)
         return total <= truck.payload_kg
 
+    def validate_no_stack_on_fragile(
+        self, plan: PackingPlan, items: List[FurnitureItem]
+    ) -> bool:
+        """Verify nothing is stacked on top of a fragile item.
+
+        Implementation extension beyond thesis 3.5.2.1 A-E (Extension G).
+        Full formal statement and defense Q&A in docs/model_extensions.md.
+
+        For every placed pair (a, b) with b.fragile == True, the xy
+        footprints of a and b must not overlap whenever a sits at or above
+        b's top surface (a.z >= b.z + b.h). This honours the
+        FurnitureItem.fragile contract — "solver must not stack other items
+        on top of this one" — and is the post-solve safety net for the ILP
+        `sup_fragile_*` constraints and the FFD `_supported` fragile gate.
+
+        Manifest-level constraint — Placement does not carry the fragile
+        flag, so the original items list is required. Implementation
+        extension beyond thesis 3.5.2.1 A-E. Complexity: O(n^2).
+        """
+        fragile_ids = {it.item_id for it in items if it.fragile}
+        if not fragile_ids:
+            return True
+        packed = [p for p in plan.placements if p.is_packed]
+        for b in packed:
+            if b.item_id not in fragile_ids:
+                continue
+            top = b.z + b.h
+            for a in packed:
+                if a is b:
+                    continue
+                if a.z < top:
+                    continue
+                xy_overlap = (
+                    a.x < b.x + b.w
+                    and b.x < a.x + a.w
+                    and a.y < b.y + b.l
+                    and b.y < a.y + a.l
+                )
+                if xy_overlap:
+                    return False
+        return True
+
     def validate_lifo(self, plan: PackingPlan) -> bool:
         """Verify the Sequential Loading Constraint.
 
@@ -157,6 +199,7 @@ class ConstraintValidator:
             and self.validate_orientation(plan)
             and self.validate_lifo(plan)
             and (items is None or self.validate_weight(plan, items, truck))
+            and (items is None or self.validate_no_stack_on_fragile(plan, items))
         )
 
     def first_failing_check(
@@ -181,4 +224,6 @@ class ConstraintValidator:
             return "lifo"
         if items is not None and not self.validate_weight(plan, items, truck):
             return "weight"
+        if items is not None and not self.validate_no_stack_on_fragile(plan, items):
+            return "fragile_stacking"
         return None
