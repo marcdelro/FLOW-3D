@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type {
   DeliveryStop,
@@ -17,6 +17,80 @@ import {
   downloadManifestTemplate,
   importManifestFile,
 } from "../data/manifestImport";
+
+/**
+ * Number input that lets the user backspace to empty mid-edit without
+ * snapping back to a fallback. Holds its own string state; only commits
+ * a parsed number to `onChange` when the text parses cleanly. On blur,
+ * an empty/invalid value resets to `min` (or 1 if min is 0).
+ */
+function NumberInput({
+  value,
+  onChange,
+  min = 0,
+  max,
+  step,
+  className,
+  disabled,
+  title,
+  ariaLabel,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  className?: string;
+  disabled?: boolean;
+  title?: string;
+  ariaLabel?: string;
+}) {
+  const [text, setText] = useState<string>(String(value));
+
+  // Resync external changes (e.g. import overwrites the value).
+  useEffect(() => {
+    setText((prev) => {
+      const parsed = prev === "" ? NaN : Number(prev);
+      return Number.isFinite(parsed) && parsed === value ? prev : String(value);
+    });
+  }, [value]);
+
+  return (
+    <input
+      type="number"
+      className={className}
+      min={min}
+      max={max}
+      step={step}
+      disabled={disabled}
+      title={title}
+      aria-label={ariaLabel}
+      value={text}
+      onChange={(e) => {
+        const v = e.target.value;
+        setText(v);
+        if (v === "" || v === "-") return;
+        const n = step && !Number.isInteger(step) ? parseFloat(v) : parseInt(v, 10);
+        if (!Number.isFinite(n)) return;
+        let clamped = n;
+        if (typeof min === "number" && clamped < min) clamped = min;
+        if (typeof max === "number" && clamped > max) clamped = max;
+        onChange(clamped);
+      }}
+      onBlur={() => {
+        const v = text;
+        if (v === "" || v === "-" || !Number.isFinite(Number(v))) {
+          const fallback = min > 0 ? min : 1;
+          setText(String(fallback));
+          onChange(fallback);
+        } else {
+          // Re-stringify to drop leading zeroes ("0042" → "42").
+          setText(String(Number(v)));
+        }
+      }}
+    />
+  );
+}
 
 /** Strip the trailing "_NN" from an item_id. Used by the edit flow. */
 function prefixOf(item_id: string): string | undefined {
@@ -71,30 +145,43 @@ const labelCls = "block text-xs text-gray-500 mb-1";
 // ── Section header (sticky within the scrollable sidebar) ─────────────────────
 function Section({
   title,
+  hint,
   badge,
   children,
   bg2,
   border,
   muted,
+  lightMode,
 }: {
   title: string;
+  hint?: string;
   badge?: number;
   children: ReactNode;
   bg2: string;
   border: string;
   muted: string;
+  lightMode?: boolean;
 }) {
   return (
     <>
-      <div className={`flex items-center justify-between px-4 py-3 border-b ${border} ${bg2} sticky top-0 z-10`}>
-        <span className={`text-sm font-semibold ${muted} uppercase tracking-wider`}>
-          {title}
-        </span>
+      <div className={`flex items-start justify-between gap-3 px-5 py-4 border-b-2 ${border} ${bg2} sticky top-0 z-10`}>
+        <div>
+          <div className={`text-lg font-bold leading-tight ${lightMode ? "text-slate-900" : "text-gray-100"}`}>
+            {title}
+          </div>
+          {hint && (
+            <div className={`text-sm mt-0.5 leading-snug ${muted}`}>{hint}</div>
+          )}
+        </div>
         {badge !== undefined && (
-          <span className={`text-xs font-mono ${muted}`}>{badge}</span>
+          <span className={`text-base font-bold px-2.5 py-1 rounded-full shrink-0 ${
+            lightMode ? "bg-slate-200 text-slate-700" : "bg-gray-800 text-gray-300"
+          }`}>
+            {badge}
+          </span>
         )}
       </div>
-      <div className="px-4 py-4">{children}</div>
+      <div className="px-5 py-5">{children}</div>
     </>
   );
 }
@@ -165,7 +252,7 @@ function AddItemForm({
     hoverVariant ?? value.model_variant ?? (variants.length > 0 ? 0 : undefined);
 
   return (
-    <div className={`border rounded-lg p-4 space-y-3 ${lightMode ? "border-gray-300 bg-slate-50" : "border-gray-700 bg-gray-900/30"}`}>
+    <div className={`border-2 rounded-2xl p-5 space-y-4 ${lightMode ? "border-slate-300 bg-slate-50" : "border-gray-700 bg-gray-900/40"}`}>
       {/* Furniture type dropdown grouped by category */}
       <div>
         <label className={labelCls}>Furniture Type</label>
@@ -191,9 +278,13 @@ function AddItemForm({
 
       {/* Auto-generated item ID badge */}
       {value.item_id && (
-        <div className="flex items-center gap-1.5 py-0.5">
-          <span className="text-sm text-gray-400">ID:</span>
-          <span className="font-mono text-sm text-blue-400 bg-blue-950/40 border border-blue-900/40 px-2 py-1 rounded">
+        <div className="flex items-center gap-2 py-0.5">
+          <span className={`text-sm font-medium ${lightMode ? "text-slate-600" : "text-gray-400"}`}>ID:</span>
+          <span className={`text-sm font-semibold px-2.5 py-1 rounded-lg ${
+            lightMode
+              ? "text-blue-700 bg-blue-50 border border-blue-200"
+              : "text-blue-300 bg-blue-950/40 border border-blue-900/40"
+          }`}>
             {value.item_id}
           </span>
         </div>
@@ -225,7 +316,7 @@ function AddItemForm({
       {variants.length > 1 && (
         <div>
           <label className={labelCls}>Model Variant</label>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-2">
             {variants.map((v) => {
               const active = value.model_variant === v.index;
               return (
@@ -235,13 +326,13 @@ function AddItemForm({
                   onClick={() => onChange({ ...value, model_variant: v.index })}
                   onMouseEnter={() => setHoverVariant(v.index)}
                   onMouseLeave={() => setHoverVariant(null)}
-                  className={`px-3 py-2 text-sm rounded-md border transition-colors ${
+                  className={`px-4 py-2.5 text-base font-semibold rounded-lg border-2 transition-colors ${
                     active
                       ? lightMode
-                        ? "border-blue-500 bg-blue-100 text-blue-700"
-                        : "border-blue-500 bg-blue-950 text-blue-300"
+                        ? "border-blue-600 bg-blue-100 text-blue-800"
+                        : "border-blue-500 bg-blue-950 text-blue-200"
                       : lightMode
-                        ? "border-gray-300 bg-white text-gray-700 hover:border-gray-400"
+                        ? "border-slate-300 bg-white text-slate-700 hover:border-slate-500"
                         : "border-gray-700 bg-gray-900 text-gray-300 hover:border-gray-600"
                   }`}
                 >
@@ -253,33 +344,34 @@ function AddItemForm({
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-3">
-        {(["w", "l", "h"] as const).map((k) => (
-          <div key={k}>
-            <label className={labelCls}>{k.toUpperCase()} (mm)</label>
-            <input
-              className={inputCls}
-              type="number"
-              min={1}
-              value={value[k]}
-              onChange={(e) =>
-                set(k, Math.max(1, parseInt(e.target.value) || 1))
-              }
-            />
-          </div>
-        ))}
+      <div>
+        <label className={labelCls}>Dimensions (mm)</label>
+        <div className="grid grid-cols-3 gap-3">
+          {(["w", "l", "h"] as const).map((k) => (
+            <div key={k}>
+              <div className={`text-sm font-medium mb-1 ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
+                {k === "w" ? "Width" : k === "l" ? "Length" : "Height"}
+              </div>
+              <NumberInput
+                className={inputCls}
+                min={1}
+                value={value[k]}
+                onChange={(n) => set(k, n)}
+              />
+            </div>
+          ))}
+        </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 items-end">
+      <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={labelCls}>Weight (kg)</label>
-          <input
+          <NumberInput
             className={inputCls}
-            type="number"
             min={0}
             step={1}
             value={value.weight_kg}
-            onChange={(e) => set("weight_kg", parseFloat(e.target.value) || 0)}
+            onChange={(n) => set("weight_kg", n)}
           />
         </div>
         <div>
@@ -296,72 +388,65 @@ function AddItemForm({
             ))}
           </select>
         </div>
-        <div className="flex items-center gap-2 pb-0.5">
-          <input
-            id="new_side_up"
-            type="checkbox"
-            className="accent-blue-500 cursor-pointer"
-            checked={value.side_up}
-            onChange={(e) => set("side_up", e.target.checked)}
-          />
-          <label htmlFor="new_side_up" className={`${labelCls} mb-0 cursor-pointer`}>
-            Side Up
-          </label>
-        </div>
       </div>
 
-      {/* Boxed / Fragile / Quantity row */}
-      <div className="grid grid-cols-3 gap-3 items-end">
-        <div className="flex items-center gap-2 pb-0.5">
-          <input
-            id="new_boxed"
-            type="checkbox"
-            className="accent-blue-500 cursor-pointer"
-            checked={!!value.boxed}
-            onChange={(e) => set("boxed", e.target.checked)}
-          />
-          <label htmlFor="new_boxed" className={`${labelCls} mb-0 cursor-pointer`}>
-            Boxed
-          </label>
-        </div>
-        <div className="flex items-center gap-2 pb-0.5">
-          <input
-            id="new_fragile"
-            type="checkbox"
-            className="accent-amber-500 cursor-pointer"
-            checked={!!value.fragile}
-            onChange={(e) => set("fragile", e.target.checked)}
-          />
-          <label htmlFor="new_fragile" className={`${labelCls} mb-0 cursor-pointer`}>
-            Fragile
-          </label>
-        </div>
+      {/* Handling flags */}
+      <div className="space-y-2.5">
+        <label className={labelCls}>Handling</label>
+        <CheckboxRow
+          id="new_side_up"
+          checked={value.side_up}
+          onChange={(v) => set("side_up", v)}
+          title="Side Up"
+          desc="Item must remain upright."
+          lightMode={lightMode}
+        />
+        <CheckboxRow
+          id="new_boxed"
+          checked={!!value.boxed}
+          onChange={(v) => set("boxed", v)}
+          title="Boxed"
+          desc="Renders a cardboard wrapper in the viewer."
+          lightMode={lightMode}
+        />
+        <CheckboxRow
+          id="new_fragile"
+          checked={!!value.fragile}
+          onChange={(v) => set("fragile", v)}
+          title="Fragile"
+          desc="Solver will not stack other items on top."
+          lightMode={lightMode}
+          warn
+        />
+      </div>
+
+      {!isEditing && (
         <div>
           <label className={labelCls}>Quantity</label>
-          <input
-            className={inputCls}
-            type="number"
+          <NumberInput
+            className={`${inputCls} max-w-[120px]`}
             min={1}
             max={99}
-            disabled={isEditing}
-            title={isEditing ? "Quantity only applies when adding new items." : "Number of identical items to add."}
             value={quantity}
-            onChange={(e) =>
-              onQuantityChange(Math.max(1, Math.min(99, parseInt(e.target.value) || 1)))
-            }
+            onChange={onQuantityChange}
           />
         </div>
-      </div>
+      )}
 
       {/* Fragile handling notice — only shown when checked */}
       {value.fragile && (
-        <div className={`rounded-md border p-2.5 text-xs leading-relaxed ${
+        <div className={`rounded-xl border-2 p-3.5 text-sm leading-relaxed ${
           lightMode
-            ? "border-amber-300 bg-amber-50 text-amber-800"
-            : "border-amber-700 bg-amber-950 text-amber-200"
+            ? "border-amber-300 bg-amber-50 text-amber-900"
+            : "border-amber-700 bg-amber-950 text-amber-100"
         }`}>
-          <div className="font-bold mb-1 flex items-center gap-1.5">
-            <span>⚠</span> Fragile handling required
+          <div className="font-bold mb-1.5 flex items-center gap-2 text-base">
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            Fragile handling required
           </div>
           Wrap with moving blankets, foam, or bubble wrap. Secure corners with
           cardboard and use heavy-duty straps. The packing solver will not stack
@@ -369,14 +454,18 @@ function AddItemForm({
         </div>
       )}
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && (
+        <p className={`text-base font-semibold ${lightMode ? "text-red-700" : "text-red-300"}`}>
+          {error}
+        </p>
+      )}
 
-      <div className="flex gap-2 pt-1">
+      <div className="flex gap-3 pt-2">
         <button
           onClick={onCancel}
-          className={`flex-1 py-2.5 text-sm rounded-md border font-medium transition-colors ${
+          className={`flex-1 py-3 text-base font-semibold rounded-xl border-2 transition-colors ${
             lightMode
-              ? "border-gray-300 text-gray-700 hover:bg-gray-100"
+              ? "border-slate-300 text-slate-700 hover:bg-slate-100"
               : "border-gray-700 text-gray-300 hover:bg-gray-800"
           }`}
         >
@@ -384,12 +473,66 @@ function AddItemForm({
         </button>
         <button
           onClick={onConfirm}
-          className="flex-1 py-2.5 text-sm rounded-md bg-blue-700 hover:bg-blue-600 text-white font-semibold transition-colors"
+          className="flex-1 py-3 text-base font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-md hover:shadow-lg"
         >
           {confirmLabel}
         </button>
       </div>
     </div>
+  );
+}
+
+function CheckboxRow({
+  id,
+  checked,
+  onChange,
+  title,
+  desc,
+  lightMode,
+  warn,
+}: {
+  id: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  title: string;
+  desc: string;
+  lightMode?: boolean;
+  warn?: boolean;
+}) {
+  const activeBorder = warn
+    ? "border-amber-500"
+    : "border-blue-500";
+  const activeBg = warn
+    ? lightMode ? "bg-amber-50" : "bg-amber-950/30"
+    : lightMode ? "bg-blue-50" : "bg-blue-950/30";
+
+  return (
+    <label
+      htmlFor={id}
+      className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${
+        checked
+          ? `${activeBorder} ${activeBg}`
+          : lightMode
+            ? "border-slate-200 bg-white hover:border-slate-300"
+            : "border-gray-700 bg-gray-900/40 hover:border-gray-600"
+      }`}
+    >
+      <input
+        id={id}
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className={`mt-1 w-5 h-5 cursor-pointer ${warn ? "accent-amber-500" : "accent-blue-600"}`}
+      />
+      <div className="flex-1">
+        <div className={`text-base font-semibold ${lightMode ? "text-slate-900" : "text-gray-100"}`}>
+          {title}
+        </div>
+        <div className={`text-sm leading-snug mt-0.5 ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
+          {desc}
+        </div>
+      </div>
+    </label>
   );
 }
 
@@ -409,10 +552,10 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
   const muted  = lightMode ? "text-gray-700"   : "text-gray-400";
 
   const inputCls =
-    `w-full ${bg} border ${border} rounded-md px-3 py-2 text-sm ${text} ` +
-    `focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 font-mono ` +
-    (lightMode ? "shadow-sm placeholder-gray-400" : "placeholder-gray-500");
-  const labelCls = `block text-sm font-medium ${muted} mb-1.5`;
+    `w-full ${bg} border-2 ${border} rounded-lg px-3.5 py-2.5 text-base ${text} ` +
+    `focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ` +
+    (lightMode ? "shadow-sm placeholder-slate-400" : "placeholder-gray-500");
+  const labelCls = `block text-base font-semibold ${lightMode ? "text-slate-700" : "text-gray-300"} mb-1.5`;
 
   const [truck, setTruck]   = useState<TruckSpec>(DEFAULT_TRUCK);
   const [stops, setStops]   = useState<DeliveryStop[]>(DEFAULT_STOPS);
@@ -422,6 +565,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
   const [showAdd, setShowAdd]       = useState(false);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [itemError, setItemError]   = useState<string | null>(null);
+  const editFormRef = useRef<HTMLDivElement | null>(null);
 
   // Import flow — file input, drag-overlay, last-import digest
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -561,6 +705,9 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
     setDraftQty(1);
     setShowAdd(true);
     setItemError(null);
+    setTimeout(() => {
+      editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 0);
   }
 
   return (
@@ -568,25 +715,29 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
       className={`relative flex flex-col pb-4 ${lightMode ? "bg-slate-50" : ""}`}
       onDragOver={(e) => { e.preventDefault(); if (!isDragging) setIsDragging(true); }}
       onDragLeave={(e) => {
-        // only clear when leaving the container itself (not a child)
-        if (e.currentTarget === e.target) setIsDragging(false);
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragging(false);
       }}
       onDrop={onDrop}
     >
       {/* Drag-and-drop overlay */}
       {isDragging && (
-        <div className={`absolute inset-0 z-30 flex flex-col items-center justify-center pointer-events-none border-2 border-dashed rounded-lg ${
+        <div className={`absolute inset-0 z-30 flex flex-col items-center justify-center pointer-events-none border-4 border-dashed rounded-2xl ${
           lightMode
-            ? "bg-blue-50/95 border-blue-400 text-blue-700"
-            : "bg-blue-950/95 border-blue-500 text-blue-200"
+            ? "bg-blue-50/95 border-blue-500 text-blue-800"
+            : "bg-blue-950/95 border-blue-400 text-blue-100"
         }`}>
-          <div className="text-2xl font-bold mb-1">Drop manifest file</div>
-          <div className="text-sm opacity-80">.xlsx · .xls · .json</div>
+          <svg className="w-16 h-16 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+          <div className="text-3xl font-bold mb-2">Drop your file here</div>
+          <div className="text-base opacity-80">Excel or JSON file</div>
         </div>
       )}
 
       {/* ── Import bar ──────────────────────────────────────────────────────── */}
-      <div className={`flex items-center gap-2 px-4 py-3 border-b ${border} ${bg2}`}>
+      <div className={`flex items-center gap-2 px-5 py-4 border-b-2 ${border} ${bg2}`}>
         <input
           ref={fileInputRef}
           type="file"
@@ -597,96 +748,120 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-md border transition-colors ${
+          className={`flex items-center gap-2 text-base font-semibold px-4 py-2.5 rounded-lg border-2 transition-colors ${
             lightMode
-              ? "border-gray-300 bg-white text-gray-700 hover:bg-gray-100 hover:border-gray-400"
+              ? "border-slate-300 bg-white text-slate-800 hover:bg-slate-100 hover:border-slate-400"
               : "border-gray-600 bg-gray-900 text-gray-200 hover:bg-gray-800 hover:border-gray-500"
           }`}
           title="Import a .xlsx, .xls, or .json manifest"
         >
-          <span>↑</span> Import Manifest
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+          Import Manifest
         </button>
         <button
           type="button"
           onClick={downloadManifestTemplate}
-          className={`text-sm px-2.5 py-1.5 rounded-md transition-colors ${
+          className={`text-base font-semibold px-3 py-2.5 rounded-lg transition-colors ${
             lightMode
-              ? "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-              : "text-gray-400 hover:text-gray-100 hover:bg-gray-800"
+              ? "text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+              : "text-gray-300 hover:text-gray-100 hover:bg-gray-800"
           }`}
           title="Download a starter .xlsx template"
         >
           Template
         </button>
-        <span className={`ml-auto text-xs ${muted}`}>or drop a file here</span>
+        <span className={`ml-auto text-sm ${muted} hidden sm:inline`}>or drop a file here</span>
       </div>
       {importMessage && (
-        <div className={`px-4 py-2 text-sm border-b ${border} ${
+        <div className={`px-5 py-3 text-base border-b-2 ${border} ${
           importMessage.kind === "ok"
-            ? lightMode ? "bg-green-50 text-green-800" : "bg-green-950 text-green-300"
-            : lightMode ? "bg-red-50 text-red-800"   : "bg-red-950 text-red-300"
+            ? lightMode ? "bg-green-50 text-green-800 border-green-200" : "bg-green-950 text-green-300"
+            : lightMode ? "bg-red-50 text-red-800 border-red-200"       : "bg-red-950 text-red-300"
         }`}>
           {importMessage.text}
         </div>
       )}
 
-      {/* ── Truck Spec ─────────────────────────────────────────────────────── */}
-      <Section title="Truck Specification" bg2={bg2} border={border} muted={muted}>
+      {/* ── Truck Specification ────────────────────────────────────────────── */}
+      <Section
+        title="Truck Specification"
+        hint="Interior dimensions and payload limit."
+        bg2={bg2}
+        border={border}
+        muted={muted}
+        lightMode={lightMode}
+      >
         <div className="grid grid-cols-2 gap-3 mb-3">
           {(["W", "L", "H"] as const).map((k) => (
             <div key={k}>
               <label className={labelCls}>
                 {k === "W" ? "Width" : k === "L" ? "Length" : "Height"} (mm)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 className={inputCls}
                 min={1}
                 value={truck[k]}
-                onChange={(e) =>
-                  setTruckField(k, Math.max(1, parseInt(e.target.value) || 1))
-                }
+                onChange={(n) => setTruckField(k, n)}
               />
             </div>
           ))}
           <div>
             <label className={labelCls}>Payload (kg)</label>
-            <input
-              type="number"
+            <NumberInput
               className={inputCls}
               min={0}
               step={100}
               value={truck.payload_kg}
-              onChange={(e) =>
-                setTruckField("payload_kg", parseFloat(e.target.value) || 0)
-              }
+              onChange={(n) => setTruckField("payload_kg", n)}
             />
           </div>
         </div>
-        <div className={`text-sm ${muted} font-mono ${bg2} rounded-md px-3 py-2`}>
-          Vol:&nbsp;{truckVol.toFixed(2)}&nbsp;m³ &nbsp;·&nbsp; Cargo:&nbsp;~{theoPct}%&nbsp;theoretical
+        <div className={`rounded-xl px-4 py-3 border ${
+          lightMode ? "bg-slate-50 border-slate-200 text-slate-700" : "bg-gray-900 border-gray-800 text-gray-300"
+        }`}>
+          <div className="flex justify-between text-base">
+            <span>Volume:</span>
+            <span className="font-bold font-mono">{truckVol.toFixed(2)} m³</span>
+          </div>
+          <div className="flex justify-between text-base mt-1">
+            <span>Cargo (theoretical):</span>
+            <span className="font-bold font-mono">~{theoPct}%</span>
+          </div>
         </div>
       </Section>
 
       {/* ── Delivery Stops ─────────────────────────────────────────────────── */}
-      <Section title="Delivery Stops" badge={stops.length} bg2={bg2} border={border} muted={muted}>
-        <div className="space-y-2 mb-2">
+      <Section
+        title="Delivery Stops"
+        hint="Listed in delivery order. Stop 1 is unloaded first."
+        badge={stops.length}
+        bg2={bg2}
+        border={border}
+        muted={muted}
+        lightMode={lightMode}
+      >
+        <div className="space-y-3 mb-3">
           {stops.map((stop, i) => (
-            <div key={stop.stop_id} className="flex items-center gap-1.5">
+            <div key={stop.stop_id} className="flex items-center gap-2">
               <span
-                className="w-7 h-7 rounded text-sm font-bold flex items-center justify-center shrink-0 text-gray-950 leading-none"
+                className="w-11 h-11 rounded-xl text-lg font-bold flex items-center justify-center shrink-0 text-gray-950 leading-none shadow-sm"
                 style={{
                   backgroundColor: badgeColor(stop.stop_id),
                   outline: lightMode ? "1.5px solid rgba(0,0,0,0.18)" : "none",
                   outlineOffset: "1px",
                 }}
+                aria-label={`Stop ${stop.stop_id}`}
               >
                 {stop.stop_id}
               </span>
               <input
                 className={`${inputCls} flex-1 min-w-0`}
                 type="text"
-                placeholder="Address"
+                placeholder="Type the address"
                 value={stop.address}
                 onChange={(e) =>
                   setStops((s) =>
@@ -696,32 +871,53 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
                   )
                 }
               />
-              {/* Reorder buttons */}
-              <div className="flex flex-col gap-px shrink-0">
+              <div className="flex flex-col gap-1 shrink-0">
                 <button
                   onClick={() => moveStop(i, -1)}
                   disabled={i === 0}
-                  title="Move up"
-                  className="text-gray-500 hover:text-gray-200 disabled:opacity-20 disabled:cursor-default transition-colors text-sm leading-none px-1"
+                  title="Move up in the list"
+                  aria-label="Move stop up"
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-25 disabled:cursor-default transition-colors ${
+                    lightMode
+                      ? "text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-300"
+                      : "text-gray-400 hover:text-gray-100 hover:bg-gray-800 border border-gray-700"
+                  }`}
                 >
-                  ▲
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="18 15 12 9 6 15" />
+                  </svg>
                 </button>
                 <button
                   onClick={() => moveStop(i, 1)}
                   disabled={i === stops.length - 1}
-                  title="Move down"
-                  className="text-gray-500 hover:text-gray-200 disabled:opacity-20 disabled:cursor-default transition-colors text-sm leading-none px-1"
+                  title="Move down in the list"
+                  aria-label="Move stop down"
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-25 disabled:cursor-default transition-colors ${
+                    lightMode
+                      ? "text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-300"
+                      : "text-gray-400 hover:text-gray-100 hover:bg-gray-800 border border-gray-700"
+                  }`}
                 >
-                  ▼
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
                 </button>
               </div>
               {stops.length > 1 && (
                 <button
                   onClick={() => removeStop(i)}
-                  title="Remove stop"
-                  className="text-gray-500 hover:text-red-400 transition-colors text-sm shrink-0"
+                  title="Remove this stop"
+                  aria-label="Remove stop"
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors shrink-0 ${
+                    lightMode
+                      ? "text-slate-500 hover:text-red-700 hover:bg-red-50 border border-slate-300 hover:border-red-300"
+                      : "text-gray-500 hover:text-red-300 hover:bg-red-950/40 border border-gray-700 hover:border-red-800"
+                  }`}
                 >
-                  ✕
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
                 </button>
               )}
             </div>
@@ -729,82 +925,112 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
         </div>
         <button
           onClick={addStop}
-          className={`w-full text-sm ${muted} border border-dashed ${border} rounded-md py-2.5 transition-colors font-medium ${
+          className={`w-full text-base font-semibold border-2 border-dashed rounded-xl py-3.5 transition-colors flex items-center justify-center gap-2 ${
             lightMode
-              ? "hover:text-gray-900 hover:border-gray-400 hover:bg-white"
-              : "hover:text-gray-200 hover:border-gray-500"
+              ? "border-slate-300 text-slate-700 hover:text-slate-900 hover:border-slate-500 hover:bg-slate-50"
+              : "border-gray-700 text-gray-300 hover:text-gray-100 hover:border-gray-500 hover:bg-gray-900"
           }`}
         >
-          + Add Stop
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Add another stop
         </button>
-        <p className={`text-sm ${muted} mt-2 leading-relaxed`}>
-          Stop&nbsp;1&nbsp;=&nbsp;first delivery (near door). Higher&nbsp;#&nbsp;=&nbsp;deeper in truck&nbsp;(LIFO).
+        <p className={`text-sm mt-3 leading-relaxed ${muted}`}>
+          Stop 1 = first delivery (near door). Higher # = deeper in truck (LIFO).
         </p>
       </Section>
 
       {/* ── Cargo Items ────────────────────────────────────────────────────── */}
-      <Section title="Cargo Items" badge={items.length} bg2={bg2} border={border} muted={muted}>
+      <Section
+        title="Cargo Items"
+        hint="Furniture to be packed into the truck."
+        badge={items.length}
+        bg2={bg2}
+        border={border}
+        muted={muted}
+        lightMode={lightMode}
+      >
         {items.length > 0 && (
-          <div className={`rounded border ${border} overflow-hidden mb-2`}>
-            <table className="w-full text-xs">
+          <div className={`rounded-xl border-2 ${border} overflow-hidden mb-3`}>
+            <table className="w-full">
               <thead>
-                <tr className={`${bg2} ${muted}`}>
-                  <th className="text-left px-2 py-2 font-semibold text-sm">ID</th>
-                  <th className="text-right px-2 py-2 font-semibold text-sm whitespace-nowrap">
-                    W×L×H
+                <tr className={`${bg2} border-b-2 ${border}`}>
+                  <th className={`text-left px-3 py-3 font-bold text-sm ${lightMode ? "text-slate-700" : "text-gray-300"}`}>Item</th>
+                  <th className={`text-right px-3 py-3 font-bold text-sm whitespace-nowrap ${lightMode ? "text-slate-700" : "text-gray-300"}`}>
+                    Size
                   </th>
-                  <th className="text-center px-1 py-2 font-semibold text-sm w-8">Stp</th>
-                  <th className="text-center px-1 py-2 font-semibold text-sm w-12" title="Side-up · Boxed · Fragile">Flags</th>
-                  <th className="w-12" />
+                  <th className={`text-center px-2 py-3 font-bold text-sm w-12 ${lightMode ? "text-slate-700" : "text-gray-300"}`}>Stop</th>
+                  <th className={`text-center px-2 py-3 font-bold text-sm ${lightMode ? "text-slate-700" : "text-gray-300"}`}>Notes</th>
+                  <th className="w-20" />
                 </tr>
               </thead>
-              <tbody className={`divide-y ${border}/40`}>
+              <tbody>
                 {items.map((item, i) => (
-                  <tr key={item.item_id} className={lightMode ? "hover:bg-slate-100" : "hover:bg-gray-800/30"}>
+                  <tr
+                    key={item.item_id}
+                    onClick={() => startEdit(i)}
+                    className={`border-t ${border} cursor-pointer ${
+                      editingIdx === i
+                        ? lightMode ? "bg-blue-50" : "bg-blue-950/30"
+                        : lightMode ? "hover:bg-slate-50" : "hover:bg-gray-800/30"
+                    }`}
+                  >
                     <td
-                      className={`px-2 py-2 font-mono text-sm ${text} max-w-[100px] truncate`}
+                      className={`px-3 py-3 text-base font-medium ${text} max-w-[140px] truncate`}
                       title={item.item_id}
                     >
                       {item.item_id}
                     </td>
-                    <td className={`px-2 py-2 text-right font-mono text-sm ${muted} whitespace-nowrap`}>
+                    <td className={`px-3 py-3 text-right text-sm whitespace-nowrap ${muted}`}>
                       {item.w}×{item.l}×{item.h}
                     </td>
-                    <td className="px-1 py-2 text-center">
+                    <td className="px-2 py-3 text-center">
                       <span
-                        className="inline-flex w-6 h-6 rounded text-sm font-bold items-center justify-center text-gray-950 leading-none"
+                        className="inline-flex w-9 h-9 rounded-lg text-base font-bold items-center justify-center text-gray-950 leading-none shadow-sm"
                         style={{
                           backgroundColor: badgeColor(item.stop_id),
                           outline: lightMode ? "1.5px solid rgba(0,0,0,0.18)" : "none",
                           outlineOffset: "1px",
                         }}
+                        aria-label={`Stop ${item.stop_id}`}
                       >
                         {item.stop_id}
                       </span>
                     </td>
-                    <td className={`px-1 py-2 text-center text-sm`}>
-                      <div className="flex items-center justify-center gap-1">
+                    <td className="px-2 py-3 text-center">
+                      <div className="flex items-center justify-center gap-1 flex-wrap">
                         {item.side_up && (
-                          <span className={muted} title="Upright only">↑</span>
+                          <span
+                            className={`inline-block text-xs font-bold px-2 py-0.5 rounded-full ${
+                              lightMode
+                                ? "bg-slate-100 text-slate-700 border border-slate-300"
+                                : "bg-gray-800 text-gray-300 border border-gray-700"
+                            }`}
+                            title="Side-up — orientation locked upright"
+                          >
+                            ↑
+                          </span>
                         )}
                         {item.boxed && (
                           <span
-                            className={`inline-block text-[10px] font-bold px-1 rounded ${
+                            className={`inline-block text-xs font-bold px-2 py-0.5 rounded-full ${
                               lightMode
-                                ? "bg-blue-100 text-blue-700 border border-blue-300"
-                                : "bg-blue-950 text-blue-300 border border-blue-800"
+                                ? "bg-blue-100 text-blue-800 border border-blue-300"
+                                : "bg-blue-950 text-blue-200 border border-blue-800"
                             }`}
-                            title="Boxed (renders cardboard wrapper in viewer)"
+                            title="Boxed — renders cardboard wrapper in viewer"
                           >
                             BOX
                           </span>
                         )}
                         {item.fragile && (
                           <span
-                            className={`inline-block text-[10px] font-bold px-1 rounded ${
+                            className={`inline-block text-xs font-bold px-2 py-0.5 rounded-full ${
                               lightMode
-                                ? "bg-amber-100 text-amber-700 border border-amber-300"
-                                : "bg-amber-950 text-amber-300 border border-amber-800"
+                                ? "bg-amber-100 text-amber-800 border border-amber-300"
+                                : "bg-amber-950 text-amber-200 border border-amber-800"
                             }`}
                             title="Fragile — solver will not stack against this item"
                           >
@@ -813,23 +1039,40 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
                         )}
                       </div>
                     </td>
-                    <td className="pr-2 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="pr-3 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => startEdit(i)}
-                          title="Edit item"
-                          className="text-gray-500 hover:text-blue-400 transition-colors text-sm p-1"
+                          title="Change this item"
+                          aria-label={`Edit ${item.item_id}`}
+                          className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
+                            lightMode
+                              ? "text-slate-600 hover:text-blue-700 hover:bg-blue-50 border border-slate-300 hover:border-blue-300"
+                              : "text-gray-400 hover:text-blue-300 hover:bg-blue-950/40 border border-gray-700 hover:border-blue-800"
+                          }`}
                         >
-                          ✎
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
                         </button>
                         <button
-                          onClick={() =>
-                            setItems((its) => its.filter((_, j) => j !== i))
-                          }
-                          title="Remove item"
-                          className="text-gray-500 hover:text-red-400 transition-colors text-sm p-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setItems((its) => its.filter((_, j) => j !== i));
+                          }}
+                          title="Remove this item"
+                          aria-label={`Remove ${item.item_id}`}
+                          className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
+                            lightMode
+                              ? "text-slate-600 hover:text-red-700 hover:bg-red-50 border border-slate-300 hover:border-red-300"
+                              : "text-gray-400 hover:text-red-300 hover:bg-red-950/40 border border-gray-700 hover:border-red-800"
+                          }`}
                         >
-                          ✕
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
                         </button>
                       </div>
                     </td>
@@ -841,6 +1084,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
         )}
 
         {showAdd ? (
+          <div ref={editFormRef}>
           <AddItemForm
             key={editingIdx ?? "new"}
             value={draft}
@@ -865,42 +1109,58 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
             lightMode={lightMode}
             isEditing={editingIdx !== null}
           />
+          </div>
         ) : stops.length > 0 ? (
           <button
             onClick={() => setShowAdd(true)}
-            className={`w-full text-sm ${muted} border border-dashed ${border} rounded-md py-2.5 transition-colors font-medium ${
+            className={`w-full text-base font-semibold border-2 border-dashed rounded-xl py-4 transition-colors flex items-center justify-center gap-2 ${
               lightMode
-                ? "hover:text-gray-900 hover:border-gray-400 hover:bg-white"
-                : "hover:text-gray-200 hover:border-gray-500"
+                ? "border-slate-300 text-slate-700 hover:text-slate-900 hover:border-slate-500 hover:bg-slate-50"
+                : "border-gray-700 text-gray-300 hover:text-gray-100 hover:border-gray-500 hover:bg-gray-900"
             }`}
           >
-            + Add Item
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Add Item
           </button>
         ) : (
-          <p className={`text-sm ${muted} text-center py-2`}>
+          <p className={`text-base ${muted} text-center py-3`}>
             Add at least one stop before adding items.
           </p>
         )}
       </Section>
 
-      {/* ── Solve button ───────────────────────────────────────────────────── */}
-      <div className="px-4 pt-2">
+      {/* ── Big Solve button ───────────────────────────────────────────────── */}
+      <div className="px-5 pt-3 pb-1">
         <button
           onClick={() => onSolve({ items, truck, stops })}
           disabled={loading || items.length === 0}
-          className="w-full py-3.5 text-base font-bold rounded-lg bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-white transition-colors flex items-center justify-center gap-2"
+          className={`w-full py-5 text-xl font-bold rounded-2xl transition-all flex items-center justify-center gap-3 shadow-lg ${
+            loading || items.length === 0
+              ? lightMode
+                ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
+                : "bg-gray-800 text-gray-500 cursor-not-allowed shadow-none"
+              : "bg-blue-600 hover:bg-blue-700 text-white hover:shadow-xl"
+          }`}
         >
           {loading ? (
             <>
-              <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <span className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin" />
               Solving…
             </>
           ) : (
-            "Solve Packing Plan"
+            <>
+              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+              Solve Packing Plan
+            </>
           )}
         </button>
         {items.length === 0 && !loading && (
-          <p className={`text-sm ${muted} text-center mt-2`}>
+          <p className={`text-base ${muted} text-center mt-3`}>
             Add at least one item to solve.
           </p>
         )}

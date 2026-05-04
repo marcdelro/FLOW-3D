@@ -1,3 +1,4 @@
+import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -562,42 +563,44 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
     <div className="relative w-full h-full">
 
       {/* ── View-mode buttons ── */}
-      <div className="absolute top-3 left-3 z-10 flex gap-1.5">
-        {(["3d", "exploded", "labels", "animate"] as const).map((m) => (
-          <button
-            key={m}
-            onClick={() => {
-              if (m === "animate" && mode !== "animate") {
-                setAnimStep(0);
-                setIsPlaying(true);
-              } else if (m !== "animate") {
-                setIsPlaying(false);
-              }
-              setMode(m);
-            }}
-            className={`px-3 py-1.5 text-sm font-semibold rounded border transition-colors ${
-              mode === m
-                ? "bg-blue-600 border-blue-500 text-white shadow"
-                : lightMode
-                  ? "bg-white border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                  : "bg-gray-900 border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white"
-            }`}
-          >
-            {m === "3d" ? "3D" : m === "exploded" ? "Exploded" : m === "labels" ? "Labels" : "▶ Animate"}
-          </button>
-        ))}
+      <div className="absolute top-4 left-4 z-10 flex gap-2">
+        {(["3d", "exploded", "labels", "animate"] as const).map((m) => {
+          const label = m === "3d" ? "3D" : m === "exploded" ? "Exploded" : m === "labels" ? "Labels" : "▶ Animate";
+          return (
+            <button
+              key={m}
+              onClick={() => {
+                if (m === "animate" && mode !== "animate") {
+                  setAnimStep(0);
+                  setIsPlaying(true);
+                } else if (m !== "animate") {
+                  setIsPlaying(false);
+                }
+                setMode(m);
+              }}
+              className={`px-4 py-2.5 text-base font-semibold rounded-xl border-2 transition-colors ${
+                mode === m
+                  ? "bg-blue-600 border-blue-700 text-white shadow-md"
+                  : lightMode
+                    ? "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400"
+                    : "bg-gray-900 border-gray-600 text-gray-200 hover:bg-gray-800 hover:border-gray-500"
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Animate: currently-placing badge (top-center) ── */}
       {mode === "animate" && latestItem && (
-        <div className={`absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 border rounded-lg px-3 py-1.5 pointer-events-none ${lightMode ? "bg-white border-gray-300" : "bg-gray-900 border-gray-600"}`}>
-          <span className={`text-sm font-medium ${lightMode ? "text-gray-500" : "text-gray-400"}`}>Placing:</span>
-          <span className={`text-sm font-mono font-bold ${lightMode ? "text-gray-900" : "text-white"}`}>{latestItem.item_id}</span>
+        <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3 border-2 rounded-xl px-4 py-2.5 pointer-events-none shadow-md ${lightMode ? "bg-white border-slate-300" : "bg-gray-900 border-gray-600"}`}>
+          <span className={`text-base font-medium ${lightMode ? "text-slate-600" : "text-gray-400"}`}>Placing:</span>
+          <span className={`text-base font-bold ${lightMode ? "text-slate-900" : "text-white"}`}>{latestItem.item_id}</span>
           <span
-            className="text-xs font-bold px-1.5 py-0.5 rounded border text-gray-950"
+            className="text-sm font-bold px-2.5 py-1 rounded-lg text-gray-950"
             style={{
               backgroundColor: hexCss(colorForStop(latestItem.stop_id)),
-              borderColor:     hexCss(colorForStop(latestItem.stop_id)),
             }}
           >
             Stop {latestItem.stop_id}
@@ -605,51 +608,66 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
         </div>
       )}
       {mode === "animate" && animStep === 0 && (
-        <div className={`absolute top-3 left-1/2 -translate-x-1/2 z-10 border rounded-lg px-3 py-1.5 pointer-events-none ${lightMode ? "bg-white border-gray-300" : "bg-gray-900 border-gray-600"}`}>
-          <span className={`text-sm font-medium ${lightMode ? "text-gray-600" : "text-gray-400"}`}>Press play to begin loading sequence</span>
+        <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-10 border-2 rounded-xl px-4 py-2.5 pointer-events-none shadow-md ${lightMode ? "bg-white border-slate-300" : "bg-gray-900 border-gray-600"}`}>
+          <span className={`text-base font-semibold ${lightMode ? "text-slate-700" : "text-gray-300"}`}>Press play to begin loading sequence</span>
         </div>
       )}
       {mode === "animate" && animStep >= animSorted.length && animSorted.length > 0 && (
-        <div className={`absolute top-3 left-1/2 -translate-x-1/2 z-10 border rounded-lg px-3 py-1.5 pointer-events-none ${lightMode ? "bg-green-50 border-green-300" : "bg-gray-900 border-green-800"}`}>
-          <span className={`text-sm font-semibold ${lightMode ? "text-green-700" : "text-green-400"}`}>All {animSorted.length} items loaded</span>
+        <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-10 border-2 rounded-xl px-4 py-2.5 pointer-events-none shadow-md ${lightMode ? "bg-green-50 border-green-400" : "bg-green-950/70 border-green-700"}`}>
+          <span className={`text-base font-bold ${lightMode ? "text-green-800" : "text-green-300"}`}>
+            All {animSorted.length} items loaded
+          </span>
         </div>
       )}
 
-      {/* ── Animate: playback controls (bottom-center) ── */}
+      {/* ── Animate: playback controls (bottom-center) — large touch targets ── */}
       {mode === "animate" && (
-        <div className={`absolute bottom-12 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 border rounded-xl px-4 py-2 shadow-2xl ${lightMode ? "bg-white border-gray-300" : "bg-gray-900 border-gray-700"}`}>
-          <button
+        <div className={`absolute bottom-14 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 border-2 rounded-2xl px-4 py-3 shadow-2xl ${lightMode ? "bg-white border-slate-300" : "bg-gray-900 border-gray-700"}`}>
+          <PlaybackBtn
             onClick={() => { setAnimStep(0); setIsPlaying(false); }}
-            className={`transition-colors text-base px-1 ${lightMode ? "text-gray-500 hover:text-gray-900" : "text-gray-500 hover:text-white"}`}
-            title="Restart"
-          >⏮</button>
-          <button
+            title="Go back to the start"
+            lightMode={lightMode}
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zM9.5 12l8.5 6V6z"/></svg>
+          </PlaybackBtn>
+          <PlaybackBtn
             onClick={() => { setIsPlaying(false); setAnimStep((s) => Math.max(0, s - 1)); }}
-            className={`transition-colors text-base px-1 ${lightMode ? "text-gray-500 hover:text-gray-900" : "text-gray-500 hover:text-white"}`}
             title="Previous item"
-          >⏪</button>
+            lightMode={lightMode}
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </PlaybackBtn>
           <button
             onClick={() => {
               if (animStep >= animSorted.length) { setAnimStep(0); setIsPlaying(true); }
               else setIsPlaying((p) => !p);
             }}
-            className="w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center text-white text-sm transition-colors shrink-0"
+            className="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 flex items-center justify-center text-white transition-colors shrink-0 shadow-md"
             title={isPlaying ? "Pause" : "Play"}
+            aria-label={isPlaying ? "Pause" : "Play"}
           >
-            {isPlaying ? "⏸" : "▶"}
+            {isPlaying ? (
+              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+            ) : (
+              <svg className="w-6 h-6 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            )}
           </button>
-          <button
+          <PlaybackBtn
             onClick={() => { setIsPlaying(false); setAnimStep((s) => Math.min(animSorted.length, s + 1)); }}
-            className={`transition-colors text-base px-1 ${lightMode ? "text-gray-500 hover:text-gray-900" : "text-gray-500 hover:text-white"}`}
             title="Next item"
-          >⏩</button>
-          <button
+            lightMode={lightMode}
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </PlaybackBtn>
+          <PlaybackBtn
             onClick={() => { setIsPlaying(false); setAnimStep(animSorted.length); }}
-            className={`transition-colors text-base px-1 ${lightMode ? "text-gray-500 hover:text-gray-900" : "text-gray-500 hover:text-white"}`}
-            title="Show all"
-          >⏭</button>
+            title="Show every item"
+            lightMode={lightMode}
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
+          </PlaybackBtn>
 
-          <div className={`w-px h-4 mx-1 ${lightMode ? "bg-gray-300" : "bg-gray-700"}`} />
+          <div className={`w-px h-7 mx-1 ${lightMode ? "bg-slate-300" : "bg-gray-700"}`} />
 
           <input
             type="range"
@@ -657,18 +675,22 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
             max={animSorted.length}
             value={animStep}
             onChange={(e) => { setIsPlaying(false); setAnimStep(parseInt(e.target.value)); }}
-            className="w-28 accent-blue-500 cursor-pointer"
+            className="w-32 accent-blue-600 cursor-pointer"
+            aria-label="Loading progress"
           />
-          <span className={`text-sm font-mono font-semibold min-w-[36px] text-center ${lightMode ? "text-gray-700" : "text-gray-300"}`}>
+          <span className={`text-base font-bold min-w-[48px] text-center ${lightMode ? "text-slate-800" : "text-gray-200"}`}>
             {animStep}/{animSorted.length}
           </span>
 
-          <div className={`w-px h-4 mx-1 ${lightMode ? "bg-gray-300" : "bg-gray-700"}`} />
+          <div className={`w-px h-7 mx-1 ${lightMode ? "bg-slate-300" : "bg-gray-700"}`} />
 
+          <label className={`text-sm font-medium ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
+            Speed
+          </label>
           <select
             value={animSpeed}
             onChange={(e) => setAnimSpeed(parseInt(e.target.value))}
-            className={`text-sm rounded px-2 py-1 cursor-pointer border ${lightMode ? "bg-white border-gray-300 text-gray-700" : "bg-gray-800 border-gray-700 text-gray-300"}`}
+            className={`text-base font-semibold rounded-lg px-3 py-1.5 cursor-pointer border-2 ${lightMode ? "bg-white border-slate-300 text-slate-800" : "bg-gray-800 border-gray-700 text-gray-200"}`}
           >
             <option value={1500}>Slow</option>
             <option value={900}>Normal</option>
@@ -677,24 +699,24 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
         </div>
       )}
 
-      {/* ── Stop legend (bottom-right) ── */}
-      <div className={`absolute bottom-4 right-4 z-10 border rounded-lg px-3 py-2.5 space-y-1.5 min-w-[130px] ${lightMode ? "bg-white border-gray-300" : "bg-gray-950 border-gray-700"}`}>
-        <div className={`text-xs font-bold uppercase tracking-wider mb-2 ${lightMode ? "text-gray-500" : "text-gray-400"}`}>
+      {/* ── Stop legend (bottom-right) — bigger and clearer ── */}
+      <div className={`absolute bottom-4 right-4 z-10 border-2 rounded-2xl px-4 py-3 space-y-2 min-w-[170px] shadow-md ${lightMode ? "bg-white border-slate-300" : "bg-gray-950 border-gray-700"}`}>
+        <div className={`text-sm font-bold uppercase tracking-wider mb-2 ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
           Load Order
         </div>
         {uniqueStops
           .slice()
           .reverse()
           .map((sid, i, arr) => (
-            <div key={sid} className="flex items-center gap-2">
+            <div key={sid} className="flex items-center gap-2.5">
               <span
-                className="w-3 h-3 rounded-sm shrink-0"
+                className="w-5 h-5 rounded-md shrink-0 shadow-sm"
                 style={{ backgroundColor: hexCss(colorForStop(sid)) }}
               />
-              <span className={`text-sm font-medium ${lightMode ? "text-gray-800" : "text-gray-200"}`}>Stop {sid}</span>
-              {i === 0 && <span className={`text-xs ${lightMode ? "text-gray-400" : "text-gray-500"}`}>(rear)</span>}
+              <span className={`text-base font-semibold ${lightMode ? "text-slate-800" : "text-gray-100"}`}>Stop {sid}</span>
+              {i === 0 && <span className={`text-sm ${lightMode ? "text-slate-500" : "text-gray-500"}`}>(rear)</span>}
               {i === arr.length - 1 && arr.length > 1 && (
-                <span className={`text-xs ${lightMode ? "text-gray-400" : "text-gray-500"}`}>(door)</span>
+                <span className={`text-sm ${lightMode ? "text-slate-500" : "text-gray-500"}`}>(door)</span>
               )}
             </div>
           ))}
@@ -702,7 +724,7 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
 
       {/* ── Door label (bottom-left) ── */}
       <div className="absolute bottom-4 left-4 z-10">
-        <span className={`text-sm font-semibold border px-2.5 py-1 rounded ${lightMode ? "bg-blue-50 border-blue-300 text-blue-700" : "bg-blue-950 border-blue-700 text-blue-300"}`}>
+        <span className={`text-base font-bold border-2 px-3.5 py-2 rounded-xl shadow-md ${lightMode ? "bg-blue-50 border-blue-300 text-blue-800" : "bg-blue-950 border-blue-700 text-blue-200"}`}>
           ← DOOR
         </span>
       </div>
@@ -721,6 +743,35 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
 
       <div ref={mountRef} className="w-full h-full" />
     </div>
+  );
+}
+
+// ── Playback button helper ──────────────────────────────────────────────────
+
+function PlaybackBtn({
+  onClick,
+  title,
+  lightMode,
+  children,
+}: {
+  onClick: () => void;
+  title: string;
+  lightMode?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+        lightMode
+          ? "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+          : "text-gray-400 hover:text-gray-100 hover:bg-gray-800"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -755,69 +806,68 @@ function ItemTooltip({
         transform: flipLeft ? "translateX(-100%)" : "none",
       }}
     >
-      <div className={`border rounded-lg px-3 py-2.5 shadow-2xl min-w-[180px] ${lightMode ? "bg-white border-gray-300" : "bg-gray-900 border-gray-600"}`}>
-        <div className={`font-mono font-bold text-sm mb-2 truncate max-w-[200px] ${lightMode ? "text-gray-900" : "text-white"}`}>
+      <div className={`border-2 rounded-2xl px-4 py-3.5 shadow-2xl min-w-[230px] ${lightMode ? "bg-white border-slate-300" : "bg-gray-900 border-gray-600"}`}>
+        <div className={`font-bold text-base mb-3 truncate max-w-[260px] ${lightMode ? "text-slate-900" : "text-white"}`}>
           {p.item_id}
         </div>
 
-        <div className="space-y-1 text-xs">
+        <div className="space-y-2 text-sm">
           <div className="flex justify-between gap-4">
-            <span className={lightMode ? "text-gray-500" : "text-gray-400"}>W × L × H</span>
-            <span className={`font-mono ${lightMode ? "text-gray-800" : "text-gray-200"}`}>
+            <span className={lightMode ? "text-slate-600" : "text-gray-400"}>W × L × H</span>
+            <span className={`font-mono ${lightMode ? "text-slate-900" : "text-gray-100"}`}>
               {p.w} × {p.l} × {p.h}
-              <span className={`ml-0.5 ${lightMode ? "text-gray-400" : "text-gray-500"}`}>mm</span>
+              <span className={`ml-1 ${lightMode ? "text-slate-500" : "text-gray-500"}`}>mm</span>
             </span>
           </div>
 
           <div className="flex justify-between gap-4">
-            <span className={lightMode ? "text-gray-500" : "text-gray-400"}>Volume</span>
-            <span className={`font-mono ${lightMode ? "text-gray-800" : "text-gray-200"}`}>
+            <span className={lightMode ? "text-slate-600" : "text-gray-400"}>Volume</span>
+            <span className={`font-mono ${lightMode ? "text-slate-900" : "text-gray-100"}`}>
               {((p.w * p.l * p.h) / 1e9).toFixed(3)}
-              <span className={`ml-0.5 ${lightMode ? "text-gray-400" : "text-gray-500"}`}>m³</span>
+              <span className={`ml-1 ${lightMode ? "text-slate-500" : "text-gray-500"}`}>m³</span>
             </span>
           </div>
 
           <div className="flex justify-between gap-4">
-            <span className={lightMode ? "text-gray-500" : "text-gray-400"}>Position</span>
-            <span className={`font-mono ${lightMode ? "text-gray-800" : "text-gray-200"}`}>
+            <span className={lightMode ? "text-slate-600" : "text-gray-400"}>Position</span>
+            <span className={`font-mono ${lightMode ? "text-slate-900" : "text-gray-100"}`}>
               ({p.x}, {p.y}, {p.z})
             </span>
           </div>
 
           <div className="flex justify-between gap-4">
-            <span className={lightMode ? "text-gray-500" : "text-gray-400"}>Orientation</span>
-            <span className={`font-mono ${lightMode ? "text-gray-800" : "text-gray-200"}`}>#{p.orientation_index}</span>
+            <span className={lightMode ? "text-slate-600" : "text-gray-400"}>Orientation</span>
+            <span className={`font-mono ${lightMode ? "text-slate-900" : "text-gray-100"}`}>
+              #{p.orientation_index}
+            </span>
           </div>
 
           {(meta?.boxed || meta?.fragile) && (
-            <div className="flex justify-between gap-4">
-              <span className={lightMode ? "text-gray-500" : "text-gray-400"}>Handling</span>
-              <span className="flex gap-1">
-                {meta.boxed && (
-                  <span className={`text-[10px] font-bold px-1.5 rounded ${
-                    lightMode
-                      ? "bg-blue-100 text-blue-700 border border-blue-300"
-                      : "bg-blue-950 text-blue-300 border border-blue-800"
-                  }`}>BOXED</span>
-                )}
-                {meta.fragile && (
-                  <span className={`text-[10px] font-bold px-1.5 rounded ${
-                    lightMode
-                      ? "bg-amber-100 text-amber-700 border border-amber-300"
-                      : "bg-amber-950 text-amber-300 border border-amber-800"
-                  }`}>FRAGILE</span>
-                )}
-              </span>
+            <div className="flex items-center gap-2 pt-1">
+              {meta.boxed && (
+                <span className={`text-xs font-bold px-2 py-1 rounded ${
+                  lightMode
+                    ? "bg-blue-100 text-blue-800 border border-blue-300"
+                    : "bg-blue-950 text-blue-200 border border-blue-800"
+                }`}>BOXED</span>
+              )}
+              {meta.fragile && (
+                <span className={`text-xs font-bold px-2 py-1 rounded ${
+                  lightMode
+                    ? "bg-amber-100 text-amber-800 border border-amber-300"
+                    : "bg-amber-950 text-amber-200 border border-amber-800"
+                }`}>FRAGILE</span>
+              )}
             </div>
           )}
 
-          <div className={`border-t pt-1 mt-1 ${lightMode ? "border-gray-200" : "border-gray-700"}`}>
-            <div className="flex items-center gap-1.5">
+          <div className={`border-t-2 pt-2.5 mt-2.5 ${lightMode ? "border-slate-200" : "border-gray-700"}`}>
+            <div className="flex items-center gap-2">
               <span
-                className="w-2.5 h-2.5 rounded-sm shrink-0"
+                className="w-4 h-4 rounded shrink-0"
                 style={{ backgroundColor: color }}
               />
-              <span className="text-sm font-semibold" style={{ color }}>Stop {p.stop_id}</span>
+              <span className="text-base font-bold" style={{ color }}>Stop {p.stop_id}</span>
             </div>
           </div>
         </div>

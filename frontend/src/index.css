@@ -11,4 +11,20 @@ body,
   background: #0b0d12;
   color: #e5e7eb;
   font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  font-size: 17px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Larger default focus ring for keyboard users / low-vision */
+*:focus-visible {
+  outline: 3px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Easier-to-grab number inputs (don't shrink the spinners away) */
+input[type="number"] {
+  -moz-appearance: textfield;
 }
