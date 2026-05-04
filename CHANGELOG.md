@@ -12,6 +12,77 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 12 — 2026-05-04 · Frontend UX Polish — Typography, NumberInput, and Step Navigation
+
+**Goal:** Scale up the UI's visual hierarchy (larger text, more padding, border-2
+throughout), replace raw `<input type="number">` elements with a controlled
+`NumberInput` that handles mid-edit backspace without snap-back, introduce
+`CheckboxRow` cards with descriptions for the handling flags, and rebuild the
+sidebar navigation as numbered step tabs with subtitles.
+
+### Added
+
+**Frontend**
+- `frontend/src/components/ManifestForm.tsx`: New `NumberInput` component — holds
+  its own string state so the user can backspace to empty mid-edit without the field
+  snapping back to a fallback value; commits a parsed `int` or `float` to `onChange`
+  only when the text parses cleanly; resets to `min` (or 1 when `min === 0`) on blur.
+  Replaces all raw `<input type="number">` elements in `AddItemForm` for `w`, `l`,
+  `h`, `weight_kg`, and `quantity` fields.
+- `frontend/src/components/ManifestForm.tsx`: New `CheckboxRow` component — a
+  bordered card with a title and description line; `warn=true` switches to amber
+  accent for the Fragile flag. Replaces the three inline checkbox+label pairs for
+  Side Up, Boxed, and Fragile, each now carrying a one-line description of what the
+  flag does for the solver or viewer.
+- `frontend/src/App.tsx`: New `HelpCard` component — numbered step card (circle
+  number, title, body) used in the three-column onboarding grid on the empty state.
+  Replaces the old `StrategyCard` chips.
+
+### Changed
+
+**Frontend**
+- `frontend/src/App.tsx`: Default `lightMode` switched to `true` (light theme on
+  first load); sidebar width 400 → 440 px; navigation tabs redesigned as two large
+  numbered step buttons with `step / title / subtitle` layout and a border-bottom-4
+  active indicator; `StrategyCard` / `EmptyState` components removed in favour of
+  inline `HelpCard` grid; loading spinner enlarged (w-16, border-4); error banner
+  rebuilt with an SVG alert icon and a title+body layout; fallback error message
+  changed to a user-friendly sentence. `sideBg`, `sideBorder`, `headerBg`, `shell`
+  theme token variables centralize all conditional class lookups.
+- `frontend/src/components/Dashboard.tsx`: `SectionHeader` gains an optional `hint`
+  subtitle prop, displayed in muted text below the title; `StatCard` enlarged to
+  `text-2xl` font, more padding, and an explicit border; utilization bar percentage
+  is now colored with the bar color (`#16a34a` green / `#d97706` amber / `#dc2626`
+  red, replacing the old teal/amber/coral values for WCAG-AA contrast), and shows
+  a `packedVolM3` (m³) readout next to the percentage; LIFO stop cards display
+  "Step N · Stop N" in the card header and use a w-14 h-14 step counter; item
+  chips use an explicit white background in light mode (`bg-white`); unplaced-items
+  section adds a triangle warning SVG icon beside the count sentence; strategy
+  badges gain border classes for both dark and light themes.
+- `frontend/src/components/ManifestForm.tsx`: Dimension fields labeled Width /
+  Length / Height instead of bare `W (mm)` / `L (mm)` / `H (mm)`; quantity field
+  hidden during edit mode (only shown when adding new items); `Section` component
+  gains an optional `hint` subtitle (Truck Specification, Delivery Stops, Cargo
+  Items all receive hints); drag-drop overlay rebuilt with an SVG upload icon and
+  larger text; edit form auto-scrolls into view on open via `editFormRef`; import
+  bar drag-leave logic corrected to use `e.currentTarget.contains(relatedTarget)`
+  so the overlay does not flicker when hovering child elements; `inputCls` and
+  `labelCls` scaled up to `text-base` / `border-2` / `rounded-lg`.
+- `frontend/src/components/PlanSelector.tsx`, `frontend/src/components/TruckViewer.tsx`,
+  `frontend/src/index.css`: matching spacing uplift (px-5/py-5, gap-3), border-2
+  thickness, and font-size scale for visual consistency across all panels.
+
+### Removed
+
+**Frontend**
+- `frontend/src/App.tsx`: `EmptyState` component — functionality merged into the
+  main `App` return with `HelpCard` grid.
+- `frontend/src/App.tsx`: `StrategyCard` and `TONE_CLASSES` — replaced by the
+  simpler `HelpCard` which documents the workflow steps instead of the solver
+  strategy names.
+
+---
+
 ## Sprint 11 — 2026-05-02 · Fragile No-Stacking and Model Extensions Documentation
 
 **Goal:** Honour the `FurnitureItem.fragile` data contract end-to-end across the
@@ -688,9 +759,9 @@ evaluate trade-offs between ILP and FFD solver outputs.
   target persisted in `useRef` across scene rebuilds so orbit state survives
   3D ↔ Exploded ↔ Labels mode switches.
 - `frontend/src/components/Dashboard.tsx` — LIFO load-sequence panel groups packed
-  items by descending `stop_id` (highest loaded first, sits nearest rear); colour-coded
-  `V_util` progress bar (green ≥ 70 %, amber ≥ 40 %, red below); ILP/FFD solver mode
-  badge; amber callout for `unplaced_items`.
+  items by descending `stop_id` (highest loaded first, sits deepest / nearest rear);
+  colour-coded `V_util` progress bar (green ≥ 70 %, amber ≥ 40 %, red below); ILP/FFD
+  solver mode badge; amber callout for `unplaced_items`.
   Thesis ref: section 3.5.2.1 E — Route-Sequenced LIFO (`stop_i > stop_j → y_i + l_i ≤ y_j`)
 - `frontend/src/api/client.ts` — `fetchSolutions(request): Promise<PackingPlan[]>`
   returns 3 alternative plans; real mode makes 3 parallel requests, mock mode returns
