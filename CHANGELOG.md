@@ -12,6 +12,86 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 13 — 2026-05-06 · White-Box and Black-Box Test Suites with ANOVA Benchmark Data
+
+**Goal:** Establish comprehensive test coverage for the hybrid solver pipeline — white-box
+unit tests verifying internal constraint logic, black-box integration tests exercising
+`OptimizationEngine` as an opaque input/output boundary, and ANOVA benchmark data
+collection supporting thesis section 3.6.
+
+### Added
+
+**Tests**
+- `backend/tests/test_whitebox.py`: New file. 39 unit tests in 6 groups (WB-LIFO,
+  WB-OVERLAP, WB-ORIENTATION, WB-BOUNDARY, WB-HYBRID, WB-VUTIL) verifying internal
+  constraint logic across `ConstraintValidator`, `FFDSolver`, and `OptimizationEngine`.
+  `USE_MOCK_SOLVER` patched to `False` throughout; `_GUROBI_AVAILABLE` monkeypatched in
+  WB-HYBRID tests to decouple routing assertions from licence availability.
+  - **WB-LIFO** (7 tests): `validate_lifo()`, `FFDSolver._lifo_ok()`,
+    `_lifo_presort()` — touching boundary `y_i + l_i = y_j` valid; strict violation
+    detected; same-stop items unrestricted; presort places highest `stop_id` items
+    first with volume-desc as secondary key.
+    Thesis ref: section 3.5.2.1 E — Route-Sequenced LIFO.
+  - **WB-OVERLAP** (6 tests): `validate_non_overlap()`, `FFDSolver._collides()` —
+    Big-M 6-plane separation verified plane-by-plane; shared face (touching) accepted;
+    overlapping pair rejected.
+    Thesis ref: section 3.5.2.1 B — Non-overlap Big-M.
+  - **WB-ORIENTATION** (6 tests): `_candidate_orientations()` — `side_up=False` yields
+    all 6 permutations of `(w_i, l_i, h_i)`; `side_up=True` restricts to
+    `UPRIGHT_ORIENTATIONS = {0, 1}` so `h_i` stays on the truck z-axis.
+    Thesis ref: section 3.5.2.1 D — Rigid Orientation.
+  - **WB-BOUNDARY** (8 tests): `validate_boundary()` and FFD `_greedy_placement()`
+    direct calls — items fitting exactly at the truck wall pack; items exceeding all
+    truck dimensions in every orientation land in `unplaced_items`.
+    Thesis ref: section 3.5.2.1 C — Boundary.
+  - **WB-HYBRID** (7 tests): `get_active_algorithm()` — `n ≤ SOLVER_THRESHOLD` with
+    Gurobi available → `"ILP"`; `n > threshold` → `"FFD"`; `"stability"` and
+    `"balanced"` strategies always route to FFD; fallback to FFD when Gurobi
+    unavailable.
+    Thesis ref: section 3.5.2.3 — hybrid dispatcher.
+  - **WB-VUTIL** (5 tests): `FFDSolver.solve()` `V_util` formula verified against
+    manual calculation; unpacked items excluded from numerator; empty manifest → 0.0;
+    full-truck packing approaches 1.0.
+    Thesis ref: section 3.5.2.1 A — Objective.
+- `backend/tests/test_blackbox.py`: New file. 35 tests treating
+  `OptimizationEngine.optimize()` as an opaque input/output boundary; no internal state
+  is read.
+  - **BB-S-01..09** (functional): single-item packing; multi-stop LIFO ordering
+    (`y_i + l_i ≤ y_j` verified on outputs only); oversized item in `unplaced_items`;
+    `side_up` items at `orientation_index ∈ {0, 1}`; `"balanced"` and `"stability"`
+    strategies yield `solver_mode = "FFD"`; fragile item not used as supporter
+    (Extension G); `V_util ∈ [0, 1]`; `n = 19` routes to ILP (gated by
+    `_GUROBI_ILP_CAPABLE` probe); `n = 25` routes to FFD.
+  - **BB-E-01..04** (error): zero-dimension `FurnitureItem.l = 0` and `w = 0`
+    intentionally fail — documents the missing `ge=1` validator on `FurnitureItem.w`,
+    `l`, `h` as a known data-contract gap (2 failing tests, tracked below); missing
+    `stop_id` raises `pydantic.ValidationError`; payload overload lands items in
+    `unplaced_items`; all-oversized manifest returns empty `placements`.
+  - `_GUROBI_ILP_CAPABLE` probe: 2001-variable `BINARY` model constructed at collection
+    time to detect Gurobi size-limited free licence — `_GUROBI_AVAILABLE` alone cannot
+    distinguish size-limited from full-capacity licences; ILP-gated tests skip on
+    size-limited installations with a diagnostic reason.
+- `benchmark/`: ANOVA benchmark output data. `benchmark_full.json` (1.1 MB) captures
+  per-trial `solver_mode`, `n_items`, `V_util`, and `t_exec_ms` for n ∈ {4–24}; raw
+  data for the two-way ANOVA (solver_mode × n_items) required by thesis section 3.6.
+  Thesis ref: section 3.6 — ANOVA benchmarking.
+
+### Changed
+
+**Frontend**
+- `frontend/src/api/client.ts`: Switch mock-mode import from `{ mockPlan, mockPlans }`
+  (`../data/mockPlan`) to `{ buildPlansFromRequest }` (`../data/planBuilder`); aligns
+  the mock path with the `planBuilder` module introduced in Sprint 9.
+
+### Known gaps surfaced
+
+- `backend/api/models.py`: `FurnitureItem.w`, `l`, `h` carry no `ge=1` Pydantic
+  validator — zero-dimension items do not raise `ValidationError` at input time and
+  produce undefined solver behavior. Fix: `Field(..., ge=1)` on all three fields.
+  Two BB-E-01 tests intentionally fail to keep this gap visible until the fix lands.
+
+---
+
 ## Sprint 12 — 2026-05-04 · Frontend UX Polish — Typography, NumberInput, and Step Navigation
 
 **Goal:** Scale up the UI's visual hierarchy (larger text, more padding, border-2
