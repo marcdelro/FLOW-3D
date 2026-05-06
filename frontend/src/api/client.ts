@@ -1,4 +1,4 @@
-import { mockPlan, mockPlans } from "../data/mockPlan";
+import { buildPlansFromRequest } from "../data/planBuilder";
 import type { PackingPlan, SolveRequest, SolveStrategy } from "../types";
 
 /**
