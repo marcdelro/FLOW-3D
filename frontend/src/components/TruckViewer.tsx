@@ -161,10 +161,15 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
   const cameraTargetRef = useRef<THREE.Vector3 | null>(null);
 
   const modelCacheRef = useRef<Map<string, THREE.Group | null>>(new Map());
+  const cameraRef     = useRef<THREE.PerspectiveCamera | null>(null);
+  const controlsRef   = useRef<OrbitControls | null>(null);
 
   const [mode, setMode]           = useState<ViewMode>("3d");
   const [tooltip, setTooltip]     = useState<TooltipState | null>(null);
   const [modelsVersion, setModelsVersion] = useState(0);
+  const [activeView,    setActiveView]    = useState<"reset" | "top" | "front" | "side" | null>(null);
+  const [pressedKey,    setPressedKey]    = useState<string | null>(null);
+  const [camOpen,       setCamOpen]       = useState(false);
 
   // ── Animation state ────────────────────────────────────────────────────────
   const [animStep,    setAnimStep]    = useState(0);
@@ -489,6 +494,8 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
     controls.enableDamping = true;
     controls.dampingFactor = 0.07;
     controls.update();
+    cameraRef.current   = camera;
+    controlsRef.current = controls;
 
     // ── Render loop ────────────────────────────────────────────────────────
     let frameId = 0;
@@ -546,6 +553,8 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
       mount.removeEventListener("mouseleave", handleMouseLeave);
       cameraPosRef.current.copy(camera.position);
       cameraTargetRef.current = controls.target.clone();
+      cameraRef.current   = null;
+      controlsRef.current = null;
       controls.dispose();
       for (const g of geos)        g.dispose();
       for (const m of mats)        m.dispose();
@@ -558,6 +567,58 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan, truck, mode, modelsVersion, animStep, lightMode, items]);
+
+  const tW = truck.W / MM_PER_UNIT;
+  const tL = truck.L / MM_PER_UNIT;
+  const tH = truck.H / MM_PER_UNIT;
+
+  function animateCamera(toPos: THREE.Vector3, toTarget: THREE.Vector3) {
+    const cam  = cameraRef.current;
+    const ctrl = controlsRef.current;
+    if (!cam || !ctrl) return;
+    // Assign to non-nullable typed consts so the inner closure is type-safe.
+    const safeCam: THREE.PerspectiveCamera = cam;
+    const safeCtrl: OrbitControls         = ctrl;
+    const fromPos    = safeCam.position.clone();
+    const fromTarget = safeCtrl.target.clone();
+    let f = 0;
+    function tick() {
+      if (!cameraRef.current) return;
+      f++;
+      const t = 1 - (1 - f / 30) ** 3;
+      safeCam.position.lerpVectors(fromPos, toPos, t);
+      safeCtrl.target.lerpVectors(fromTarget, toTarget, t);
+      safeCtrl.update();
+      if (f < 30) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function panCamera(dx: number, dy: number) {
+    const cam  = cameraRef.current;
+    const ctrl = controlsRef.current;
+    if (!cam || !ctrl) return;
+    const step  = Math.max(tW, tL, tH) * 0.08;
+    const right = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0);
+    const upVec = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1);
+    const delta = right.multiplyScalar(dx * step).add(upVec.multiplyScalar(dy * step));
+    cam.position.add(delta);
+    ctrl.target.add(delta);
+    ctrl.update();
+  }
+
+  function zoomCamera(inward: boolean) {
+    const cam  = cameraRef.current;
+    const ctrl = controlsRef.current;
+    if (!cam || !ctrl) return;
+    const step  = Math.max(tW, tL, tH) * 0.15;
+    const dir   = new THREE.Vector3().subVectors(ctrl.target, cam.position).normalize();
+    const sign  = inward ? 1 : -1;
+    const newPos = cam.position.clone().addScaledVector(dir, sign * step);
+    if (newPos.distanceTo(ctrl.target) < 20) return;
+    cam.position.copy(newPos);
+    ctrl.update();
+  }
 
   return (
     <div className="relative w-full h-full">
@@ -722,11 +783,156 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
           ))}
       </div>
 
-      {/* ── Door label (bottom-left) ── */}
-      <div className="absolute bottom-4 left-4 z-10">
-        <span className={`text-base font-bold border-2 px-3.5 py-2 rounded-xl shadow-md ${lightMode ? "bg-blue-50 border-blue-300 text-blue-800" : "bg-blue-950 border-blue-700 text-blue-200"}`}>
-          ← DOOR
-        </span>
+      {/* ── DOOR label — standalone landmark, separated from camera controls ── */}
+      <span className={`absolute bottom-4 left-20 z-10 text-base font-bold border-2 px-3.5 py-2 rounded-xl shadow-md ${lightMode ? "bg-blue-50 border-blue-300 text-blue-800" : "bg-blue-950 border-blue-700 text-blue-200"}`}>
+        ← DOOR
+      </span>
+
+      {/* ── Camera controls — collapsed toolbar, 44 px footprint when closed ── */}
+      <div className="absolute bottom-4 left-4 z-10 flex flex-col items-start gap-2">
+
+        {/* Expandable panel — slides up from the toggle button */}
+        <div className={`transition-all duration-200 overflow-hidden ${camOpen ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"}`}>
+          <div className="flex flex-col items-start gap-3 pb-2">
+
+            {/* PAN section */}
+            <div className="flex flex-col items-start gap-1">
+              <span className={`text-[9px] uppercase tracking-widest font-bold pl-1 ${lightMode ? "text-slate-500" : "text-gray-400"}`}>PAN</span>
+              <div className="flex gap-2 items-end">
+                <div className={`grid grid-cols-3 gap-1 border-2 rounded-xl p-1 shadow-md ${lightMode ? "bg-white border-gray-300" : "bg-gray-900 border-gray-700"}`}>
+                  <div />
+                  <CameraBtn title="Pan Up" active={pressedKey === "Pan Up"} lightMode={lightMode} onClick={() => { panCamera(0, 1); setPressedKey("Pan Up"); setTimeout(() => setPressedKey(null), 150); }}>
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="18 15 12 9 6 15"/>
+                    </svg>
+                    <span className={`text-[10px] font-semibold leading-tight ${lightMode ? "text-slate-700" : "text-gray-200"}`}>Up</span>
+                  </CameraBtn>
+                  <div />
+                  <CameraBtn title="Pan Left" active={pressedKey === "Pan Left"} lightMode={lightMode} onClick={() => { panCamera(-1, 0); setPressedKey("Pan Left"); setTimeout(() => setPressedKey(null), 150); }}>
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="15 18 9 12 15 6"/>
+                    </svg>
+                    <span className={`text-[10px] font-semibold leading-tight ${lightMode ? "text-slate-700" : "text-gray-200"}`}>Left</span>
+                  </CameraBtn>
+                  <div />
+                  <CameraBtn title="Pan Right" active={pressedKey === "Pan Right"} lightMode={lightMode} onClick={() => { panCamera(1, 0); setPressedKey("Pan Right"); setTimeout(() => setPressedKey(null), 150); }}>
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                    <span className={`text-[10px] font-semibold leading-tight ${lightMode ? "text-slate-700" : "text-gray-200"}`}>Right</span>
+                  </CameraBtn>
+                  <div />
+                  <CameraBtn title="Pan Down" active={pressedKey === "Pan Down"} lightMode={lightMode} onClick={() => { panCamera(0, -1); setPressedKey("Pan Down"); setTimeout(() => setPressedKey(null), 150); }}>
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                    <span className={`text-[10px] font-semibold leading-tight ${lightMode ? "text-slate-700" : "text-gray-200"}`}>Down</span>
+                  </CameraBtn>
+                  <div />
+                </div>
+
+                <div className={`flex flex-col gap-1 border-2 rounded-xl p-1 shadow-md ${lightMode ? "bg-white border-gray-300" : "bg-gray-900 border-gray-700"}`}>
+                  <CameraBtn title="Zoom In" active={pressedKey === "Zoom In"} lightMode={lightMode} onClick={() => { zoomCamera(true); setPressedKey("Zoom In"); setTimeout(() => setPressedKey(null), 150); }}>
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="7"/>
+                      <line x1="16.5" y1="16.5" x2="21" y2="21"/>
+                      <line x1="11" y1="8" x2="11" y2="14"/>
+                      <line x1="8" y1="11" x2="14" y2="11"/>
+                    </svg>
+                    <span className={`text-[10px] font-semibold leading-tight ${lightMode ? "text-slate-700" : "text-gray-200"}`}>Zoom In</span>
+                  </CameraBtn>
+                  <CameraBtn title="Zoom Out" active={pressedKey === "Zoom Out"} lightMode={lightMode} onClick={() => { zoomCamera(false); setPressedKey("Zoom Out"); setTimeout(() => setPressedKey(null), 150); }}>
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="7"/>
+                      <line x1="16.5" y1="16.5" x2="21" y2="21"/>
+                      <line x1="8" y1="11" x2="14" y2="11"/>
+                    </svg>
+                    <span className={`text-[10px] font-semibold leading-tight ${lightMode ? "text-slate-700" : "text-gray-200"}`}>Zoom Out</span>
+                  </CameraBtn>
+                </div>
+              </div>
+            </div>
+
+            {/* VIEW section */}
+            <div className="flex flex-col items-start gap-1">
+              <span className={`text-[9px] uppercase tracking-widest font-bold pl-1 ${lightMode ? "text-slate-500" : "text-gray-400"}`}>VIEW</span>
+              <div className={`flex gap-1 border-2 rounded-xl p-1 shadow-md ${lightMode ? "bg-white border-gray-300" : "bg-gray-900 border-gray-700"}`}>
+                <CameraBtn title="Reset View" active={activeView === "reset"} lightMode={lightMode} onClick={() => {
+                  setActiveView("reset");
+                  animateCamera(
+                    new THREE.Vector3(-600, 600, 1400),
+                    new THREE.Vector3(tW / 2, tH / 2, tL / 2),
+                  );
+                }}>
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                    <path d="M3 3v5h5"/>
+                  </svg>
+                </CameraBtn>
+                <CameraBtn title="Top View" active={activeView === "top"} lightMode={lightMode} onClick={() => {
+                  setActiveView("top");
+                  animateCamera(
+                    new THREE.Vector3(tW / 2, tH * 4.5, tL / 2),
+                    new THREE.Vector3(tW / 2, 0, tL / 2),
+                  );
+                }}>
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="4" y="13" width="16" height="8" rx="1"/>
+                    <line x1="12" y1="2" x2="12" y2="12"/>
+                    <polyline points="9 9 12 12 15 9"/>
+                  </svg>
+                </CameraBtn>
+                <CameraBtn title="Front View" active={activeView === "front"} lightMode={lightMode} onClick={() => {
+                  setActiveView("front");
+                  animateCamera(
+                    new THREE.Vector3(tW / 2, tH / 2, tL + Math.max(tW, tH) * 2.5),
+                    new THREE.Vector3(tW / 2, tH / 2, tL / 2),
+                  );
+                }}>
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="5" y="4" width="14" height="16" rx="1"/>
+                    <line x1="1" y1="12" x2="4" y2="12"/>
+                    <polyline points="3 9 5 12 3 15"/>
+                  </svg>
+                </CameraBtn>
+                <CameraBtn title="Side View" active={activeView === "side"} lightMode={lightMode} onClick={() => {
+                  setActiveView("side");
+                  animateCamera(
+                    new THREE.Vector3(tW + Math.max(tW, tH) * 2.5, tH / 2, tL / 2),
+                    new THREE.Vector3(tW / 2, tH / 2, tL / 2),
+                  );
+                }}>
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="4" y="4" width="14" height="16" rx="1"/>
+                    <line x1="19" y1="12" x2="23" y2="12"/>
+                    <polyline points="21 9 23 12 21 15"/>
+                  </svg>
+                </CameraBtn>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Toggle button — always visible, 44 px, anchors the panel */}
+        <button
+          onClick={() => setCamOpen((v) => !v)}
+          title={camOpen ? "Close camera controls" : "Open camera controls"}
+          aria-label={camOpen ? "Close camera controls" : "Open camera controls"}
+          className={`w-11 h-11 rounded-xl border-2 flex items-center justify-center shadow-md transition-colors ${
+            camOpen
+              ? "bg-blue-600 border-blue-700 text-white"
+              : lightMode
+                ? "bg-white border-gray-300 text-slate-700 hover:bg-gray-100"
+                : "bg-gray-900 border-gray-700 text-gray-200 hover:bg-gray-800"
+          }`}
+        >
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M23 7l-7 5 7 5V7z"/>
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+          </svg>
+        </button>
+
       </div>
 
       {/* ── Hover tooltip ── */}
@@ -768,6 +974,39 @@ function PlaybackBtn({
         lightMode
           ? "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
           : "text-gray-400 hover:text-gray-100 hover:bg-gray-800"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ── Camera-view button helper ──────────────────────────────────────────────────
+
+function CameraBtn({
+  onClick,
+  title,
+  active,
+  lightMode,
+  children,
+}: {
+  onClick: () => void;
+  title: string;
+  active: boolean;
+  lightMode?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className={`w-11 h-11 rounded-lg flex flex-col items-center justify-center gap-0.5 transition-colors ${
+        active
+          ? "bg-blue-600 text-white"
+          : lightMode
+            ? "text-slate-700 hover:bg-gray-100"
+            : "text-gray-200 hover:bg-gray-800"
       }`}
     >
       {children}
