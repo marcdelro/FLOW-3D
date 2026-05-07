@@ -12,6 +12,60 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 14 — 2026-05-07 · Frontend Camera Controls, Pan/Zoom, and Manifest UX Polish
+
+**Goal:** Ship imperative camera navigation (preset views with animated lerp, D-pad pan,
+zoom), collapse the camera panel behind a toggle button to free the truck's door corner,
+fix the cargo table column clipping bug, and polish the row-delete interaction in the
+manifest editor.
+
+### Added
+
+**Frontend**
+- `frontend/src/components/TruckViewer.tsx`: Add `cameraRef`/`controlsRef` refs for
+  imperative camera access outside the scene `useEffect`, enabling helper functions to
+  modify the live camera without rebuilding the Three.js scene.
+- `frontend/src/components/TruckViewer.tsx`: Add `animateCamera()` with a 30-frame cubic
+  ease-out lerp `(1 − (1−f/30)³)` for smooth preset view transitions (Reset, Top, Front,
+  Side); closure uses typed non-null consts to satisfy TypeScript's narrowing requirements.
+- `frontend/src/components/TruckViewer.tsx`: Add `panCamera(dx, dy)` translating both
+  `camera.position` and `controls.target` along the camera's world-space right/up matrix
+  columns; step size is 8 % of `max(W, L, H)`.
+- `frontend/src/components/TruckViewer.tsx`: Add `zoomCamera(inward)` moving the camera
+  along the direction toward `controls.target`, clamped at 20-unit minimum distance; step
+  size is 15 % of `max(W, L, H)`.
+- `frontend/src/components/TruckViewer.tsx`: Add `CameraBtn` helper component — 44 × 44 px
+  (WCAG 2.5.5 touch target), `flex-col` icon + `text-[10px]` label, `pressedKey` state
+  delivers a 150 ms pressed flash on each pan/zoom action; inactive contrast raised to
+  `text-slate-700` (light) / `text-gray-200` (dark) for WCAG AA compliance.
+- `frontend/src/components/TruckViewer.tsx`: Collapsed camera toolbar — camera-icon toggle
+  button (44 px permanent canvas footprint) reveals PAN D-pad + Zoom stack + VIEW presets
+  via `max-h-[600px] opacity-100` slide animation (`transition-all duration-200`); `PAN`
+  and `VIEW` section labels added for group separation; `camOpen: boolean` state tracks
+  open/closed.
+- `frontend/src/components/TruckViewer.tsx`: DOOR orientation label separated from camera
+  controls to `absolute bottom-4 left-20 z-10` as a standalone spatial landmark — no
+  longer shares a container with navigation controls.
+- `frontend/src/components/ManifestForm.tsx`: Add `deleteItem(idx)` adjusting `editingIdx`
+  downward when a row at an index below the active editing index is deleted, preventing
+  index drift on in-place edits.
+
+### Changed
+
+**Frontend**
+- `frontend/src/components/ManifestForm.tsx`: Switch cargo table from `table-layout: auto`
+  to `table-fixed` with explicit column widths (Size `w-32`, Stop `w-12`, Actions `w-24`)
+  — fixes trash button clipping caused by `whitespace-nowrap` content in the Size column
+  forcing the table wider than its `overflow-hidden` container.
+- `frontend/src/components/ManifestForm.tsx`: Fold `side_up` / `boxed` / `fragile` attribute
+  badges from a dedicated Notes column into the Item name cell as `text-[10px]` sub-badges;
+  remove the Notes column, reclaiming its width for the Actions column.
+- `frontend/src/components/ManifestForm.tsx`: Replace ✕ icon delete button with a trash SVG;
+  button is `disabled` and `opacity-30` when its row is actively being edited, preventing
+  accidental deletion of the item currently in the edit form.
+
+---
+
 ## Sprint 13 — 2026-05-06 · White-Box and Black-Box Test Suites with ANOVA Benchmark Data
 
 **Goal:** Establish comprehensive test coverage for the hybrid solver pipeline — white-box
