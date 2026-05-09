@@ -7,14 +7,31 @@ time complexity from Table 3.3 (thesis section 3.5.2.4).
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Set
 
-from api.models import FurnitureItem, PackingPlan, TruckSpec
+from api.models import FurnitureItem, PackingPlan, Placement, TruckSpec
 
 # Orientations {0, 1} keep the original vertical axis upright (h along z).
 # Restriction imposed on rigid items via the side_up flag per thesis
 # section 3.5.2.1 (Rigid Orientation).
 UPRIGHT_ORIENTATIONS: frozenset[int] = frozenset({0, 1})
+
+
+class InfeasiblePackingException(RuntimeError):
+    """Raised when ConstraintValidator.repair() cannot produce a valid plan.
+
+    Signals the API layer to return 422 with solver_mode and failure report.
+    Carries the last attempted plan so callers can log diagnostics.
+    """
+
+    def __init__(self, plan: PackingPlan, truck: TruckSpec, failed_check: str) -> None:
+        super().__init__(
+            f"Repair failed: plan remains infeasible after repair "
+            f"(solver_mode={plan.solver_mode}, failed_check={failed_check})"
+        )
+        self.plan = plan
+        self.truck = truck
+        self.failed_check = failed_check
 
 
 class PlanValidationError(RuntimeError):
@@ -227,3 +244,152 @@ class ConstraintValidator:
         if items is not None and not self.validate_no_stack_on_fragile(plan, items):
             return "fragile_stacking"
         return None
+
+    # ------------------------------------------------------------------
+    # Repair
+    # ------------------------------------------------------------------
+
+    def repair(
+        self,
+        plan: PackingPlan,
+        truck: TruckSpec,
+        items: List[FurnitureItem],
+    ) -> PackingPlan:
+        """Attempt to salvage a failing plan by unpacking offending items.
+
+        Iteratively identifies the first failing constraint, removes the
+        minimal set of items responsible, and re-validates. Returns a
+        valid PackingPlan (possibly with more unplaced_items than the
+        original). Raises InfeasiblePackingException if the plan cannot
+        be made valid after exhausting all packed items.
+        """
+        packed_ids: Set[str] = {p.item_id for p in plan.placements if p.is_packed}
+
+        for _ in range(len(plan.placements) + 1):
+            candidate = self._rebuild(plan, packed_ids)
+            failed = self.first_failing_check(candidate, truck, items)
+            if failed is None:
+                return candidate
+            offenders = self._offenders(candidate, truck, items, failed)
+            if not offenders:
+                # Cannot identify specific culprits — give up
+                break
+            packed_ids -= offenders
+
+        final = self._rebuild(plan, packed_ids)
+        failed = self.first_failing_check(final, truck, items)
+        if failed is not None:
+            raise InfeasiblePackingException(final, truck, failed)
+        return final
+
+    @staticmethod
+    def _rebuild(plan: PackingPlan, packed_ids: Set[str]) -> PackingPlan:
+        """Return a copy of plan with is_packed reflecting packed_ids."""
+        new_placements: List[Placement] = []
+        new_unplaced: List[str] = []
+        for p in plan.placements:
+            if p.item_id in packed_ids:
+                new_placements.append(p.model_copy(update={"is_packed": True}))
+            else:
+                new_placements.append(p.model_copy(update={"is_packed": False}))
+                new_unplaced.append(p.item_id)
+        return plan.model_copy(
+            update={"placements": new_placements, "unplaced_items": new_unplaced}
+        )
+
+    @staticmethod
+    def _offenders(
+        plan: PackingPlan,
+        truck: TruckSpec,
+        items: List[FurnitureItem],
+        failed_check: str,
+    ) -> Set[str]:
+        """Return item_ids to unpack in order to resolve failed_check."""
+        packed = [p for p in plan.placements if p.is_packed]
+
+        if failed_check == "boundary":
+            return {
+                p.item_id
+                for p in packed
+                if (
+                    p.x < 0
+                    or p.y < 0
+                    or p.z < 0
+                    or p.x + p.w > truck.W
+                    or p.y + p.l > truck.L
+                    or p.z + p.h > truck.H
+                )
+            }
+
+        if failed_check == "orientation":
+            return {
+                p.item_id
+                for p in packed
+                if p.orientation_index < 0 or p.orientation_index > 5
+            }
+
+        if failed_check == "lifo":
+            # Unpack items whose y-position violates LIFO (the later-stop
+            # item that sits too close to the loading door).
+            offenders: Set[str] = set()
+            for a in packed:
+                for b in packed:
+                    if a.stop_id > b.stop_id and a.y + a.l > b.y:
+                        offenders.add(a.item_id)
+            return offenders
+
+        if failed_check == "non_overlap":
+            offenders = set()
+            for i in range(len(packed)):
+                a = packed[i]
+                for j in range(i + 1, len(packed)):
+                    b = packed[j]
+                    separated = (
+                        a.x + a.w <= b.x
+                        or b.x + b.w <= a.x
+                        or a.y + a.l <= b.y
+                        or b.y + b.l <= a.y
+                        or a.z + a.h <= b.z
+                        or b.z + b.h <= a.z
+                    )
+                    if not separated:
+                        # Unpack the item delivered last (higher stop_id leaves first)
+                        offenders.add(
+                            a.item_id if a.stop_id <= b.stop_id else b.item_id
+                        )
+            return offenders
+
+        if failed_check == "fragile_stacking":
+            fragile_ids = {it.item_id for it in items if it.fragile}
+            offenders = set()
+            for b in packed:
+                if b.item_id not in fragile_ids:
+                    continue
+                top = b.z + b.h
+                for a in packed:
+                    if a is b or a.z < top:
+                        continue
+                    if (
+                        a.x < b.x + b.w
+                        and b.x < a.x + a.w
+                        and a.y < b.y + b.l
+                        and b.y < a.y + a.l
+                    ):
+                        offenders.add(a.item_id)
+            return offenders
+
+        if failed_check == "weight":
+            weights = {it.item_id: it.weight_kg for it in items}
+            by_weight = sorted(
+                packed, key=lambda p: weights.get(p.item_id, 0.0), reverse=True
+            )
+            offenders = set()
+            total = sum(weights.get(p.item_id, 0.0) for p in packed)
+            for p in by_weight:
+                if total <= truck.payload_kg:
+                    break
+                offenders.add(p.item_id)
+                total -= weights.get(p.item_id, 0.0)
+            return offenders
+
+        return set()

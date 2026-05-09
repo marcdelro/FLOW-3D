@@ -19,9 +19,9 @@ SolveStrategy = Literal["optimal", "balanced", "stability"]
 
 class FurnitureItem(BaseModel):
     item_id: str = Field(..., description="Unique item identifier")
-    w: int = Field(..., description="Width w_i in millimetres")
-    l: int = Field(..., description="Length l_i in millimetres")
-    h: int = Field(..., description="Height h_i in millimetres")
+    w: int = Field(..., ge=1, description="Width w_i in millimetres")
+    l: int = Field(..., ge=1, description="Length l_i in millimetres")
+    h: int = Field(..., ge=1, description="Height h_i in millimetres")
     weight_kg: float = Field(0.0, description="Item mass in kilograms")
     stop_id: int = Field(..., description="Delivery stop (LIFO key)")
     side_up: bool = Field(
