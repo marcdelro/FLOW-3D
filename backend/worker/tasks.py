@@ -16,12 +16,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from api.models import PackingPlan, SolveRequest
 from core.db import log_job
 from core.optimizer import OptimizationEngine
-from core.validator import PlanValidationError
+from core.validator import ConstraintValidator, InfeasiblePackingException, PlanValidationError
 from worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
 _engine = OptimizationEngine()
+_validator = ConstraintValidator()
 
 
 @celery_app.task(bind=True, name="worker.tasks.solve_task")
@@ -49,17 +50,43 @@ def solve_task(self, request_dict: dict) -> dict:
         return {"status": "done", "plan": plan.model_dump()}
 
     except PlanValidationError as exc:
-        logger.error("Plan validation failed for job %s: %s", self.request.id, exc)
-        log_job(
-            job_id=self.request.id,
-            solver_mode=getattr(exc.plan, "solver_mode", "unknown"),
-            n_items=len(request_dict.get("items", [])),
-            v_util=getattr(exc.plan, "v_util", 0.0),
-            t_exec_ms=getattr(exc.plan, "t_exec_ms", 0),
-            status="failed",
-            error=str(exc),
+        logger.warning(
+            "Plan validation failed for job %s (%s) — attempting repair",
+            self.request.id,
+            exc.failed_check,
         )
-        return {"status": "failed", "detail": str(exc), "failed_check": exc.failed_check}
+        try:
+            request = SolveRequest.model_validate(request_dict)
+            repaired = _validator.repair(exc.plan, exc.truck, request.items)
+            logger.info("Repair succeeded for job %s", self.request.id)
+            log_job(
+                job_id=self.request.id,
+                solver_mode=repaired.solver_mode,
+                n_items=len(request.items),
+                v_util=repaired.v_util,
+                t_exec_ms=repaired.t_exec_ms,
+                status="done",
+            )
+            return {"status": "done", "plan": repaired.model_dump()}
+        except InfeasiblePackingException as repair_exc:
+            logger.error(
+                "Repair failed for job %s: %s", self.request.id, repair_exc
+            )
+            log_job(
+                job_id=self.request.id,
+                solver_mode=getattr(repair_exc.plan, "solver_mode", "unknown"),
+                n_items=len(request_dict.get("items", [])),
+                v_util=getattr(repair_exc.plan, "v_util", 0.0),
+                t_exec_ms=getattr(repair_exc.plan, "t_exec_ms", 0),
+                status="failed",
+                error=str(repair_exc),
+            )
+            return {
+                "status": "failed",
+                "detail": str(repair_exc),
+                "failed_check": repair_exc.failed_check,
+                "solver_mode": getattr(repair_exc.plan, "solver_mode", "unknown"),
+            }
 
     except Exception as exc:
         logger.error("Solver error for job %s: %s", self.request.id, exc)

@@ -12,6 +12,57 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 16 — 2026-05-09 · Input Guards, Infeasibility Recovery, and Item 6 Completion
+
+**Goal:** Close the last open item from the API skeleton checklist — add missing
+`ge=1` dimension guards to `FurnitureItem`, implement `InfeasiblePackingException`,
+and give `ConstraintValidator` a `repair()` method so the pipeline attempts recovery
+before returning a 422.
+
+### Added
+
+**Backend**
+- `backend/core/validator.py`: New `InfeasiblePackingException` exception class.
+  Raised when `ConstraintValidator.repair()` exhausts all recovery options and
+  cannot produce a valid plan. Carries the last attempted plan, truck, and
+  `failed_check` label so the API layer can build a meaningful 422 response with
+  `solver_mode` and failure report — satisfying the item-6 contract from the API
+  skeleton spec.
+- `backend/core/validator.py::ConstraintValidator.repair()`: New method. Given a
+  failing `PackingPlan`, iteratively identifies the items responsible for each
+  constraint violation and marks them `is_packed=False`, moving them to
+  `unplaced_items`. Re-validates after each pass; returns the repaired plan as
+  soon as it is clean. Raises `InfeasiblePackingException` if the plan cannot
+  be made valid after exhausting all packed items. Handles all six constraint
+  types: `boundary` (items outside truck dims), `orientation` (invalid
+  `orientation_index`), `lifo` (later-stop items in front of earlier-stop items),
+  `non_overlap` (overlapping pairs — unpacks the lower-priority item), `fragile_stacking`
+  (items stacked above a fragile item's xy footprint), and `weight` (greedy removal
+  of heaviest items until payload is within limit).
+- `backend/core/validator.py`: Private helpers `_rebuild()` and `_offenders()`
+  supporting `repair()` — `_rebuild` reconstructs a `PackingPlan` from a set of
+  packed item IDs; `_offenders` returns the set of `item_id`s responsible for a
+  named failing check.
+
+### Changed
+
+**Backend**
+- `backend/api/models.py`: Add `ge=1` to `FurnitureItem.w`, `l`, and `h` fields.
+  Zero-dimension items previously passed Pydantic validation silently and reached
+  the solver, producing undefined behavior. Now rejected immediately at the API
+  boundary with a 422 `ValidationError`. Closes the known gap surfaced by BB-E-01
+  in Sprint 13's black-box test suite.
+- `backend/worker/tasks.py`: On `PlanValidationError`, now attempts
+  `ConstraintValidator.repair()` before giving up. If repair succeeds, the
+  repaired plan is logged as `status: done` and returned to the frontend (with
+  additional items in `unplaced_items`). If repair raises
+  `InfeasiblePackingException`, logs `status: failed` and returns a 422 response
+  with `solver_mode`, `failed_check`, and `detail` — matching the item-6 spec
+  exactly. A `_validator = ConstraintValidator()` instance is now held at module
+  level alongside `_engine`.
+
+---
+
 ## Sprint 15 — 2026-05-09 · Frontend Layout Compaction and UX Polish
 
 **Goal:** Compact the plan selector cards and dashboard panel to reduce visual bulk,
