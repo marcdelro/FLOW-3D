@@ -53,7 +53,7 @@ function SectionHeader({
   lightMode?: boolean;
 }) {
   return (
-    <div className={`flex items-start justify-between gap-3 px-5 py-4 border-b-2 sticky top-0 z-10 ${
+    <div className={`flex items-start justify-between gap-3 px-5 py-3 border-b-2 sticky top-0 z-10 ${
       lightMode ? "border-slate-200 bg-white" : "border-gray-800 bg-gray-950"
     }`}>
       <div>
@@ -83,18 +83,18 @@ function StatCard({
   lightMode?: boolean;
 }) {
   return (
-    <div className={`rounded-xl p-4 text-center border ${
+    <div className={`rounded-xl p-3 text-center border ${
       lightMode ? "bg-slate-50 border-slate-200" : "bg-gray-900 border-gray-800"
     }`}>
-      <div className={`text-2xl font-bold leading-none ${lightMode ? "text-slate-900" : "text-white"}`}>
+      <div className={`text-xl font-bold leading-none ${lightMode ? "text-slate-900" : "text-white"}`}>
         {value}
         {unit && (
-          <span className={`text-base font-semibold ml-1 ${lightMode ? "text-slate-500" : "text-gray-400"}`}>
+          <span className={`text-sm font-semibold ml-1 ${lightMode ? "text-slate-500" : "text-gray-400"}`}>
             {unit}
           </span>
         )}
       </div>
-      <div className={`text-sm mt-2 font-medium ${lightMode ? "text-slate-600" : "text-gray-400"}`}>{label}</div>
+      <div className={`text-xs mt-1.5 font-medium ${lightMode ? "text-slate-600" : "text-gray-400"}`}>{label}</div>
     </div>
   );
 }
@@ -185,26 +185,26 @@ export function Dashboard({ plan, lightMode = false }: DashboardProps) {
           </button>
         }
       />
-      <div className="px-5 py-5 space-y-5">
+      <div className="px-5 py-4 space-y-3">
 
         {/* Big utilization bar — % and m³ side by side */}
-        <div className={`rounded-xl border-2 p-4 ${
+        <div className={`rounded-xl border-2 p-3 ${
           lightMode ? "bg-white border-slate-200" : "bg-gray-900 border-gray-800"
         }`}>
-          <div className="flex items-baseline justify-between mb-3 gap-2">
-            <span className={`text-base font-semibold ${lightMode ? "text-slate-700" : "text-gray-300"}`}>
+          <div className="flex items-baseline justify-between mb-2 gap-2">
+            <span className={`text-sm font-semibold ${lightMode ? "text-slate-700" : "text-gray-300"}`}>
               Volumetric Utilization
             </span>
             <div className="text-right">
-              <span className="text-4xl font-bold font-mono leading-none" style={{ color: barColor }}>
-                {utilPct}<span className="text-2xl">%</span>
+              <span className="text-3xl font-bold font-mono leading-none" style={{ color: barColor }}>
+                {utilPct}<span className="text-xl">%</span>
               </span>
-              <div className={`text-base font-mono mt-1.5 ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
+              <div className={`text-sm font-mono mt-1 ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
                 {packedVolM3.toFixed(2)} m³ packed
               </div>
             </div>
           </div>
-          <div className={`h-4 rounded-full overflow-hidden ${lightMode ? "bg-slate-200" : "bg-gray-800"}`}>
+          <div className={`h-3 rounded-full overflow-hidden ${lightMode ? "bg-slate-200" : "bg-gray-800"}`}>
             <div
               className="h-full rounded-full transition-all duration-700"
               style={{ width: `${utilPct}%`, backgroundColor: barColor }}
@@ -213,14 +213,14 @@ export function Dashboard({ plan, lightMode = false }: DashboardProps) {
         </div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2">
           <StatCard
             value={String(plan.t_exec_ms)}
             unit="ms"
             label="Exec Time"
             lightMode={lightMode}
           />
-          <div className={`rounded-xl p-4 text-center border flex flex-col items-center justify-center gap-2 ${
+          <div className={`rounded-xl p-3 text-center border flex flex-col items-center justify-center gap-2 ${
             lightMode ? "bg-slate-50 border-slate-200" : "bg-gray-900 border-gray-800"
           }`}>
             <span
@@ -253,10 +253,10 @@ export function Dashboard({ plan, lightMode = false }: DashboardProps) {
         hint="Order items into the truck — rear to door."
         lightMode={lightMode}
       />
-      <div className="px-5 py-5 space-y-4">
+      <div className="px-5 py-4 space-y-3">
 
         {/* Instruction card */}
-        <div className={`rounded-xl px-4 py-3.5 border-2 ${
+        <div className={`rounded-xl px-4 py-3 border-2 ${
           lightMode
             ? "bg-blue-50 border-blue-200"
             : "bg-blue-950/40 border-blue-900/60"
@@ -288,23 +288,23 @@ export function Dashboard({ plan, lightMode = false }: DashboardProps) {
           return (
             <div
               key={sid}
-              className="rounded-2xl border-2 p-5"
+              className="rounded-2xl border-2 p-3.5"
               style={{
                 borderColor: lightMode ? s.borderLight : s.border,
                 backgroundColor: lightMode ? s.bgLight : s.bg,
               }}
             >
-              <div className="flex items-center justify-between mb-3 gap-3">
-                <div className="flex items-center gap-3 min-w-0">
+              <div className="flex items-center justify-between mb-2 gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <div
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-bold text-gray-950 shrink-0 shadow"
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold text-gray-950 shrink-0 shadow"
                     style={{ backgroundColor: s.text }}
                     aria-hidden="true"
                   >
                     {loadStep}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-lg font-bold leading-tight" style={{ color: s.text }}>
+                    <div className="text-base font-bold leading-tight" style={{ color: s.text }}>
                       Step {loadStep} · Stop {sid}
                     </div>
                     <div className={`text-sm leading-tight mt-0.5 ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
@@ -317,7 +317,7 @@ export function Dashboard({ plan, lightMode = false }: DashboardProps) {
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className={`text-3xl font-bold leading-none ${lightMode ? "text-slate-900" : "text-white"}`}>
+                  <div className={`text-xl font-bold leading-none ${lightMode ? "text-slate-900" : "text-white"}`}>
                     {its.length}
                   </div>
                   <div className={`text-sm mt-1 ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
@@ -330,7 +330,7 @@ export function Dashboard({ plan, lightMode = false }: DashboardProps) {
                 {its.map((p) => (
                   <span
                     key={p.item_id}
-                    className={`text-base font-medium rounded-lg px-3 py-1.5 border-2 ${
+                    className={`text-sm font-medium rounded-lg px-2.5 py-1 border-2 ${
                       lightMode ? "text-slate-800 bg-white" : "text-gray-100 bg-gray-950/60"
                     }`}
                     style={{
@@ -381,8 +381,8 @@ export function Dashboard({ plan, lightMode = false }: DashboardProps) {
             hint="Items the solver could not fit."
             lightMode={lightMode}
           />
-          <div className="px-5 py-5">
-            <div className={`rounded-xl p-4 border-2 ${
+          <div className="px-5 py-4">
+            <div className={`rounded-xl p-3 border-2 ${
               lightMode
                 ? "bg-amber-50 border-amber-300"
                 : "bg-amber-950/60 border-amber-800"

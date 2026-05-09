@@ -23,17 +23,17 @@ interface PlanSelectorProps {
 
 export function PlanSelector({ plans, selectedIdx, onSelect, lightMode = false }: PlanSelectorProps) {
   return (
-    <div className="px-5 py-5 space-y-3">
+    <div className="px-5 py-4 space-y-2.5">
       <div>
         <h2 className={`text-lg font-bold ${lightMode ? "text-slate-900" : "text-gray-100"}`}>
           Packing Plans
         </h2>
-        <p className={`text-base mt-1 ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
+        <p className={`text-sm mt-0.5 ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
           Select a plan to preview in the 3D viewer.
         </p>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {plans.map((plan, i) => {
           const utilPct  = Math.round(plan.v_util * 100);
           const packed   = plan.placements.filter((p) => p.is_packed);
@@ -54,7 +54,7 @@ export function PlanSelector({ plans, selectedIdx, onSelect, lightMode = false }
               key={i}
               onClick={() => onSelect(i)}
               aria-pressed={selected}
-              className={`w-full flex flex-col gap-3 rounded-2xl border-2 p-5 text-left transition-all focus:outline-none ${
+              className={`w-full flex flex-col gap-2 rounded-2xl border-2 p-3 text-left transition-all focus:outline-none ${
                 selected
                   ? lightMode
                     ? "border-blue-600 bg-blue-50 shadow-md"
@@ -111,16 +111,16 @@ export function PlanSelector({ plans, selectedIdx, onSelect, lightMode = false }
                     Volumetric Utilization
                   </span>
                   <div className="text-right">
-                    <span className="text-3xl font-bold font-mono leading-none" style={{ color: barColor }}>
+                    <span className="text-xl font-bold font-mono leading-none" style={{ color: barColor }}>
                       {utilPct}
-                      <span className="text-xl">%</span>
+                      <span className="text-base">%</span>
                     </span>
                     <div className={`text-sm font-mono mt-1 ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
                       {packedVolM3.toFixed(2)} m³
                     </div>
                   </div>
                 </div>
-                <div className={`h-3 rounded-full overflow-hidden ${lightMode ? "bg-slate-200" : "bg-gray-800"}`}>
+                <div className={`h-2 rounded-full overflow-hidden ${lightMode ? "bg-slate-200" : "bg-gray-800"}`}>
                   <div
                     className="h-full rounded-full transition-all duration-500"
                     style={{ width: `${utilPct}%`, backgroundColor: barColor }}
@@ -129,7 +129,7 @@ export function PlanSelector({ plans, selectedIdx, onSelect, lightMode = false }
               </div>
 
               {/* Stat row: packed / time */}
-              <div className={`grid grid-cols-2 gap-2 pt-2 border-t ${lightMode ? "border-slate-200" : "border-gray-800"}`}>
+              <div className={`grid grid-cols-2 gap-2 pt-1.5 border-t ${lightMode ? "border-slate-200" : "border-gray-800"}`}>
                 <Stat
                   label="Packed"
                   value={`${packed.length} / ${total}`}
@@ -161,7 +161,7 @@ function Stat({
   return (
     <div>
       <div className={`text-sm ${lightMode ? "text-slate-500" : "text-gray-500"}`}>{label}</div>
-      <div className={`text-base font-bold font-mono mt-0.5 ${lightMode ? "text-slate-900" : "text-gray-100"}`}>
+      <div className={`text-sm font-bold font-mono mt-0.5 ${lightMode ? "text-slate-900" : "text-gray-100"}`}>
         {value}
       </div>
     </div>
