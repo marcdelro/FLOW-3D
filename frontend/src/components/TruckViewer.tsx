@@ -172,9 +172,11 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
   const [camOpen,       setCamOpen]       = useState(false);
 
   // ── Animation state ────────────────────────────────────────────────────────
-  const [animStep,    setAnimStep]    = useState(0);
-  const [isPlaying,   setIsPlaying]   = useState(false);
-  const [animSpeed,   setAnimSpeed]   = useState(900);
+  const [animStep,         setAnimStep]         = useState(0);
+  const [isPlaying,        setIsPlaying]        = useState(false);
+  const [animSpeed,        setAnimSpeed]        = useState(900);
+  const [showPlacingBadge, setShowPlacingBadge] = useState(false);
+  const [showLoadedBadge,  setShowLoadedBadge]  = useState(false);
 
   const packed      = plan.placements.filter((p) => p.is_packed);
   const uniqueStops = [...new Set(packed.map((p) => p.stop_id))].sort((a, b) => a - b);
@@ -188,7 +190,27 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
   useEffect(() => {
     setAnimStep(0);
     setIsPlaying(false);
+    setShowPlacingBadge(false);
+    setShowLoadedBadge(false);
   }, [plan]);
+
+  // Auto-dismiss the "Placing" badge 2 s after the last item change.
+  useEffect(() => {
+    if (!latestItem) return;
+    setShowPlacingBadge(true);
+    const id = setTimeout(() => setShowPlacingBadge(false), 2000);
+    return () => clearTimeout(id);
+  }, [latestItem]);
+
+  // Auto-dismiss the "All loaded" badge 3 s after it first appears.
+  useEffect(() => {
+    if (animStep >= animSorted.length && animSorted.length > 0) {
+      setShowLoadedBadge(true);
+      const id = setTimeout(() => setShowLoadedBadge(false), 3000);
+      return () => clearTimeout(id);
+    }
+    setShowLoadedBadge(false);
+  }, [animStep, animSorted.length]);
 
   useEffect(() => {
     if (!isPlaying || mode !== "animate") return;
@@ -654,7 +676,7 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
       </div>
 
       {/* ── Animate: currently-placing badge (top-center) ── */}
-      {mode === "animate" && latestItem && (
+      {mode === "animate" && showPlacingBadge && latestItem && (
         <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3 border-2 rounded-xl px-4 py-2.5 pointer-events-none shadow-md ${lightMode ? "bg-white border-slate-300" : "bg-gray-900 border-gray-600"}`}>
           <span className={`text-base font-medium ${lightMode ? "text-slate-600" : "text-gray-400"}`}>Placing:</span>
           <span className={`text-base font-bold ${lightMode ? "text-slate-900" : "text-white"}`}>{latestItem.item_id}</span>
@@ -673,7 +695,7 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
           <span className={`text-base font-semibold ${lightMode ? "text-slate-700" : "text-gray-300"}`}>Press play to begin loading sequence</span>
         </div>
       )}
-      {mode === "animate" && animStep >= animSorted.length && animSorted.length > 0 && (
+      {mode === "animate" && showLoadedBadge && (
         <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-10 border-2 rounded-xl px-4 py-2.5 pointer-events-none shadow-md ${lightMode ? "bg-green-50 border-green-400" : "bg-green-950/70 border-green-700"}`}>
           <span className={`text-base font-bold ${lightMode ? "text-green-800" : "text-green-300"}`}>
             All {animSorted.length} items loaded
@@ -761,7 +783,7 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
       )}
 
       {/* ── Stop legend (bottom-right) — bigger and clearer ── */}
-      <div className={`absolute bottom-4 right-4 z-10 border-2 rounded-2xl px-4 py-3 space-y-2 min-w-[170px] shadow-md ${lightMode ? "bg-white border-slate-300" : "bg-gray-950 border-gray-700"}`}>
+      <div className={`absolute ${mode === "animate" ? "bottom-36" : "bottom-4"} right-4 z-10 border-2 rounded-2xl px-4 py-3 space-y-2 min-w-[170px] shadow-md ${lightMode ? "bg-white border-slate-300" : "bg-gray-950 border-gray-700"}`}>
         <div className={`text-sm font-bold uppercase tracking-wider mb-2 ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
           Load Order
         </div>
@@ -783,10 +805,6 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
           ))}
       </div>
 
-      {/* ── DOOR label — standalone landmark, separated from camera controls ── */}
-      <span className={`absolute bottom-4 left-20 z-10 text-base font-bold border-2 px-3.5 py-2 rounded-xl shadow-md ${lightMode ? "bg-blue-50 border-blue-300 text-blue-800" : "bg-blue-950 border-blue-700 text-blue-200"}`}>
-        ← DOOR
-      </span>
 
       {/* ── Camera controls — collapsed toolbar, 44 px footprint when closed ── */}
       <div className="absolute bottom-4 left-4 z-10 flex flex-col items-start gap-2">

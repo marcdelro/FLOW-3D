@@ -742,44 +742,95 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
       )}
 
       {/* ── Import bar ──────────────────────────────────────────────────────── */}
-      <div className={`flex items-center gap-2 px-5 py-4 border-b-2 ${border} ${bg2}`}>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".xlsx,.xls,.json,application/json,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          className="hidden"
-          onChange={onFilePicked}
-        />
+      <div className={`px-5 py-4 border-b-2 ${border} ${bg2} space-y-3`}>
+        {/* Action buttons row */}
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.json,application/json,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={onFilePicked}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className={`flex items-center gap-2 text-base font-semibold px-4 py-2.5 rounded-lg border-2 transition-colors ${
+              lightMode
+                ? "border-slate-300 bg-white text-slate-800 hover:bg-slate-100 hover:border-slate-400"
+                : "border-gray-600 bg-gray-900 text-gray-200 hover:bg-gray-800 hover:border-gray-500"
+            }`}
+            title="Import a .xlsx, .xls, or .json manifest"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            Import Manifest
+          </button>
+          <button
+            type="button"
+            onClick={downloadManifestTemplate}
+            className={`flex items-center gap-2 text-base font-semibold px-4 py-2.5 rounded-lg border-2 transition-colors ${
+              lightMode
+                ? "border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-slate-400"
+                : "border-gray-600 bg-gray-900 text-gray-200 hover:bg-gray-800 hover:border-gray-500"
+            }`}
+            title="Download a starter .xlsx template — fill it in and re-import"
+          >
+            <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            <span>
+              Download Template
+              <span className={`block text-[11px] font-normal leading-none mt-0.5 ${lightMode ? "text-slate-500" : "text-gray-400"}`}>.xlsx format</span>
+            </span>
+          </button>
+        </div>
+
+        {/* Drop zone */}
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className={`flex items-center gap-2 text-base font-semibold px-4 py-2.5 rounded-lg border-2 transition-colors ${
-            lightMode
-              ? "border-slate-300 bg-white text-slate-800 hover:bg-slate-100 hover:border-slate-400"
-              : "border-gray-600 bg-gray-900 text-gray-200 hover:bg-gray-800 hover:border-gray-500"
+          className={`w-full flex flex-col items-center justify-center gap-2 py-5 rounded-xl border-2 border-dashed transition-colors duration-150 cursor-pointer ${
+            isDragging
+              ? lightMode
+                ? "border-blue-500 bg-blue-50"
+                : "border-blue-500 bg-blue-900/30"
+              : lightMode
+                ? "border-blue-300 bg-white hover:border-blue-400 hover:bg-blue-50"
+                : "border-blue-700 bg-gray-900/40 hover:border-blue-500 hover:bg-blue-950/30"
           }`}
-          title="Import a .xlsx, .xls, or .json manifest"
+          aria-label="Drop manifest file here or click to browse"
         >
-          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="17 8 12 3 7 8" />
-            <line x1="12" y1="3" x2="12" y2="15" />
+          <svg
+            className={`w-8 h-8 ${isDragging ? "text-blue-500" : lightMode ? "text-blue-400" : "text-blue-600"}`}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="16 16 12 12 8 16" />
+            <line x1="12" y1="12" x2="12" y2="21" />
+            <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
           </svg>
-          Import Manifest
+          <div className="text-center leading-tight">
+            <div className={`text-base font-semibold ${lightMode ? "text-slate-800" : "text-gray-200"}`}>
+              Drop your manifest here
+            </div>
+            <div className={`text-sm mt-0.5 ${lightMode ? "text-slate-500" : "text-gray-400"}`}>
+              or click to browse
+            </div>
+          </div>
+          <div className={`text-xs ${lightMode ? "text-slate-400" : "text-gray-500"}`}>
+            .xlsx · .xls · .json — max 10 MB
+          </div>
         </button>
-        <button
-          type="button"
-          onClick={downloadManifestTemplate}
-          className={`text-base font-semibold px-3 py-2.5 rounded-lg transition-colors ${
-            lightMode
-              ? "text-slate-700 hover:text-slate-900 hover:bg-slate-100"
-              : "text-gray-300 hover:text-gray-100 hover:bg-gray-800"
-          }`}
-          title="Download a starter .xlsx template"
-        >
-          Template
-        </button>
-        <span className={`ml-auto text-sm ${muted} hidden sm:inline`}>or drop a file here</span>
       </div>
       {importMessage && (
         <div className={`px-5 py-3 text-base border-b-2 ${border} ${
@@ -963,11 +1014,11 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
               <thead>
                 <tr className={`${bg2} border-b-2 ${border}`}>
                   <th className={`text-left px-3 py-3 font-bold text-sm ${lightMode ? "text-slate-700" : "text-gray-300"}`}>Item</th>
-                  <th className={`text-right px-3 py-3 font-bold text-sm w-32 ${lightMode ? "text-slate-700" : "text-gray-300"}`}>
+                  <th className={`text-right px-3 py-3 font-bold text-sm w-28 ${lightMode ? "text-slate-700" : "text-gray-300"}`}>
                     Size
                   </th>
                   <th className={`text-center px-2 py-3 font-bold text-sm w-12 ${lightMode ? "text-slate-700" : "text-gray-300"}`}>Stop</th>
-                  <th className="w-24" />
+                  <th className="w-20" />
                 </tr>
               </thead>
               <tbody>
@@ -981,8 +1032,8 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
                         : lightMode ? "hover:bg-slate-50" : "hover:bg-gray-800/30"
                     }`}
                   >
-                    <td className={`px-3 py-2.5 max-w-[160px]`} title={item.item_id}>
-                      <div className={`truncate text-base font-medium ${text}`}>{item.item_id}</div>
+                    <td className="px-3 py-2.5" title={item.item_id}>
+                      <div className={`break-all text-sm font-medium ${text}`}>{item.item_id}</div>
                       {(item.side_up || item.boxed || item.fragile) && (
                         <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                           {item.side_up && (
@@ -1018,7 +1069,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
                         </div>
                       )}
                     </td>
-                    <td className={`px-3 py-3 text-right text-sm whitespace-nowrap overflow-hidden ${muted}`}>
+                    <td className={`px-3 py-3 text-right text-sm truncate ${muted}`}>
                       {item.w}×{item.l}×{item.h}
                     </td>
                     <td className="px-2 py-3 text-center">

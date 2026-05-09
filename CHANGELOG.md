@@ -12,7 +12,7 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
-## Sprint 15 — 2026-05-09 · Input Guards, Infeasibility Recovery, and Item 6 Completion
+## Sprint 16 — 2026-05-09 · Input Guards, Infeasibility Recovery, and Item 6 Completion
 
 **Goal:** Close the last open item from the API skeleton checklist — add missing
 `ge=1` dimension guards to `FurnitureItem`, implement `InfeasiblePackingException`,
@@ -60,6 +60,78 @@ before returning a 422.
   with `solver_mode`, `failed_check`, and `detail` — matching the item-6 spec
   exactly. A `_validator = ConstraintValidator()` instance is now held at module
   level alongside `_engine`.
+
+---
+
+## Sprint 15 — 2026-05-09 · Frontend Layout Compaction and UX Polish
+
+**Goal:** Compact the plan selector cards and dashboard panel to reduce visual bulk,
+add auto-dismissing animation badges so notifications clear themselves, introduce a
+dedicated full-width drop-zone import UI in the manifest form, remove the redundant
+DOOR button, and fix the stop legend / playback bar overlap in animate mode.
+
+### Added
+
+**Frontend**
+- `frontend/src/components/TruckViewer.tsx`: Add `showPlacingBadge` and
+  `showLoadedBadge` state driven by `useEffect` — the "Placing" badge auto-dismisses
+  2 s after the most-recent item change; the "All loaded" badge auto-dismisses 3 s
+  after the animation sequence completes; both badges are cleared on plan reset via the
+  existing `plan` dependency effect.
+- `frontend/src/components/ManifestForm.tsx`: Add dedicated full-width dashed
+  drop-zone below the action buttons row in the import bar — cloud-upload SVG, primary
+  and secondary labels, and a supported-format line; activates with a `border-blue-500
+  bg-blue-900/30` highlight on `isDragging`; clicking the drop zone opens the hidden
+  file input identically to the "Import Manifest" button.
+
+### Changed
+
+**Frontend**
+- `frontend/src/components/PlanSelector.tsx`: Compact plan cards — outer padding
+  `py-5` → `py-4`, card padding `p-5` → `p-3`, card gap `gap-3` → `gap-2`, card list
+  spacing `space-y-3` → `space-y-2`, utilization % `text-3xl` → `text-xl`, progress
+  bar `h-3` → `h-2`, stat values `text-base` → `text-sm`, stat separator `pt-2` →
+  `pt-1.5`; description text `text-base mt-1` → `text-sm mt-0.5`.
+- `frontend/src/components/Dashboard.tsx`: Compact dashboard panel — `SectionHeader`
+  `py-4` → `py-3`; `StatCard` `p-4` → `p-3` with value `text-2xl` → `text-xl` and
+  unit `text-base` → `text-sm` and label `text-sm mt-2` → `text-xs mt-1.5`;
+  performance body `py-5 space-y-5` → `py-4 space-y-3`; util block `p-4` → `p-3`
+  with `text-4xl` → `text-3xl` (%) and bar `h-4` → `h-3` and m³ readout `text-base`
+  → `text-sm`; stat card grid gap `gap-3` → `gap-2`; LIFO section body `py-5
+  space-y-4` → `py-4 space-y-3`; LIFO instruction card `py-3.5` → `py-3`; stop card
+  `p-5` → `p-3.5`; step circle `w-14 h-14 rounded-2xl text-2xl` → `w-10 h-10
+  rounded-xl text-lg`; stop title `text-lg` → `text-base`; item count `text-3xl` →
+  `text-xl`; item chips `text-base px-3 py-1.5` → `text-sm px-2.5 py-1`; unplaced
+  section body `py-5` → `py-4` with card `p-4` → `p-3`.
+- `frontend/src/components/ManifestForm.tsx`: Redesign template download button with
+  `border-2` outline, a download-arrow SVG icon, "Download Template" label, and
+  `.xlsx format` sub-label; restructure import bar to a `space-y-3` column with a
+  `flex items-center gap-2` (no `flex-wrap`) buttons row above the drop zone so both
+  buttons remain on one line.
+- `frontend/src/components/ManifestForm.tsx`: Fix item name cell — remove
+  `max-w-[160px] overflow-hidden`, switch inner div from `truncate text-base font-medium`
+  to `break-all text-sm font-medium` so long item IDs wrap rather than clip; shrink
+  Size column `w-32` → `w-28` and Actions column `w-24` → `w-20` to reclaim horizontal
+  space.
+
+### Fixed
+
+**Frontend**
+- `frontend/src/components/TruckViewer.tsx`: Fix stop legend overlapping the animate
+  playback bar — offset class changed from `bottom-4` to `bottom-36` when
+  `mode === "animate"` via a ternary so the legend clears the 112 px bar.
+- `frontend/src/components/TruckViewer.tsx`: Fix animation badges persisting
+  indefinitely — `showPlacingBadge` previously stayed visible on pause; `showLoadedBadge`
+  previously stayed until a mode change; both now auto-dismiss via `setTimeout` with
+  `clearTimeout` cleanup.
+
+### Removed
+
+**Frontend**
+- `frontend/src/components/TruckViewer.tsx`: Remove the `← DOOR` button landmark
+  (`absolute bottom-4 left-20`) — visually redundant with the "Front View" camera
+  preset in the collapsed camera toolbar; in-scene door geometry (`doorSprite`,
+  `doorMesh`, `doorFrame`) is preserved.
 
 ---
 
