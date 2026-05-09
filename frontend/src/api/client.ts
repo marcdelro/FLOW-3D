@@ -5,7 +5,7 @@ import type { PackingPlan, SolveRequest, SolveStrategy } from "../types";
  * The three DSS strategies presented to the user as Plan A / B / C.
  * Order is meaningful — A is shown first and selected by default.
  */
-const STRATEGIES: SolveStrategy[] = ["optimal", "balanced", "stability"];
+const STRATEGIES: SolveStrategy[] = ["optimal", "axle_balance", "stability"];
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
@@ -27,7 +27,7 @@ export async function fetchSolutions(
     return buildPlansFromRequest(request);
   }
   // Real API: 3 parallel requests, each with a different DSS strategy so the
-  // backend produces three structurally distinct plans (optimal / balanced /
+  // backend produces three structurally distinct plans (optimal / axle_balance /
   // stability). Plans are returned in STRATEGIES order to match the A/B/C UI.
   return Promise.all(
     STRATEGIES.map((strategy) => fetchSolution({ ...request, strategy })),

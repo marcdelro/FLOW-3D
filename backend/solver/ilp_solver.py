@@ -561,6 +561,7 @@ class ILPSolver(AbstractSolver):
                     orientation_index=orientation_index,
                     stop_id=item.stop_id,
                     is_packed=True,
+                    model_variant=item.model_variant,
                 )
             )
             packed_volume += item.w * item.l * item.h

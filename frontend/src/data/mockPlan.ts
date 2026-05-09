@@ -6,10 +6,11 @@ const RATIONALES = {
     "Maximum volumetric utilization via exact ILP. Choose this plan when " +
     "minimizing trips and fuel cost matters most — the solver provably " +
     "finds the densest LIFO-feasible packing for the given manifest.",
-  balanced:
-    "Fast deterministic FFD with volume-descending presort. Choose this " +
-    "plan when solve speed matters or when you want a predictable, " +
-    "repeatable layout for the same route on different days.",
+  axle_balance:
+    "FFD with axle-aware best-fit placement — distributes mass along the " +
+    "cargo bay so front and rear axles share load evenly. Choose this " +
+    "plan to keep individual-axle weight within LTO regulatory limits " +
+    "and reduce drive-axle wear on long runs.",
   stability:
     "FFD with weight-descending presort — heavy items go in first and " +
     "settle at the bottom of the load. Choose this plan for fragile " +
@@ -24,14 +25,14 @@ export const mockPlan: PackingPlan = {
   rationale: RATIONALES.optimal,
 };
 
-// Plan B — Balanced (FFD volume-descending presort)
+// Plan B — Axle Balance (FFD with axle-aware best-fit placement)
 const mockPlanB: PackingPlan = {
   v_util: 0.41,
   t_exec_ms: 23,
   solver_mode: "FFD",
   unplaced_items: [],
-  strategy: "balanced",
-  rationale: RATIONALES.balanced,
+  strategy: "axle_balance",
+  rationale: RATIONALES.axle_balance,
   placements: [
     { item_id: "wardrobe_01",    x: 1200, y: 0,    z: 0, w: 1200, l: 600, h: 1800, orientation_index: 0, stop_id: 3, is_packed: true },
     { item_id: "desk_01",        x: 0,    y: 0,    z: 0, w: 1000, l: 600, h: 750,  orientation_index: 0, stop_id: 3, is_packed: true },

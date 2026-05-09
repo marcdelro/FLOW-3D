@@ -3,12 +3,17 @@
 OptimizationEngine.optimize() routes a manifest through one of three
 decision-support strategies, each with a distinct objective trade-off:
 
-    optimal   — exact ILP (Gurobi Branch-and-Bound) when available and
-                n <= SOLVER_THRESHOLD; falls back to volume-desc FFD otherwise.
-                Maximizes V_util.
-    balanced  — volume-desc FFD always. Fast, deterministic, predictable.
-    stability — weight-desc FFD always. Heavy items placed first → lower
-                center of gravity, reducing transit shifting damage.
+    optimal       — exact ILP (Gurobi Branch-and-Bound) when available and
+                    n <= SOLVER_THRESHOLD; falls back to volume-desc FFD
+                    otherwise. Maximises V_util.
+    axle_balance  — FFD with axle-aware position picker. Among LIFO-feasible
+                    candidate positions, picks the one that brings the cargo
+                    longitudinal centre-of-mass closest to truck.L / 2 so
+                    front and rear axles share load evenly. Defensible
+                    against LTO axle-weight regulations.
+    stability     — weight-desc FFD. Heavy items placed first land at z=0
+                    and lower the vertical centre of gravity, reducing
+                    transit shifting damage.
 
 The post-solve `ConstraintValidator` run is performed inside
 `AbstractSolver.solve()` itself (template method), so a solver cannot
@@ -45,10 +50,11 @@ STRATEGY_RATIONALES: Dict[SolveStrategy, str] = {
         "minimizing trips and fuel cost matters most — the solver provably "
         "finds the densest LIFO-feasible packing for the given manifest."
     ),
-    "balanced": (
-        "Fast deterministic FFD with volume-descending presort. Choose this "
-        "plan when solve speed matters or when you want a predictable, "
-        "repeatable layout for the same route on different days."
+    "axle_balance": (
+        "FFD with axle-aware best-fit placement — distributes mass along the "
+        "cargo bay so front and rear axles share load evenly. Choose this "
+        "plan to keep individual-axle weight within LTO regulatory limits "
+        "and reduce drive-axle wear on long runs."
     ),
     "stability": (
         "FFD with weight-descending presort — heavy items go in first and "
@@ -65,7 +71,13 @@ class OptimizationEngine:
     def __init__(self) -> None:
         self.threshold: int = SOLVER_THRESHOLD
         self._ilp: ILPSolver = ILPSolver()
+        # Volume-desc FFD is the Optimal-strategy fallback when n > threshold
+        # or when Gurobi is unavailable. It is NOT exposed as its own DSS
+        # strategy any more — Axle Balance replaced that role.
         self._ffd_volume: FFDSolver = FFDSolver(presort="volume")
+        self._ffd_axle: FFDSolver = FFDSolver(
+            presort="weight", axle_balance=True
+        )
         self._ffd_weight: FFDSolver = FFDSolver(presort="weight")
 
     def get_active_algorithm(self, n: int) -> str:
@@ -82,8 +94,8 @@ class OptimizationEngine:
     ) -> PackingPlan:
         if strategy == "stability":
             plan = self._ffd_weight.solve(items, truck)
-        elif strategy == "balanced":
-            plan = self._ffd_volume.solve(items, truck)
+        elif strategy == "axle_balance":
+            plan = self._ffd_axle.solve(items, truck)
         else:  # "optimal"
             mode = self.get_active_algorithm(len(items))
             if mode == "ILP":

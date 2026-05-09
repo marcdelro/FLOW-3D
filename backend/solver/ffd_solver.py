@@ -27,13 +27,26 @@ class FFDSolver(AbstractSolver):
         "volume" — largest items first (default; maximizes early packing density).
         "weight" — heaviest items first (heavies land at z=0, lowering CoG).
     Stop-id ordering is always descending so the LIFO Y-axis layout is preserved.
+
+    The `axle_balance` flag changes Phase 3's candidate selection rule from
+    pure first-fit to "best-fit by longitudinal centre-of-mass". Each
+    feasible (cx, cy, cz) candidate is scored by how close placing the
+    item there would bring the cumulative cargo y-CoG to truck.L / 2
+    (uniform-beam approximation: target mid-bay so front and rear axles
+    share load evenly). All other thesis 3.5.2.1 constraints (B, C, E + F)
+    plus fragile no-stacking are still enforced; axle balance only
+    re-orders the search among feasible positions, so worst-case
+    complexity stays O(n^2).
     """
 
-    def __init__(self, presort: str = "volume") -> None:
+    def __init__(
+        self, presort: str = "volume", axle_balance: bool = False
+    ) -> None:
         super().__init__()
         if presort not in ("volume", "weight"):
             raise ValueError(f"Unknown FFD presort strategy: {presort!r}")
         self._presort = presort
+        self._axle_balance = axle_balance
 
     def _solve(self, items: List[FurnitureItem], truck: TruckSpec) -> PackingPlan:
         if USE_MOCK_SOLVER:
@@ -122,6 +135,12 @@ class FFDSolver(AbstractSolver):
 
         Items that fail every candidate are appended to unplaced_items.
 
+        When `self._axle_balance` is True, the loop walks ALL feasible
+        candidates instead of breaking on the first match and picks the
+        one that minimises |new_y_cog - truck.L/2|. This produces the
+        Axle Balance strategy's longitudinally-balanced layout while
+        still respecting every constraint above.
+
         Thesis section 3.5.2.2, Phase 3.
         """
         placements: List[Placement] = []
@@ -131,6 +150,13 @@ class FFDSolver(AbstractSolver):
         weight_cap = truck.payload_kg if truck.payload_kg > 0 else float("inf")
         fragile_ids = {it.item_id for it in sequence if it.fragile}
 
+        # Axle-balance bookkeeping: y-weighted moment of every placed item's
+        # centroid. y_target is the cargo bay midpoint — uniform-beam
+        # approximation for "front and rear axles equally loaded".
+        weighted_y_sum: float = 0.0
+        total_weight: float = 0.0
+        y_target: float = truck.L / 2.0
+
         for item in sequence:
             if placed_weight + item.weight_kg > weight_cap:
                 unplaced.append(item.item_id)
@@ -138,6 +164,7 @@ class FFDSolver(AbstractSolver):
 
             sorted_candidates = sorted(candidates, key=lambda c: (c[1], c[0], c[2]))
             chosen: Tuple[int, int, int, int, int, int, int] | None = None
+            best_score: float = float("inf")
 
             for orientation_index in self._candidate_orientations(item):
                 w_eff, l_eff, h_eff = self._effective_dims(item, orientation_index)
@@ -156,9 +183,30 @@ class FFDSolver(AbstractSolver):
                         cx, cy, cz, w_eff, l_eff, placements, fragile_ids
                     ):
                         continue
-                    chosen = (cx, cy, cz, w_eff, l_eff, h_eff, orientation_index)
-                    break
-                if chosen is not None:
+
+                    if self._axle_balance:
+                        # Score this candidate by the resulting cargo y-CoG.
+                        # When the item is weightless (weight_kg == 0) we
+                        # still need a tiebreaker; fall back to candidate y
+                        # so identical scores remain deterministic.
+                        item_y_centroid = cy + l_eff / 2.0
+                        new_total = total_weight + item.weight_kg
+                        if new_total > 0:
+                            new_y_cog = (
+                                weighted_y_sum
+                                + item.weight_kg * item_y_centroid
+                            ) / new_total
+                        else:
+                            new_y_cog = item_y_centroid
+                        score = abs(new_y_cog - y_target)
+                        if score < best_score:
+                            best_score = score
+                            chosen = (cx, cy, cz, w_eff, l_eff, h_eff, orientation_index)
+                        # Do NOT break — keep evaluating other candidates
+                    else:
+                        chosen = (cx, cy, cz, w_eff, l_eff, h_eff, orientation_index)
+                        break
+                if not self._axle_balance and chosen is not None:
                     break
 
             if chosen is None:
@@ -178,12 +226,17 @@ class FFDSolver(AbstractSolver):
                     orientation_index=orientation_index,
                     stop_id=item.stop_id,
                     is_packed=True,
+                    model_variant=item.model_variant,
                 )
             )
             candidates.extend(
                 [(cx + w_eff, cy, cz), (cx, cy + l_eff, cz), (cx, cy, cz + h_eff)]
             )
             placed_weight += item.weight_kg
+            # Update axle bookkeeping with the actual chosen position so the
+            # next item's score reflects the new cargo y-CoG.
+            weighted_y_sum += item.weight_kg * (cy + l_eff / 2.0)
+            total_weight += item.weight_kg
 
         return placements, unplaced
 

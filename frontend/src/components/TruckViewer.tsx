@@ -177,6 +177,10 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
   const [animSpeed,        setAnimSpeed]        = useState(900);
   const [showPlacingBadge, setShowPlacingBadge] = useState(false);
   const [showLoadedBadge,  setShowLoadedBadge]  = useState(false);
+  /** item_ids whose 3D model failed to resolve and were rendered as a coloured
+   *  box. Surfaced as a warning chip so users don't mistake fallback geometry
+   *  for the real model. */
+  const [fallbackItemIds, setFallbackItemIds] = useState<string[]>([]);
 
   const packed      = plan.placements.filter((p) => p.is_packed);
   const uniqueStops = [...new Set(packed.map((p) => p.stop_id))].sort((a, b) => a - b);
@@ -373,6 +377,7 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
 
     // ── Item meshes for raycasting ─────────────────────────────────────────
     const itemMeshes: THREE.Mesh[] = [];
+    const fallbacks: string[] = [];
 
     // ── Render each visible item ───────────────────────────────────────────
     for (let i = 0; i < displayItems.length; i++) {
@@ -442,6 +447,7 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
 
       } else {
         // ── Fallback: coloured box (model not loaded or geometry invalid) ─
+        fallbacks.push(p.item_id);
         const geom = new THREE.BoxGeometry(w, h, l);
         geos.push(geom);
 
@@ -508,6 +514,15 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
         spriteMats.push(sprite.material as THREE.SpriteMaterial);
       }
     }
+
+    // Surface fallback placements (rendered as a coloured box because their
+    // 3D model could not be resolved or loaded). Compare-then-set avoids
+    // pointless re-renders when the list is unchanged.
+    setFallbackItemIds((prev) =>
+      prev.length === fallbacks.length && prev.every((id, i) => id === fallbacks[i])
+        ? prev
+        : fallbacks,
+    );
 
     // ── Orbit controls ─────────────────────────────────────────────────────
     const defaultTarget = new THREE.Vector3(truckW / 2, truckH / 2, truckL / 2);
@@ -676,6 +691,30 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
       </div>
 
       {/* ── Animate: currently-placing badge (top-center) ── */}
+      {/* Fallback warning — items rendered as placeholder boxes because the
+          3D model could not be resolved or loaded. Hidden when none. */}
+      {fallbackItemIds.length > 0 && (
+        <div
+          className={`absolute top-4 right-4 z-10 border-2 rounded-xl px-3 py-2 max-w-xs shadow-md flex items-start gap-2 ${
+            lightMode ? "bg-amber-50 border-amber-400" : "bg-amber-950/70 border-amber-700"
+          }`}
+          title={fallbackItemIds.join(", ")}
+        >
+          <svg className={`w-5 h-5 shrink-0 mt-0.5 ${lightMode ? "text-amber-600" : "text-amber-400"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          <div>
+            <div className={`text-sm font-bold ${lightMode ? "text-amber-900" : "text-amber-200"}`}>
+              {fallbackItemIds.length} item{fallbackItemIds.length === 1 ? "" : "s"} using placeholder geometry
+            </div>
+            <div className={`text-xs mt-0.5 ${lightMode ? "text-amber-800" : "text-amber-300"}`}>
+              3D model failed to resolve — coloured box shown instead. Hover for IDs.
+            </div>
+          </div>
+        </div>
+      )}
       {mode === "animate" && showPlacingBadge && latestItem && (
         <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3 border-2 rounded-xl px-4 py-2.5 pointer-events-none shadow-md ${lightMode ? "bg-white border-slate-300" : "bg-gray-900 border-gray-600"}`}>
           <span className={`text-base font-medium ${lightMode ? "text-slate-600" : "text-gray-400"}`}>Placing:</span>

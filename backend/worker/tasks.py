@@ -70,7 +70,8 @@ def solve_task(self, request_dict: dict) -> dict:
             return {"status": "done", "plan": repaired.model_dump()}
         except InfeasiblePackingException as repair_exc:
             logger.error(
-                "Repair failed for job %s: %s", self.request.id, repair_exc
+                "Repair failed for job %s (failed_check=%s): %s",
+                self.request.id, repair_exc.failed_check, repair_exc,
             )
             log_job(
                 job_id=self.request.id,
@@ -80,6 +81,7 @@ def solve_task(self, request_dict: dict) -> dict:
                 t_exec_ms=getattr(repair_exc.plan, "t_exec_ms", 0),
                 status="failed",
                 error=str(repair_exc),
+                failed_check=repair_exc.failed_check,
             )
             return {
                 "status": "failed",

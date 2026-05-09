@@ -11,10 +11,14 @@ from typing import List, Literal
 from pydantic import BaseModel, Field
 
 # DSS plan-selection strategies (thesis section 3.5.2 — decision support layer).
-# Each strategy maps to a distinct objective trade-off: optimal = max V_util via
-# ILP, balanced = fast deterministic FFD by volume, stability = FFD by weight so
-# heavy items sit at the bottom (low center of gravity).
-SolveStrategy = Literal["optimal", "balanced", "stability"]
+# Each strategy maps to a distinct objective trade-off:
+#   optimal       — max V_util via exact ILP (Gurobi B&B for n <= threshold).
+#   axle_balance  — FFD with axle-aware position picker; minimises longitudinal
+#                   centre-of-mass offset so front and rear axles share load
+#                   evenly (LTO axle-weight regulation friendly).
+#   stability     — FFD with weight-desc presort; heavy items sit at z=0 to
+#                   lower the vertical centre of gravity.
+SolveStrategy = Literal["optimal", "axle_balance", "stability"]
 
 
 class FurnitureItem(BaseModel):
@@ -22,7 +26,7 @@ class FurnitureItem(BaseModel):
     w: int = Field(..., ge=1, description="Width w_i in millimetres")
     l: int = Field(..., ge=1, description="Length l_i in millimetres")
     h: int = Field(..., ge=1, description="Height h_i in millimetres")
-    weight_kg: float = Field(0.0, description="Item mass in kilograms")
+    weight_kg: float = Field(0.0, ge=0.0, description="Item mass in kilograms")
     stop_id: int = Field(..., description="Delivery stop (LIFO key)")
     side_up: bool = Field(
         False,
@@ -43,10 +47,10 @@ class FurnitureItem(BaseModel):
 
 
 class TruckSpec(BaseModel):
-    W: int = Field(2400, description="Internal width W in millimetres")
-    L: int = Field(13600, description="Internal length L in millimetres")
-    H: int = Field(2440, description="Internal height H in millimetres")
-    payload_kg: float = Field(3000.0, description="Maximum payload in kilograms")
+    W: int = Field(2400, ge=1, description="Internal width W in millimetres")
+    L: int = Field(13600, ge=1, description="Internal length L in millimetres")
+    H: int = Field(2440, ge=1, description="Internal height H in millimetres")
+    payload_kg: float = Field(3000.0, gt=0.0, description="Maximum payload in kilograms")
 
 
 class DeliveryStop(BaseModel):
@@ -60,7 +64,7 @@ class SolveRequest(BaseModel):
     stops: List[DeliveryStop] = Field(default_factory=list)
     strategy: SolveStrategy = Field(
         "optimal",
-        description="Plan-selection strategy: optimal | balanced | stability",
+        description="Plan-selection strategy: optimal | axle_balance | stability",
     )
 
 
@@ -75,6 +79,12 @@ class Placement(BaseModel):
     orientation_index: int = Field(..., ge=0, le=5, description="Orientation 0-5")
     stop_id: int = Field(..., description="Delivery stop id")
     is_packed: bool = Field(..., description="b_i packing status flag")
+    model_variant: int | None = Field(
+        None,
+        description="0-based index into the catalog variants — passed through "
+                    "from the input FurnitureItem so the 3D viewer renders the "
+                    "user's chosen model rather than a hash-derived one",
+    )
 
 
 class PackingPlan(BaseModel):

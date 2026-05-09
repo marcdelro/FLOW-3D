@@ -12,6 +12,169 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 17 — 2026-05-09 · Axle Balance Strategy, Explainability Panel, and Audit Fixes
+
+**Goal:** Replace the redundant `balanced` DSS strategy (which collapsed to an
+identical layout to Optimal at small `n` and to Optimal's own FFD fallback at
+large `n`) with a physically distinct **Axle Balance** strategy that minimises
+longitudinal centre-of-mass offset for LTO axle-weight compliance. Add a
+sidebar Explainability tab so panel members can read why the engine picked a
+solver and which constraints shaped the result. Land the audit follow-ups
+identified after Sprint 16 (`Placement.model_variant` round-trip, weight/truck
+guards, `failed_check` propagation through repair flow, fallback-geometry
+warning chip).
+
+### Added
+
+**Backend**
+- `backend/solver/ffd_solver.py::FFDSolver`: New `axle_balance: bool = False`
+  flag. When set, Phase 3 (thesis section 3.5.2.2) walks every feasible
+  candidate per orientation instead of breaking on first-fit, scoring each by
+  `|new_y_cog - truck.L/2|` where `y_cog` is the cumulative weight-weighted
+  longitudinal centroid of placed cargo. Picks the candidate that brings the
+  centroid closest to the cargo-bay midpoint — a uniform-beam approximation
+  for "front and rear axles equally loaded". Worst-case complexity stays
+  O(n²); thesis 3.5.2.1 B/C/E + extensions F/G are still enforced.
+- `backend/core/optimizer.py::OptimizationEngine`: New `_ffd_axle = FFDSolver(presort="weight", axle_balance=True)`
+  solver instance, dispatched when `strategy="axle_balance"`. The
+  weight-descending presort commits the heaviest items to their best
+  y-positions first when they have the most influence on `y_cog`.
+- `backend/core/optimizer.py::STRATEGY_RATIONALES["axle_balance"]`: New
+  user-facing rationale string explaining the LTO-compliance motivation.
+- `backend/api/models.py::Placement.model_variant`: New optional field. ILP
+  and FFD solvers now copy `model_variant` from the input `FurnitureItem`
+  into every emitted `Placement` so the 3D viewer renders the user's chosen
+  catalog variant rather than a hash-derived default. Closes the regression
+  flagged in the post-Sprint-16 audit.
+- `backend/core/db.py::job_logs.failed_check`: New `String(32)` column.
+  `ConstraintValidator.first_failing_check` labels (`"non_overlap"`,
+  `"lifo"`, `"fragile_stacking"`, etc.) are now persisted alongside each
+  failed solve so SQL aggregations like
+  `SELECT failed_check, COUNT(*) FROM job_logs GROUP BY failed_check`
+  yield meaningful constraint-failure breakdowns for the ANOVA section.
+- `backend/tests/test_axle_balance.py`: 5 new tests — `axle_balance` strategy
+  dispatches to FFD, plan carries the strategy-specific rationale, axle-aware
+  picker brings y-CoG **strictly** closer to L/2 than first-fit FFD on a
+  heavy-forward-biased manifest, all six constraint validators still pass,
+  multi-stop LIFO ordering still respected after the picker runs.
+- `backend/tests/test_smoke_audit_fixes.py`: 13 new tests covering Pydantic
+  rejection of `w/l/h ≤ 0`, `weight_kg < 0`, and `TruckSpec` zero-dim inputs
+  at the API boundary; `model_variant` round-trip on both ILP and FFD paths;
+  `failed_check` propagation through the 422 response body and into
+  `log_job` after Sprint 16's repair flow exhausts.
+
+**Frontend**
+- `frontend/src/components/Explainability.tsx` (new component): Sidebar panel
+  with three sections — **Solver Dispatch** (strategy-specific rationale,
+  Strategy → Solver mapping table with the active row highlighted, n-vs-
+  threshold bar shown only for Optimal), **Performance Snapshot** (`V_util`,
+  `T_exec`, packed/total cards), **Constraints in Effect** (LIFO stop count,
+  fragile-item chips, payload-cap bar with binding-constraint commentary,
+  unplaced-items explainer that adapts wording per solver mode).
+- `frontend/src/App.tsx`: New "Explain" sidebar tab (third step in the
+  workflow). Tab grid resized from 2 to 3 columns; tab typography tightened
+  (`text-sm` titles, `text-xs` truncating subtitles, smaller step circles)
+  to fit the 440-px sidebar. Disabled until at least one plan exists.
+- `frontend/src/components/TruckViewer.tsx`: New amber warning chip in the
+  top-right corner that surfaces every item rendered as placeholder geometry
+  (3D model failed to resolve). Hover reveals the offending `item_id`s.
+  Hidden when `fallbackItemIds` is empty. Catches silent rendering
+  regressions that previously appeared as colored boxes with no warning.
+- `frontend/src/data/planBuilder.ts::buildAxleBalancePlan`: Replaces
+  `buildBalancedPlan`. Mock places items compactly LIFO, then translates
+  the entire packing along Y by `(L/2 − cogY)` so the cumulative y-CoG
+  sits at the cargo-bay midpoint. Produces a visually distinct centred
+  layout even when the backend mock is in use.
+
+**Config**
+- `docker-compose.yml`: `GUROBI_LICENSE_PATH` environment variable now
+  parameterises the host license path (mounted to `/opt/gurobi/gurobi.lic`
+  inside backend + celery containers). Compose fails loudly if the env var
+  is missing instead of silently mounting nothing. `GRB_LICENSE_FILE` set
+  explicitly so gurobipy doesn't have to guess. New backend healthcheck on
+  `/docs` so frontend `depends_on: condition: service_healthy` actually
+  waits for FastAPI. New `pgdata` named volume so `job_logs` persist across
+  `docker compose down`.
+- `.env.example`: New `GUROBI_LICENSE_PATH` placeholder with platform
+  examples. `USE_MOCK_SOLVER` comment now explains that
+  `docker-compose.yml` overrides it to `False` regardless.
+
+### Changed
+
+**Backend**
+- `backend/api/models.py::SolveStrategy`: Literal updated from
+  `"optimal" | "balanced" | "stability"` to
+  `"optimal" | "axle_balance" | "stability"`.
+- `backend/api/models.py::FurnitureItem.weight_kg`: Added `ge=0.0` guard.
+  Negative weights would have undercounted the payload check.
+- `backend/api/models.py::TruckSpec`: Added `ge=1` to `W`, `L`, `H` and
+  `gt=0.0` to `payload_kg`. Zero-dim trucks would have produced a divide-
+  by-zero in `v_util` and a payload check that admitted any item.
+- `backend/core/optimizer.py::OptimizationEngine`: `_ffd_volume` is now an
+  internal-only fallback for the Optimal strategy when n exceeds
+  `SOLVER_THRESHOLD` or Gurobi is unavailable. It is no longer exposed as a
+  user-facing strategy.
+- `backend/worker/tasks.py`: The repair-failure branch (`InfeasiblePackingException`
+  handler from Sprint 16) now passes `failed_check=repair_exc.failed_check`
+  to `log_job` so the constraint label is persisted alongside the failure
+  row. Both initial and repair-failure log lines now include
+  `failed_check=` in the structured-log message.
+- `backend/tests/conftest.py`: `LIVE_PIPELINE_TESTS` extended with
+  `test_smoke_audit_fixes.py` so the suite skips cleanly when Redis is not
+  running on `localhost:6379`.
+- `backend/tests/test_blackbox.py`: `_solve` default strategy and all
+  `strategy="balanced"` references renamed to `strategy="axle_balance"`.
+  `TestBBS09StandaloneFFDBaseline` test methods renamed to match. Unused
+  `_BALANCED_RATIONALE_FRAGMENT` constant replaced with `_AXLE_RATIONALE_FRAGMENT`.
+
+**Frontend**
+- `frontend/src/types/index.ts::SolveStrategy`: Literal renamed.
+- `frontend/src/api/client.ts::STRATEGIES`: Tuple updated to dispatch
+  `axle_balance` instead of `balanced`.
+- `frontend/src/components/Dashboard.tsx`: `STRATEGY_LABEL`,
+  `STRATEGY_BADGE_DARK`, `STRATEGY_BADGE_LIGHT` keys renamed; "Axle Balance"
+  reuses the teal palette previously used by Balanced.
+- `frontend/src/components/PlanSelector.tsx`: `STRATEGY_NAMES` and
+  `STRATEGY_BLURB` updated; new blurb reads "Distributes mass across both
+  axles."
+- `frontend/src/components/Explainability.tsx`: Strategy → Solver mapping
+  table now shows "FFD with axle-aware best-fit — always" for the
+  `axle_balance` row. Active strategy row highlighted with an `ACTIVE` chip
+  + ring; threshold bar only renders for Optimal; non-Optimal strategies
+  get a "SOLVER_THRESHOLD does not apply…" footnote so a panel member
+  reading the table doesn't think the threshold gates this run.
+- `frontend/src/data/mockPlan.ts`: `RATIONALES.balanced` and `mockPlanB`
+  renamed to `axle_balance` so the static JSON-fixture path also produces
+  the right strategy field.
+
+### Removed
+
+**Backend**
+- `backend/core/optimizer.py`: The user-facing `balanced` strategy
+  dispatch. The volume-desc FFD path it referenced still exists internally
+  as the Optimal fallback for `n > SOLVER_THRESHOLD`.
+
+### Notes
+
+- **Breaking change (API contract):** API consumers sending
+  `{"strategy": "balanced"}` will now receive HTTP 422
+  (`SolveStrategy` literal no longer admits the value). The frontend ships
+  in lockstep, so the live demo is unaffected. Bumping minor (0.x semver)
+  rather than major because the project is pre-1.0 and the only consumer
+  is the bundled frontend.
+- **Operational note:** the new `failed_check` column requires recreating
+  the `job_logs` table. Run `docker compose down -v` once after pulling
+  this release so `metadata.create_all()` recreates the schema; otherwise
+  `failed_check` inserts will silently fall through the try/except in
+  `log_job`.
+- **Defense Q&A material:** the central test
+  `test_axle_balance_brings_cog_closer_to_centre` empirically demonstrates
+  that the axle picker produces a strictly smaller |y_cog − L/2| than
+  first-fit FFD on a heavy-forward-biased manifest. Quote this number to
+  panel members asking "does the strategy actually do anything?"
+
+---
+
 ## Sprint 16 — 2026-05-09 · Input Guards, Infeasibility Recovery, and Item 6 Completion
 
 **Goal:** Close the last open item from the API skeleton checklist — add missing

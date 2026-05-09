@@ -17,7 +17,11 @@ import pytest
 
 from worker.celery_app import celery_app
 
-LIVE_PIPELINE_TESTS = ("test_integration_solve.py", "test_smoke.py")
+LIVE_PIPELINE_TESTS = (
+    "test_integration_solve.py",
+    "test_smoke.py",
+    "test_smoke_audit_fixes.py",
+)
 
 
 def _redis_alive(host: str = "localhost", port: int = 6379) -> bool:

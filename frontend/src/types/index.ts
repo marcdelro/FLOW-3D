@@ -29,7 +29,7 @@ export interface Placement {
 }
 
 /** DSS plan-selection strategy — see backend/core/optimizer.py. */
-export type SolveStrategy = "optimal" | "balanced" | "stability";
+export type SolveStrategy = "optimal" | "axle_balance" | "stability";
 
 export interface PackingPlan {
   placements: Placement[];

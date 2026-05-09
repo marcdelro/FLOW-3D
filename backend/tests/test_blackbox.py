@@ -84,7 +84,7 @@ def _item(
 def _solve(
     items: List[FurnitureItem],
     truck: TruckSpec | None = None,
-    strategy: str = "balanced",
+    strategy: str = "axle_balance",
 ) -> PackingPlan:
     """Invoke OptimizationEngine with USE_MOCK_SOLVER=False and no Gurobi dependency."""
     if truck is None:
@@ -103,8 +103,8 @@ def _packing_success_rate(plan: PackingPlan, n_items: int) -> float:
 VALIDATOR = ConstraintValidator()
 
 # Sentence-long rationale strings differ per strategy — used to distinguish plans.
-_BALANCED_RATIONALE_FRAGMENT = "balanced"
-_OPTIMAL_RATIONALE_FRAGMENT  = "optimal"
+_AXLE_RATIONALE_FRAGMENT    = "axle"
+_OPTIMAL_RATIONALE_FRAGMENT = "optimal"
 
 
 # ===========================================================================
@@ -349,32 +349,32 @@ class TestBBS08EdgeThetaPlus1:
 
 
 # ===========================================================================
-# BB-S-09: Standalone FFD baseline — strategy=balanced always FFD
+# BB-S-09: Standalone FFD baseline — strategy=axle_balance always FFD
 # ===========================================================================
 
 class TestBBS09StandaloneFFDBaseline:
-    """strategy=balanced must always return FFD regardless of n or Gurobi availability."""
+    """strategy=axle_balance must always return FFD regardless of n or Gurobi availability."""
 
     _ITEMS = [
         _item(f"box{i}", w=400, l=600, h=500, stop_id=(i % 2) + 1)
         for i in range(8)
     ]
 
-    def test_balanced_always_produces_ffd_mode(self):
-        plan = _solve(self._ITEMS, strategy="balanced")
+    def test_axle_balance_always_produces_ffd_mode(self):
+        plan = _solve(self._ITEMS, strategy="axle_balance")
         assert plan.solver_mode == "FFD"
 
-    def test_balanced_strategy_field_set_on_plan(self):
-        plan = _solve(self._ITEMS, strategy="balanced")
-        assert plan.strategy == "balanced"
+    def test_axle_balance_strategy_field_set_on_plan(self):
+        plan = _solve(self._ITEMS, strategy="axle_balance")
+        assert plan.strategy == "axle_balance"
 
-    def test_balanced_and_optimal_both_return_valid_plans(self):
+    def test_axle_balance_and_optimal_both_return_valid_plans(self):
         """Both strategies return valid PackingPlan objects (solver_mode may differ)."""
-        plan_bal = _solve(self._ITEMS, strategy="balanced")
-        plan_opt = _solve(self._ITEMS, strategy="optimal")
-        assert isinstance(plan_bal, PackingPlan)
+        plan_axle = _solve(self._ITEMS, strategy="axle_balance")
+        plan_opt  = _solve(self._ITEMS, strategy="optimal")
+        assert isinstance(plan_axle, PackingPlan)
         assert isinstance(plan_opt, PackingPlan)
-        assert plan_bal.solver_mode == "FFD"  # balanced is always FFD
+        assert plan_axle.solver_mode == "FFD"  # axle_balance is always FFD
 
 
 # ===========================================================================
@@ -412,7 +412,7 @@ class TestBBE02ItemBiggerThanTruck:
     def test_item_exceeding_all_truck_dims_is_unplaced(self):
         """Item with w=l=h=3000mm exceeds W=2400 in every rotation — must be unplaced."""
         item = _item("giant", w=3000, l=3000, h=3000, stop_id=1)
-        plan = _solve([item], strategy="balanced")
+        plan = _solve([item], strategy="axle_balance")
         assert "giant" in plan.unplaced_items, (
             "Item too large for any orientation must appear in unplaced_items"
         )
@@ -420,7 +420,7 @@ class TestBBE02ItemBiggerThanTruck:
     def test_plan_returned_without_exception(self):
         """System must return a valid PackingPlan even for an impossible item."""
         item = _item("giant", w=3000, l=3000, h=3000, stop_id=1)
-        plan = _solve([item], strategy="balanced")
+        plan = _solve([item], strategy="axle_balance")
         assert isinstance(plan, PackingPlan)
 
     def test_tall_item_that_can_rotate_may_be_packed(self):
@@ -430,7 +430,7 @@ class TestBBE02ItemBiggerThanTruck:
         matters.  The solver is expected to pack this item, not reject it.
         """
         item = _item("tall", w=500, l=500, h=3000, stop_id=1)
-        plan = _solve([item], strategy="balanced")
+        plan = _solve([item], strategy="axle_balance")
         assert isinstance(plan, PackingPlan)
         # Item may be packed (h=3000 rotated to L-axis) — verify no crash
         packed_ids = {p.item_id for p in plan.placements if p.is_packed}
@@ -486,17 +486,17 @@ class TestBBE04InfeasibleManifest:
 
     def test_packing_plan_returned_no_crash(self):
         items = self._overcapacity_items()
-        plan = _solve(items, strategy="balanced")
+        plan = _solve(items, strategy="axle_balance")
         assert isinstance(plan, PackingPlan)
 
     def test_unplaced_items_not_empty(self):
         """At least one item must be in unplaced_items when manifest exceeds capacity."""
         items = self._overcapacity_items()
-        plan = _solve(items, strategy="balanced")
+        plan = _solve(items, strategy="axle_balance")
         assert len(plan.unplaced_items) > 0
 
     def test_v_util_does_not_exceed_one(self):
         """v_util must remain in [0, 1] even for an infeasible manifest."""
         items = self._overcapacity_items()
-        plan = _solve(items, strategy="balanced")
+        plan = _solve(items, strategy="axle_balance")
         assert 0.0 <= plan.v_util <= 1.0

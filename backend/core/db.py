@@ -30,6 +30,9 @@ job_logs = sa.Table(
     sa.Column("v_util", sa.Float, nullable=False),
     sa.Column("t_exec_ms", sa.Integer, nullable=False),
     sa.Column("status", sa.String(8), nullable=False),
+    # Constraint label from ConstraintValidator.first_failing_check, e.g.
+    # "non_overlap", "lifo", "fragile_stacking". NULL on success.
+    sa.Column("failed_check", sa.String(32), nullable=True),
     sa.Column("error", sa.Text, nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
 )
@@ -52,6 +55,7 @@ def log_job(
     t_exec_ms: int,
     status: str,
     error: Optional[str] = None,
+    failed_check: Optional[str] = None,
 ) -> None:
     """Insert one row into job_logs. Swallows DB errors so solve pipeline is unaffected."""
     try:
@@ -64,6 +68,7 @@ def log_job(
                     v_util=v_util,
                     t_exec_ms=t_exec_ms,
                     status=status,
+                    failed_check=failed_check,
                     error=error,
                     created_at=datetime.now(timezone.utc),
                 )

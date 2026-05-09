@@ -3,15 +3,15 @@ import type { PackingPlan, SolveStrategy } from "../types";
 const PLAN_LABELS = ["A", "B", "C"] as const;
 
 const STRATEGY_NAMES: Record<SolveStrategy, string> = {
-  optimal:   "Optimal",
-  balanced:  "Balanced",
-  stability: "Stability",
+  optimal:      "Optimal",
+  axle_balance: "Axle Balance",
+  stability:    "Stability",
 };
 
 const STRATEGY_BLURB: Record<SolveStrategy, string> = {
-  optimal:   "Maximizes volumetric utilization.",
-  balanced:  "Fast and predictable packing.",
-  stability: "Heavy items stay near the floor.",
+  optimal:      "Maximizes volumetric utilization.",
+  axle_balance: "Distributes mass across both axles.",
+  stability:    "Heavy items stay near the floor.",
 };
 
 interface PlanSelectorProps {

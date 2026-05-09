@@ -2,12 +2,13 @@ import { useState } from "react";
 
 import { fetchSolutions } from "./api/client";
 import { Dashboard } from "./components/Dashboard";
+import { Explainability } from "./components/Explainability";
 import { ManifestForm } from "./components/ManifestForm";
 import { PlanSelector } from "./components/PlanSelector";
 import { TruckViewer } from "./components/TruckViewer";
 import type { FurnitureItem, PackingPlan, SolveRequest, TruckSpec } from "./types";
 
-type Tab = "manifest" | "results";
+type Tab = "manifest" | "results" | "explain";
 
 function App() {
   const [plans, setPlans]               = useState<PackingPlan[]>([]);
@@ -49,6 +50,7 @@ function App() {
   const tabsAvailable: { key: Tab; step: string; title: string; subtitle: string }[] = [
     { key: "manifest", step: "1", title: "Manifest", subtitle: "Truck, stops, and cargo" },
     { key: "results",  step: "2", title: "Results",  subtitle: "Pick a plan and review" },
+    { key: "explain",  step: "3", title: "Explain",  subtitle: "Why this solver, why this plan" },
   ];
 
   return (
@@ -115,16 +117,16 @@ function App() {
         </div>
 
         {/* Step tabs — large, numbered, with subtitles */}
-        <div className={`grid grid-cols-2 border-b-2 ${sideBorder} shrink-0`}>
+        <div className={`grid grid-cols-3 border-b-2 ${sideBorder} shrink-0`}>
           {tabsAvailable.map((t) => {
             const active   = tab === t.key;
-            const disabled = t.key === "results" && plans.length === 0;
+            const disabled = (t.key === "results" || t.key === "explain") && plans.length === 0;
             return (
               <button
                 key={t.key}
                 onClick={() => !disabled && setTab(t.key)}
                 disabled={disabled}
-                className={`flex items-center gap-3 px-4 py-4 text-left transition-all border-b-4 ${
+                className={`flex items-center gap-2 px-3 py-4 text-left transition-all border-b-4 ${
                   active
                     ? lightMode
                       ? "bg-blue-50 border-blue-600"
@@ -138,7 +140,7 @@ function App() {
                         : "bg-gray-950 border-transparent hover:bg-gray-900"
                 }`}
               >
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold shrink-0 ${
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-base font-bold shrink-0 ${
                   active
                     ? "bg-blue-600 text-white"
                     : lightMode
@@ -148,14 +150,14 @@ function App() {
                   {t.step}
                 </div>
                 <div className="min-w-0">
-                  <div className={`text-base font-bold leading-tight ${
+                  <div className={`text-sm font-bold leading-tight ${
                     active
                       ? lightMode ? "text-blue-700" : "text-blue-200"
                       : lightMode ? "text-slate-800" : "text-gray-200"
                   }`}>
                     {t.title}
                   </div>
-                  <div className={`text-sm leading-tight mt-0.5 ${lightMode ? "text-slate-500" : "text-gray-500"}`}>
+                  <div className={`text-xs leading-tight mt-0.5 truncate ${lightMode ? "text-slate-500" : "text-gray-500"}`}>
                     {t.subtitle}
                   </div>
                 </div>
@@ -185,6 +187,29 @@ function App() {
               <div className={`p-8 text-center ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
                 <p className="text-lg font-semibold mb-2">No results yet</p>
                 <p className="text-base">Run a solve from the Manifest tab to see plans.</p>
+              </div>
+            ))}
+          {tab === "explain" &&
+            (plans.length > 0 && selectedPlan ? (
+              <>
+                <PlanSelector
+                  plans={plans}
+                  selectedIdx={selectedIdx}
+                  onSelect={setSelectedIdx}
+                  lightMode={lightMode}
+                />
+                <div className={`border-t ${sideBorder}`} />
+                <Explainability
+                  plan={selectedPlan}
+                  items={solveItems}
+                  truck={truckSpec}
+                  lightMode={lightMode}
+                />
+              </>
+            ) : (
+              <div className={`p-8 text-center ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
+                <p className="text-lg font-semibold mb-2">Nothing to explain yet</p>
+                <p className="text-base">Run a solve from the Manifest tab to see why the engine picked its solver and what constrained the plan.</p>
               </div>
             ))}
         </div>

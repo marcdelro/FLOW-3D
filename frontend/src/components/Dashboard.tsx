@@ -2,20 +2,20 @@ import React from "react";
 import type { PackingPlan, Placement, SolveStrategy } from "../types";
 
 const STRATEGY_LABEL: Record<SolveStrategy, string> = {
-  optimal:   "Optimal",
-  balanced:  "Balanced",
-  stability: "Stability",
+  optimal:      "Optimal",
+  axle_balance: "Axle Balance",
+  stability:    "Stability",
 };
 
 const STRATEGY_BADGE_DARK: Record<SolveStrategy, string> = {
-  optimal:   "bg-violet-950 text-violet-200 border border-violet-800",
-  balanced:  "bg-teal-950 text-teal-200 border border-teal-800",
-  stability: "bg-amber-950 text-amber-200 border border-amber-800",
+  optimal:      "bg-violet-950 text-violet-200 border border-violet-800",
+  axle_balance: "bg-teal-950 text-teal-200 border border-teal-800",
+  stability:    "bg-amber-950 text-amber-200 border border-amber-800",
 };
 const STRATEGY_BADGE_LIGHT: Record<SolveStrategy, string> = {
-  optimal:   "bg-violet-100 text-violet-800 border border-violet-300",
-  balanced:  "bg-teal-100 text-teal-800 border border-teal-300",
-  stability: "bg-amber-100 text-amber-800 border border-amber-300",
+  optimal:      "bg-violet-100 text-violet-800 border border-violet-300",
+  axle_balance: "bg-teal-100 text-teal-800 border border-teal-300",
+  stability:    "bg-amber-100 text-amber-800 border border-amber-300",
 };
 
 function downloadPlan(plan: PackingPlan) {
