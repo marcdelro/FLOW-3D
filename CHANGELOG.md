@@ -12,9 +12,13 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
-## Sprint 18 — 2026-05-12 · Public Landing Page and Vercel Deployment
+## Sprint 18 — 2026-05-12 · Manifest Form UX: Undo/Redo, Unit Conversion, and Delete Confirmation, Public Landing Page and Vercel Deployment
 
-**Goal:** Ship a public-facing landing page at `/` with a proximity-wave interactive
+**Goal:** Reduce user error and friction in the cargo manifest editor by adding a
+30-entry undo/redo stack scoped to cargo-item mutations, a shared mm/cm/m/in dimension
+unit toggle across both the Truck Specification and Cargo Items sections, and a
+polished floating popover confirmation card that replaces the cramped inline delete strip.
+Ship a public-facing landing page at `/` with a proximity-wave interactive
 3D hero (furniture pieces replacing abstract boxes), full marketing sections, and
 route the existing simulator to `/app` — making FLOW-3D deployable to Vercel as a
 standalone frontend with zero backend dependency on the landing experience.
@@ -22,6 +26,33 @@ standalone frontend with zero backend dependency on the landing experience.
 ### Added
 
 **Frontend**
+- `frontend/src/components/ManifestForm.tsx`: New `DimUnit` type (`"mm" | "cm" | "m" | "in"`),
+  `UNIT_TO_MM` conversion table, `toDisplay(mm, unit)` (integer for mm/cm, 2 d.p. for m/in),
+  and `fromDisplay(v, unit)` (`Math.max(1, Math.round(v * factor))`) helpers. All stored
+  dimension values remain whole-mm integers; the conversion layer is purely presentational.
+- `frontend/src/components/ManifestForm.tsx`: New `UnitToggle` pill component — four
+  segmented buttons (`mm | cm | m | in`), shared `unit` state across both Truck Specification
+  and Cargo Items sections so switching one updates both simultaneously. The active unit is
+  reflected in section labels ("Width (cm)"), the Size column header, and the AddItemForm
+  dimension label.
+- `frontend/src/components/ManifestForm.tsx`: 30-entry undo/redo stack for cargo-item
+  mutations. `itemHistory: useRef<FurnitureItem[][]>` holds snapshots; `historyIdx: useState`
+  drives the undo/redo button disabled states and re-renders. `pushHistory(newItems)` slices
+  any redo branch before appending and caps at 30 entries. History resets on file import.
+  Undo (↺) and redo (↻) icon buttons (36×36 px) appear in the Cargo Items section header
+  via the new `Section action` prop.
+- `frontend/src/components/ManifestForm.tsx`: Keyboard shortcuts — Ctrl+Z undo, Ctrl+Y /
+  Ctrl+Shift+Z redo, Escape dismisses pending delete. Implemented via a one-time
+  `useEffect([], [])` handler that reads from `historyActionsRef.current` so it never
+  captures stale closures.
+- `frontend/src/components/ManifestForm.tsx`: Delete confirmation popover anchored above
+  the trash button (`absolute bottom-full right-0 mb-2 w-44 rounded-xl shadow-xl border-2
+  z-20`). Shows the item ID as a muted subtitle, "Remove this item?" with a red trash icon,
+  and full-width stacked Delete (solid red) / Cancel (ghost) buttons. A rotated `w-3 h-3`
+  caret diamond connects the card to the button. The trash button toggles the popover on
+  re-click and turns red while the popover is open. The table container switches from
+  `overflow-hidden` to `overflow-visible` while any popover is active so the card clears
+  the rounded clip boundary.
 - `frontend/src/pages/Landing.tsx`: New root route (`/`) — composes Nav, Hero,
   SocialProof, AboutSection, HowItWorks, FAQ, FinalCTA, and Footer sections into
   the public marketing page.
@@ -98,6 +129,25 @@ standalone frontend with zero backend dependency on the landing experience.
 ### Changed
 
 **Frontend**
+- `frontend/src/components/ManifestForm.tsx::Section`: Add optional `action?: ReactNode`
+  prop. When supplied, it renders beside the badge in the sticky header inside a
+  `flex items-center gap-2` wrapper so undo/redo buttons and the item count coexist.
+- `frontend/src/components/ManifestForm.tsx::AddItemForm`: Add `unit: DimUnit` prop.
+  Dimension fields (`w`, `l`, `h`) display `toDisplay(value[k], unit)` and commit
+  `fromDisplay(n, unit)` on change; `step` is 0.01 for m/in and 1 for mm/cm.
+- `frontend/src/components/ManifestForm.tsx::commitAdd`: Both the edit path and the add
+  path now capture `newItems` as an explicit variable before calling `setItems`, then
+  immediately pass `newItems` to `pushHistory` so the snapshot is always consistent with
+  what was written to state.
+- `frontend/src/components/ManifestForm.tsx::startEdit`: Calls `setPendingDeleteIdx(null)`
+  first so clicking a row to edit it dismisses any open delete confirmation.
+- `frontend/src/components/ManifestForm.tsx`: Remove `deleteItem()` function. Replaced by
+  `requestDelete(idx)` → `confirmDelete(idx)` → `cancelDelete()` flow; `confirmDelete`
+  adjusts `editingIdx` and calls `pushHistory` so deletes are undoable.
+- `frontend/src/components/ManifestForm.tsx`: Cargo table size column header updated to
+  "Size ({unit})" and cell values updated to `toDisplay(item.w, unit)×…` with `font-mono`.
+- `frontend/src/components/ManifestForm.tsx`: Table row tint extended — `bg-red-50` /
+  `bg-red-950/30` when `pendingDeleteIdx === i`, taking priority over the blue edit tint.
 - `frontend/src/main.tsx`: Wrap app in `<BrowserRouter>` with `<Routes>` —
   `/` → `Landing`, `/app/*` → existing simulator (was previously at `/`),
   `/register` → `Register`, `/login` → `Login`, `*` → `Landing`.
