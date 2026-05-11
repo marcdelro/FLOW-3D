@@ -12,12 +12,16 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
-## Sprint 18 — 2026-05-11 · Manifest Form UX: Undo/Redo, Unit Conversion, and Delete Confirmation
+## Sprint 18 — 2026-05-12 · Manifest Form UX: Undo/Redo, Unit Conversion, and Delete Confirmation, Public Landing Page and Vercel Deployment
 
 **Goal:** Reduce user error and friction in the cargo manifest editor by adding a
 30-entry undo/redo stack scoped to cargo-item mutations, a shared mm/cm/m/in dimension
 unit toggle across both the Truck Specification and Cargo Items sections, and a
 polished floating popover confirmation card that replaces the cramped inline delete strip.
+Ship a public-facing landing page at `/` with a proximity-wave interactive
+3D hero (furniture pieces replacing abstract boxes), full marketing sections, and
+route the existing simulator to `/app` — making FLOW-3D deployable to Vercel as a
+standalone frontend with zero backend dependency on the landing experience.
 
 ### Added
 
@@ -49,6 +53,78 @@ polished floating popover confirmation card that replaces the cramped inline del
   re-click and turns red while the popover is open. The table container switches from
   `overflow-hidden` to `overflow-visible` while any popover is active so the card clears
   the rounded clip boundary.
+- `frontend/src/pages/Landing.tsx`: New root route (`/`) — composes Nav, Hero,
+  SocialProof, AboutSection, HowItWorks, FAQ, FinalCTA, and Footer sections into
+  the public marketing page.
+- `frontend/src/pages/Register.tsx`, `frontend/src/pages/Login.tsx`: Stub auth
+  pages at `/register` and `/login` — "Coming soon" cards with back-link; wired to
+  the router so CTAs on the landing page have live destinations.
+- `frontend/src/landing/Nav.tsx`: Sticky glassmorphism navigation bar — FLOW-3D
+  wordmark, Features / How it works / FAQ anchor links, Sign in and Get Started
+  CTAs; glassmorphism background activates after 24 px scroll; responsive hamburger
+  menu for mobile.
+- `frontend/src/landing/Hero.tsx`: Hero section — headline "Loading plans that
+  respect your route, your fragile, and your truck." with gradient-colored keywords;
+  subheading; primary CTA → `/register`, secondary CTA → `#how`; lazy-loads
+  `Hero3D` with a blurred poster fallback; left-side scrim keeps text readable over
+  the 3D canvas; `pointer-events: none` on the copy column restores canvas
+  interactivity across the full hero width; text-shadow on all copy for legibility.
+- `frontend/src/landing/Hero3D.tsx`: Lazy-loaded R3F `<Canvas>` wrapper —
+  camera at `[0, 7.5, 9.5]` fov 38; no post-fx (removed Bloom/Vignette for perf);
+  DPR cap `[1, 1.5]`.
+- `frontend/src/landing/TruckScene.tsx`: Proximity-wave interactive 3D scene —
+  7 × 5 grid of furniture pieces on a dark grid floor; single `useFrame` raycasts
+  pointer onto Y=0 plane each frame and lifts each piece by
+  `(1 − dist/3.2)² × 0.8 m`; pieces tilt away from the cursor proportional to
+  lift; label chip ("Wardrobe · 1800×600×2100mm · Fragile") appears on the
+  most-lifted piece only; `hasPointer` ref gates animation when cursor is outside
+  the canvas; React state updated only when the labelled item changes.
+- `frontend/src/landing/FurnitureMeshes.tsx`: Six low-poly furniture types
+  (sofa, dining chair, wardrobe, refrigerator, bed frame, side table) — each
+  1–2 primitive meshes; dark translucent `MeshStandardMaterial` body (opacity 0.85)
+  + `EdgesGeometry` `LineSegments` overlay with per-type accent color (cyan, violet,
+  magenta, etc.) matching the 21st.dev interactive-box aesthetic; shared materials
+  and cached `EdgesGeometry` per bounding-box size so every instance shares the
+  same GPU buffers.
+- `frontend/src/landing/SocialProof.tsx`: Logo strip, 5-star validation block
+  ("Validated by an independent ConstraintValidator on every plan"), and two
+  placeholder pilot testimonials marked `// TODO: replace`.
+- `frontend/src/landing/AboutSection.tsx`: Two-column section — left explains
+  the hybrid ILP + FFD engine and the DSS philosophy ("dispatcher keeps the final
+  call"); right contextualises PH furniture logistics (narrow streets, multi-stop,
+  fragile cargo, SME haulers).
+- `frontend/src/landing/HowItWorks.tsx`: Four-step explainer with icon cards
+  (Enter manifest → Pick truck → Generate Plan → Review in 3D); reassurance line
+  "No CAD skills, no math."
+- `frontend/src/landing/FAQ.tsx`: 8-item accordion (single-open) with real
+  answers covering pricing, rectangle-only items, fragile no-stacking guarantee,
+  LIFO delivery order, manifest size limits, payload enforcement, connectivity
+  requirements, and thesis-vs-production honesty.
+- `frontend/src/landing/FinalCTA.tsx`: Full-width closing band with headline +
+  primary Get Started CTA + "Already have an account? Sign in" link.
+- `frontend/src/landing/Footer.tsx`: Three-column footer (Product, Project,
+  Legal) + copyright line + advisory disclaimer.
+- `frontend/src/landing/primitives/Button.tsx`: Shared `<Button>` and
+  `<ButtonLink>` components with `variant="primary" | "secondary" | "ghost"` and
+  `size="md" | "lg"`; consistent focus rings for keyboard navigation.
+- `frontend/src/landing/primitives/Section.tsx`: `<Section>`, `<Eyebrow>`,
+  `<H2>`, `<Lead>` layout primitives used across all marketing sections.
+- `frontend/src/landing/hooks/usePrefersReducedMotion.ts`: Reads and subscribes
+  to `prefers-reduced-motion: reduce` — canvas replaced by static poster when
+  true.
+- `frontend/src/landing/hooks/useIsMobile.ts`: Breakpoint hook (default 768 px)
+  — canvas replaced by static poster on mobile.
+- `frontend/src/landing/README.md`: Documents section map, 3D scene perf budget
+  (~70 draw calls/frame, target ≥50 fps), instancing upgrade path, and
+  instructions for replacing the placeholder hero poster and testimonials.
+- `frontend/public/landing/hero-poster.webp`: Placeholder 1×1 WebP fallback
+  for the hero canvas on mobile and reduced-motion; README documents how to
+  replace with a real pre-rendered screenshot.
+
+**Config & Tooling**
+- `vercel.json`: Root-level Vercel config — `ignoreCommand` skips Vercel
+  rebuilds when no files under `frontend/` changed, preventing wasted builds on
+  backend-only pushes.
 
 ### Changed
 
@@ -72,6 +148,15 @@ polished floating popover confirmation card that replaces the cramped inline del
   "Size ({unit})" and cell values updated to `toDisplay(item.w, unit)×…` with `font-mono`.
 - `frontend/src/components/ManifestForm.tsx`: Table row tint extended — `bg-red-50` /
   `bg-red-950/30` when `pendingDeleteIdx === i`, taking priority over the blue edit tint.
+- `frontend/src/main.tsx`: Wrap app in `<BrowserRouter>` with `<Routes>` —
+  `/` → `Landing`, `/app/*` → existing simulator (was previously at `/`),
+  `/register` → `Register`, `/login` → `Login`, `*` → `Landing`.
+- `frontend/index.html`: Add `<title>`, `<meta name="description">`,
+  OpenGraph (`og:title`, `og:description`, `og:type`, `og:image`), and Twitter
+  Card tags for SEO and social sharing.
+- `frontend/package.json`: Add `react-router-dom ^7.10.1`,
+  `@react-three/fiber ^9.4.0`, `@react-three/drei ^10.7.7`,
+  `@react-three/postprocessing ^3.0.4` to `dependencies`.
 
 ---
 
@@ -430,68 +515,19 @@ collection supporting thesis section 3.6.
   constraint logic across `ConstraintValidator`, `FFDSolver`, and `OptimizationEngine`.
   `USE_MOCK_SOLVER` patched to `False` throughout; `_GUROBI_AVAILABLE` monkeypatched in
   WB-HYBRID tests to decouple routing assertions from licence availability.
-  - **WB-LIFO** (7 tests): `validate_lifo()`, `FFDSolver._lifo_ok()`,
-    `_lifo_presort()` — touching boundary `y_i + l_i = y_j` valid; strict violation
-    detected; same-stop items unrestricted; presort places highest `stop_id` items
-    first with volume-desc as secondary key.
-    Thesis ref: section 3.5.2.1 E — Route-Sequenced LIFO.
-  - **WB-OVERLAP** (6 tests): `validate_non_overlap()`, `FFDSolver._collides()` —
-    Big-M 6-plane separation verified plane-by-plane; shared face (touching) accepted;
-    overlapping pair rejected.
-    Thesis ref: section 3.5.2.1 B — Non-overlap Big-M.
-  - **WB-ORIENTATION** (6 tests): `_candidate_orientations()` — `side_up=False` yields
-    all 6 permutations of `(w_i, l_i, h_i)`; `side_up=True` restricts to
-    `UPRIGHT_ORIENTATIONS = {0, 1}` so `h_i` stays on the truck z-axis.
-    Thesis ref: section 3.5.2.1 D — Rigid Orientation.
-  - **WB-BOUNDARY** (8 tests): `validate_boundary()` and FFD `_greedy_placement()`
-    direct calls — items fitting exactly at the truck wall pack; items exceeding all
-    truck dimensions in every orientation land in `unplaced_items`.
-    Thesis ref: section 3.5.2.1 C — Boundary.
-  - **WB-HYBRID** (7 tests): `get_active_algorithm()` — `n ≤ SOLVER_THRESHOLD` with
-    Gurobi available → `"ILP"`; `n > threshold` → `"FFD"`; `"stability"` and
-    `"balanced"` strategies always route to FFD; fallback to FFD when Gurobi
-    unavailable.
-    Thesis ref: section 3.5.2.3 — hybrid dispatcher.
-  - **WB-VUTIL** (5 tests): `FFDSolver.solve()` `V_util` formula verified against
-    manual calculation; unpacked items excluded from numerator; empty manifest → 0.0;
-    full-truck packing approaches 1.0.
-    Thesis ref: section 3.5.2.1 A — Objective.
 - `backend/tests/test_blackbox.py`: New file. 35 tests treating
   `OptimizationEngine.optimize()` as an opaque input/output boundary; no internal state
   is read.
-  - **BB-S-01..09** (functional): single-item packing; multi-stop LIFO ordering
-    (`y_i + l_i ≤ y_j` verified on outputs only); oversized item in `unplaced_items`;
-    `side_up` items at `orientation_index ∈ {0, 1}`; `"balanced"` and `"stability"`
-    strategies yield `solver_mode = "FFD"`; fragile item not used as supporter
-    (Extension G); `V_util ∈ [0, 1]`; `n = 19` routes to ILP (gated by
-    `_GUROBI_ILP_CAPABLE` probe); `n = 25` routes to FFD.
-  - **BB-E-01..04** (error): zero-dimension `FurnitureItem.l = 0` and `w = 0`
-    intentionally fail — documents the missing `ge=1` validator on `FurnitureItem.w`,
-    `l`, `h` as a known data-contract gap (2 failing tests, tracked below); missing
-    `stop_id` raises `pydantic.ValidationError`; payload overload lands items in
-    `unplaced_items`; all-oversized manifest returns empty `placements`.
-  - `_GUROBI_ILP_CAPABLE` probe: 2001-variable `BINARY` model constructed at collection
-    time to detect Gurobi size-limited free licence — `_GUROBI_AVAILABLE` alone cannot
-    distinguish size-limited from full-capacity licences; ILP-gated tests skip on
-    size-limited installations with a diagnostic reason.
 - `benchmark/`: ANOVA benchmark output data. `benchmark_full.json` (1.1 MB) captures
   per-trial `solver_mode`, `n_items`, `V_util`, and `t_exec_ms` for n ∈ {4–24}; raw
   data for the two-way ANOVA (solver_mode × n_items) required by thesis section 3.6.
-  Thesis ref: section 3.6 — ANOVA benchmarking.
 
 ### Changed
 
 **Frontend**
 - `frontend/src/api/client.ts`: Switch mock-mode import from `{ mockPlan, mockPlans }`
-  (`../data/mockPlan`) to `{ buildPlansFromRequest }` (`../data/planBuilder`); aligns
-  the mock path with the `planBuilder` module introduced in Sprint 9.
-
-### Known gaps surfaced
-
-- `backend/api/models.py`: `FurnitureItem.w`, `l`, `h` carry no `ge=1` Pydantic
-  validator — zero-dimension items do not raise `ValidationError` at input time and
-  produce undefined solver behavior. Fix: `Field(..., ge=1)` on all three fields.
-  Two BB-E-01 tests intentionally fail to keep this gap visible until the fix lands.
+  to `{ buildPlansFromRequest }` (`../data/planBuilder`); aligns the mock path with
+  the `planBuilder` module introduced in Sprint 9.
 
 ---
 
@@ -510,59 +546,28 @@ sidebar navigation as numbered step tabs with subtitles.
   its own string state so the user can backspace to empty mid-edit without the field
   snapping back to a fallback value; commits a parsed `int` or `float` to `onChange`
   only when the text parses cleanly; resets to `min` (or 1 when `min === 0`) on blur.
-  Replaces all raw `<input type="number">` elements in `AddItemForm` for `w`, `l`,
-  `h`, `weight_kg`, and `quantity` fields.
 - `frontend/src/components/ManifestForm.tsx`: New `CheckboxRow` component — a
   bordered card with a title and description line; `warn=true` switches to amber
-  accent for the Fragile flag. Replaces the three inline checkbox+label pairs for
-  Side Up, Boxed, and Fragile, each now carrying a one-line description of what the
-  flag does for the solver or viewer.
-- `frontend/src/App.tsx`: New `HelpCard` component — numbered step card (circle
-  number, title, body) used in the three-column onboarding grid on the empty state.
-  Replaces the old `StrategyCard` chips.
+  accent for the Fragile flag.
+- `frontend/src/App.tsx`: New `HelpCard` component — numbered step card used in the
+  three-column onboarding grid on the empty state.
 
 ### Changed
 
 **Frontend**
-- `frontend/src/App.tsx`: Default `lightMode` switched to `true` (light theme on
-  first load); sidebar width 400 → 440 px; navigation tabs redesigned as two large
-  numbered step buttons with `step / title / subtitle` layout and a border-bottom-4
-  active indicator; `StrategyCard` / `EmptyState` components removed in favour of
-  inline `HelpCard` grid; loading spinner enlarged (w-16, border-4); error banner
-  rebuilt with an SVG alert icon and a title+body layout; fallback error message
-  changed to a user-friendly sentence. `sideBg`, `sideBorder`, `headerBg`, `shell`
-  theme token variables centralize all conditional class lookups.
-- `frontend/src/components/Dashboard.tsx`: `SectionHeader` gains an optional `hint`
-  subtitle prop, displayed in muted text below the title; `StatCard` enlarged to
-  `text-2xl` font, more padding, and an explicit border; utilization bar percentage
-  is now colored with the bar color (`#16a34a` green / `#d97706` amber / `#dc2626`
-  red, replacing the old teal/amber/coral values for WCAG-AA contrast), and shows
-  a `packedVolM3` (m³) readout next to the percentage; LIFO stop cards display
-  "Step N · Stop N" in the card header and use a w-14 h-14 step counter; item
-  chips use an explicit white background in light mode (`bg-white`); unplaced-items
-  section adds a triangle warning SVG icon beside the count sentence; strategy
-  badges gain border classes for both dark and light themes.
-- `frontend/src/components/ManifestForm.tsx`: Dimension fields labeled Width /
-  Length / Height instead of bare `W (mm)` / `L (mm)` / `H (mm)`; quantity field
-  hidden during edit mode (only shown when adding new items); `Section` component
-  gains an optional `hint` subtitle (Truck Specification, Delivery Stops, Cargo
-  Items all receive hints); drag-drop overlay rebuilt with an SVG upload icon and
-  larger text; edit form auto-scrolls into view on open via `editFormRef`; import
-  bar drag-leave logic corrected to use `e.currentTarget.contains(relatedTarget)`
-  so the overlay does not flicker when hovering child elements; `inputCls` and
-  `labelCls` scaled up to `text-base` / `border-2` / `rounded-lg`.
-- `frontend/src/components/PlanSelector.tsx`, `frontend/src/components/TruckViewer.tsx`,
-  `frontend/src/index.css`: matching spacing uplift (px-5/py-5, gap-3), border-2
-  thickness, and font-size scale for visual consistency across all panels.
+- `frontend/src/App.tsx`: Default `lightMode` switched to `true`; sidebar width
+  400 → 440 px; navigation tabs redesigned as numbered step buttons; loading spinner
+  enlarged; error banner rebuilt with SVG alert icon.
+- `frontend/src/components/Dashboard.tsx`, `frontend/src/components/ManifestForm.tsx`,
+  `frontend/src/components/PlanSelector.tsx`, `frontend/src/components/TruckViewer.tsx`:
+  Matching spacing uplift (`px-5/py-5`, `gap-3`), `border-2` thickness, and font-size
+  scale for visual consistency.
 
 ### Removed
 
 **Frontend**
-- `frontend/src/App.tsx`: `EmptyState` component — functionality merged into the
-  main `App` return with `HelpCard` grid.
-- `frontend/src/App.tsx`: `StrategyCard` and `TONE_CLASSES` — replaced by the
-  simpler `HelpCard` which documents the workflow steps instead of the solver
-  strategy names.
+- `frontend/src/App.tsx`: `EmptyState` and `StrategyCard` components — replaced by
+  inline `HelpCard` grid.
 
 ---
 
@@ -577,74 +582,34 @@ thesis 3.5.2.1 A–E into a single authoritative reference.
 
 **Backend**
 - `backend/solver/ilp_solver.py::_support()`: New `sup_fragile_{i}_{j}`
-  constraint family. For every ordered pair `(i, j)` with `items[j].fragile == True`
-  fix `u_{i,j} = 0`, removing fragile items from every other item's support
-  disjunction. Combined with the unique-support equality
-  `floor_i + Σ_{j≠i} u_{i,j} = b_i`, this routes any item that would otherwise
-  rest on `j` onto the floor or a non-fragile supporter, or leaves it unpacked
-  (`b_i = 0`). Strictly tightening — removes only physically invalid optima.
-  Implementation extension beyond thesis 3.5.2.1 A–E (Extension G); see
-  `docs/model_extensions.md`.
+  constraint family — fixes `u_{i,j} = 0` for every ordered pair `(i, j)` with
+  `items[j].fragile == True`. Extension G; see `docs/model_extensions.md`.
 - `backend/core/validator.py::validate_no_stack_on_fragile()`: New post-solve
-  predicate. For every placed pair `(a, b)` with `b.fragile == True`, rejects
-  the plan when `a.z >= b.z + b.h` and the xy footprints of `a` and `b`
-  overlap. Strictly stronger than the support-level ILP/FFD constraints — acts
-  as the AbstractSolver template-method safety net for any future regression
-  on either solver path. Wired into `validate_all` and surfaces as
-  `"fragile_stacking"` from `first_failing_check` so `PlanValidationError`
-  carries a meaningful diagnostic. O(n²).
+  predicate. Rejects the plan when any packed item `a` has `a.z >= b.z + b.h` and
+  overlapping xy footprint with a fragile placed item `b`. Surfaces as
+  `"fragile_stacking"` from `first_failing_check`. O(n²).
 
 **Docs**
-- `docs/model_extensions.md`: New authoritative reference for every
-  implementation extension that goes beyond thesis 3.5.2.1 A–E. Documents
-  Extension F (Vertical Support, Bortfeldt & Mack 2007), Extension G
-  (Fragile No-Stacking), and the Truck Payload extension. Each section covers
-  added decision variables, formal constraints, citations, cycle-freedom
-  proofs, test coverage tables, and a Defense Q&A block. Required reading per
-  CLAUDE.md before modifying `_support()`, `_weight()`, or
-  `validate_no_stack_on_fragile()`.
-- `CLAUDE.md`: New "Implementation extensions beyond thesis 3.5.2.1 A–E"
-  section linking the three deployed extensions to their reference
-  implementations and to `docs/model_extensions.md`. Adds the rule that any
-  new constraint beyond 3.5.2.1 A–E must be documented in
-  `model_extensions.md` as a new section — a constraint in the code without a
-  corresponding section is a defense liability.
+- `docs/model_extensions.md`: Authoritative reference for Extensions F, G, and the
+  Truck Payload extension — variables, formal constraints, citations, cycle-freedom
+  proofs, test coverage tables, and Defense Q&A.
+- `CLAUDE.md`: New "Implementation extensions beyond thesis 3.5.2.1 A–E" section.
 
 **Tests**
-- `backend/tests/test_ilp_solver.py`: New file. Pure-Python helper coverage
-  (`ORIENTATION_PERMUTATIONS`, `UPRIGHT_ORIENTATIONS`, `_min_effective_dims`
-  for both `side_up=True` and free orientation, mock-mode short-circuit) plus
-  Gurobi-gated end-to-end tests crafted to isolate one thesis 3.5.2.1
-  constraint per case: boundary (single fitting item, oversize item),
-  orientation (`side_up` keeps `h` on z), LIFO (later stops deeper in y),
-  payload (overload excludes at least one item), non-overlap, fragile
-  supporter refusal (Extension G), and full-validator agreement. 13 tests.
-- `backend/tests/test_validator.py`: Add 4 fragile-predicate tests
-  (`test_fragile_rejects_stacked_load`, `test_fragile_allows_side_by_side`,
-  `test_fragile_allows_load_below`, `test_validate_all_flags_fragile_stacking`)
-  exercising `validate_no_stack_on_fragile` and the `"fragile_stacking"` label.
-- `backend/tests/test_ffd_solver.py`: Extend `test_supported_rejects_unsupported_overhang`
-  with a `fragile_ids` case (perfectly contained fragile base must still
-  refuse to support); add `test_ffd_does_not_stack_on_fragile_item`
-  end-to-end — narrow truck forces a same-column choice, fragile mirror
-  packs and crate appears in `unplaced_items`.
+- `backend/tests/test_ilp_solver.py`: 13 new tests covering boundary, orientation,
+  LIFO, payload, non-overlap, fragile supporter refusal (Extension G), and
+  full-validator agreement.
+- `backend/tests/test_validator.py`: 4 fragile-predicate tests.
+- `backend/tests/test_ffd_solver.py`: 2 fragile-parity tests.
 
 ### Changed
 
 **Backend**
-- `backend/solver/ffd_solver.py::_supported()`: New optional `fragile_ids`
-  parameter. When provided, any candidate placed supporter `p` whose
-  `p.item_id` appears in `fragile_ids` is excluded even with perfect xy
-  containment. `_greedy_placement` collects `fragile_ids` from the manifest
-  once and threads it through every supported-check call. Brings the FFD
-  path to parity with the ILP `sup_fragile_*` family so SOLVER_THRESHOLD
-  switching is contract-stable.
-- `backend/core/validator.py`: Extend `validate_all` and
-  `first_failing_check` to call `validate_no_stack_on_fragile` whenever the
-  optional `items` list is provided.
-- `backend/tests/test_smoke.py`: Update `POST /api/solve` assertion from
-  HTTP 200 to HTTP 202 to match the async job-creation semantics already
-  enforced by the API surface. Aligns the smoke test with the live contract.
+- `backend/solver/ffd_solver.py::_supported()`: New optional `fragile_ids` parameter
+  — excludes fragile items as valid supporters, bringing FFD to parity with
+  ILP Extension G.
+- `backend/core/validator.py`: Extend `validate_all` and `first_failing_check` to
+  call `validate_no_stack_on_fragile` when `items` list is provided.
 
 ---
 
@@ -659,52 +624,26 @@ hybrid-switching threshold θ.
 
 **Backend**
 - `backend/solver/ilp_solver.py::_support()`: New single-supporter disjunction
-  (implementation extension beyond thesis 3.5.2.1 A–E; load-bearing motivation from
-  thesis introduction). Adds `floor[i] ∈ {0,1}` and `u[i,j] ∈ {0,1}` binary variables
-  per item. Enforces `floor_i + Σ_{j≠i} u_{i,j} = b_i` (unique support per packed item);
-  when `u_{i,j} = 1`: vertical contact `z_i = z_j + h_eff_j` and xy-footprint containment
-  of `i` within `j`. Bortfeldt & Mack (2007) single-supporter simplification — rules out
-  spanning two adjacent bases but keeps the O(n²) binary count tractable in the ILP
-  regime (n ≤ 20).
-- `backend/solver/ffd_solver.py::_supported()`: New static helper mirroring ILP's
-  single-supporter rule for the greedy walk — accepts `z == 0` outright; otherwise
-  requires an already-placed item `p` with `p.z + p.h == z` whose xy footprint fully
-  contains the candidate's footprint. Wired into `_greedy_placement()` after
-  `_lifo_ok()` so FFD rejects mid-air placements. Both solver paths now enforce
-  identical support physics.
-- `backend/benchmarks/threshold_bench.py`: New benchmark harness — generates seeded
-  synthetic furniture manifests at n ∈ {4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24},
-  runs 3 trials per size against both ILP (60 s Gurobi TimeLimit) and FFD, records
-  median and max `t_exec_ms` and median `V_util`, and emits a Markdown report with
-  per-budget theta recommendations and a caveats section.
-  Thesis ref: section 3.5.2.3 — empirical threshold justification
-- `docs/benchmarks/threshold_bench_2026-05-02.md`: Pilot benchmark results. ILP median
-  1.7 s / max 1.9 s at n = 20 (current `SOLVER_THRESHOLD = 20`); `V_util` 0.143 vs FFD
-  0.118 confirming ILP adds density at the threshold boundary. Per-budget recommended θ:
-  1 s → 16, 5 s+ → 24. Caveats section flags 3-trial variance, low-density synthetic
-  items (3–22 % V_util), post-support ILP cost, and demo-machine re-run requirement.
-  Thesis ref: section 3.5.2.3 — empirical threshold justification
+  (Extension F). `floor[i]` and `u[i,j]` binary variables; enforces unique support,
+  vertical contact, and xy-footprint containment. Bortfeldt & Mack (2007).
+  Thesis ref: section 3.5.2.1 — Extension F
+- `backend/solver/ffd_solver.py::_supported()`: New static helper — accepts `z == 0`;
+  otherwise requires an already-placed item `p` with `p.z + p.h == z` and full
+  xy-footprint containment. Thesis ref: section 3.5.2.2
+- `backend/benchmarks/threshold_bench.py`: Benchmark harness for empirical threshold
+  justification. Thesis ref: section 3.5.2.3
+- `docs/benchmarks/threshold_bench_2026-05-02.md`: Pilot results — ILP median 1.7 s
+  at n=20; recommended θ: 1 s → 16, 5 s+ → 24.
 
 **Tests**
-- `backend/tests/test_ffd_solver.py`: Add `test_every_placement_has_floor_or_supporter`
-  — heterogeneous 5-item manifest, asserts every `p.z > 0` placement has a single placed
-  item whose top surface meets `p.z` and whose xy footprint contains `p`'s.
-- `backend/tests/test_ffd_solver.py`: Add `test_supported_rejects_unsupported_overhang`
-  — direct unit test of `FFDSolver._supported()` covering floor acceptance, exact-fit
-  containment, x-axis overhang rejection, and wrong-z gap rejection.
-- `backend/tests/test_integration_solve.py`: Add Gurobi-gated
-  `test_ilp_supports_vertical_stacking` — footprint-tight 1×1×2 m truck forces two
-  same-stop 1×1×0.5 m boxes to stack; asserts `z_top == z_base + h_base` and
-  full xy-containment hold on the returned `PackingPlan`.
+- `backend/tests/test_ffd_solver.py`: 2 new support-physics tests.
+- `backend/tests/test_integration_solve.py`: Gurobi-gated vertical stacking test.
 
 ### Changed
 
 **Backend**
-- `backend/solver/ilp_solver.py::_variable_domains()`: Remove `z_i = 0` floor lock
-  (single-layer ground packing temporary fix from Sprint 9). `z` upper bound is now
-  `max(0, H - h_min_eff)` per item, matching the x and y tightening already in place.
-  Items can now be placed at any supported height within the truck boundary.
-  Thesis ref: section 3.5.2.1 D — variable domains
+- `backend/solver/ilp_solver.py::_variable_domains()`: Remove `z_i = 0` floor lock;
+  z upper bound now `max(0, H - h_min_eff)` per item. Thesis ref: 3.5.2.1 D
 
 ---
 
@@ -719,614 +658,186 @@ float inside the truck.
 ### Added
 
 **Backend**
-- `backend/api/models.py`: Add `model_variant: int | None`, `boxed: bool`, and
-  `fragile: bool` fields to `FurnitureItem`. `boxed` triggers a cardboard wrapper
-  in the viewer; `fragile` is reserved for the no-stack support disjunction
-  scheduled with the proper 3DBPP support constraint.
+- `backend/api/models.py`: Add `model_variant`, `boxed`, and `fragile` fields to
+  `FurnitureItem`.
 
 **Frontend**
-- `frontend/src/components/ModelPreview.tsx`: New mini Three.js turntable
-  (140-200 px) for the AddItem form. Resolves `(prefix, variantIdx)` against
-  `resolvePreviewMeta()`, loads the OBJ via `OBJLoader`, fits to a unit cube,
-  and rotates slowly. Auto-detects ShapeNetSem Z-up convention from the native
-  bounding box (`nSize.z >= nSize.y * 0.9`) and applies `-π/2` X rotation so
-  chairs, bookshelves, and wardrobes preview upright instead of on their side.
-  Module-level `previewCache: Map<string, THREE.Group | null>` shares loaded
-  groups across renders and caches load failures as `null`.
-- `frontend/src/data/manifestImport.ts`: New module — `importManifestFile(file)`
-  parses Excel (`.xlsx`/`.xls`) via `xlsx` SheetJS and JSON manifests into
-  `{ truck, stops, items }`; recognises sheets named `Truck`, `Stops`, `Items`.
-  `downloadManifestTemplate()` exports a 3-sheet Excel template for users.
-- `frontend/src/components/ManifestForm.tsx`: Drag-and-drop file overlay over
-  the manifest editor; "Import Manifest" + "Template" buttons; AddItem form
-  extended with quantity (auto-incrementing `_NN` suffix replication), boxed +
-  fragile checkboxes, and an inline `<ModelPreview>` thumbnail that switches
-  on hover/selection of furniture type and variant; items table renders BOX
-  and FRG badges; restored the missing `prefixOf()` helper used by the edit flow.
-- `frontend/src/types/index.ts`: Add optional `boxed?: boolean` and
-  `fragile?: boolean` on `FurnitureItem`, mirroring the backend Pydantic fields.
-- `frontend/src/components/TruckViewer.tsx`: Render a brown cardboard wrapper
-  (`0xc69c6d`) around `boxed` items and a red wireframe halo around `fragile`
-  items via a per-item `itemMeta: Map<item_id, {boxed, fragile}>` derived from
-  the new `items` prop. Tooltip shows BOXED / FRAGILE badges. Labels upgraded
-  to a 512×80 canvas with 34 px bold text on a rounded pill background and
-  110×22 sprite scale for legibility on both themes; all `/90` `/95` `/97`
-  `/98` `/99` opacity modifiers replaced with solid colours.
-- `frontend/src/components/Dashboard.tsx`: Add `STRATEGY_BADGE_LIGHT` palette
-  and thread `lightMode` into the previously-missed "Why This Plan"
-  `SectionHeader`; replace alpha-hex `STOP_STYLE` (`#F0997B0f` etc.) with
-  fully-opaque colours so the load-order legend and unplaced-items section
-  stay readable on white.
-- `frontend/src/data/modelCatalog.ts`: Export `resolvePreviewMeta(prefix,
-  variantIdx)` returning `{ path, axisUp }` for `ModelPreview`; mark
-  refrigerator/fridge defaults as `fragile: true`.
-- `frontend/src/App.tsx`: Add `solveItems` state and pass `items={solveItems}`
-  to `<TruckViewer>` so the viewer can read per-item `boxed` / `fragile`.
-- `frontend/src/App.tsx`: Add conditional classes for every hardcoded dark
-  element (logo text, version badge, tabs, `V_util` badge, error banner,
-  loading text, empty state); inline `EmptyState` so `lightMode` is in scope;
-  replace the emoji `🌙/☀️` toggle with a borderless SVG moon + sun pill where
-  the active icon renders at full opacity and the inactive one at 35 %; thread
-  `lightMode` to `PlanSelector` and `Dashboard`.
-- `frontend/src/components/Dashboard.tsx`: Add `lightMode` to `DashboardProps`,
-  `SectionHeader`, and `StatCard`; per-stop palette extended with `bgLight`
-  and `borderLight`; LIFO load-sequence redesigned with numbered step-counter
-  cards, a "Loading order — rear to door" instruction card, and an annotated
-  REAR → DOOR gradient bar.
-  Thesis ref: section 3.5.2.1 E — Route-Sequenced LIFO (step counter reflects `stop_id` load order)
-- `frontend/src/components/PlanSelector.tsx`: Add `lightMode`; card background,
-  border, hover state, solver-mode badge, progress-bar track, and all
-  label/value text classes are now theme-conditional.
-- `frontend/src/components/ManifestForm.tsx`: Update theme helpers
-  (`bg2 → slate-100`, `muted → text-gray-700` in light mode); `lightMode` prop
-  on `AddItemForm`; `1.5 px solid rgba(0,0,0,0.18)` stop-badge outline in
-  light mode; fix table row hover (`hover:bg-slate-100` / `hover:bg-gray-800/30`).
-- `frontend/src/data/modelCatalog.ts`: Add `CATALOG_FOLDER_MAP` — maps 25
-  virtual catalog keys to their physical `/public/models/` subdirectory;
-  splits the 9-key shared CATALOG into 25 non-overlapping per-prefix keys,
-  eliminating variant semantic mismatch (the "Sofa" picker no longer shows
-  "Sectional" OBJ variants); `CATALOG_AXIS_UP` and `PREFIX_TO_FOLDER`
-  updated to match.
-- `frontend/public/models/Bunk_Bed/`: Add second loft-bed OBJ model
-  (`1101146651cd32a1bd09c0f277d16187`, 96 KB) from the furniture_extracted
-  ShapeNetSem dataset (original tag: "LoftBed"); registered in
-  `CATALOG["Bunk_Bed"]` as "Loft Poster" — Bunk Bed picker now has two variants.
+- `frontend/src/components/ModelPreview.tsx`: Mini Three.js turntable for AddItem form.
+- `frontend/src/data/manifestImport.ts`: Excel/JSON manifest import + template export.
+- `frontend/src/components/ManifestForm.tsx`: Drag-and-drop, quantity field, boxed +
+  fragile checkboxes, inline `ModelPreview`.
 - `frontend/src/data/planBuilder.ts`: Mock plan builder for `VITE_USE_MOCK` mode.
+- Full light-mode support across `App`, `Dashboard`, `PlanSelector`, `ManifestForm`,
+  `TruckViewer`.
 
 **Config & Tooling**
-- `docker-compose.yml`: Add `db` service (`postgres:16-alpine`) with
-  `pg_isready` healthcheck and a `DATABASE_URL=postgresql://flow3d:flow3d@db/flow3d`
-  env var on both the `backend` and `celery` services; `depends_on` extended
-  with `db: service_healthy` so the API and worker start only after Postgres
-  accepts connections. Fixes the `psycopg2.OperationalError: Connection refused`
-  on `localhost:5432` that blocked live-mode bring-up.
-- `frontend/vite.config.ts`: Bind dev server to `0.0.0.0:5173` and enable
-  `server.watch.usePolling = true` (`interval: 300`) so Windows hosts running
-  Vite inside Docker pick up file edits — inotify events do not propagate
-  across the host → container volume mount.
-- `frontend/package.json`: Add `xlsx ^0.18.5` for Excel manifest parsing.
+- `docker-compose.yml`: Add `db` (Postgres) service + healthcheck.
+- `frontend/vite.config.ts`: Bind to `0.0.0.0:5173`, enable polling for Docker.
+- `frontend/package.json`: Add `xlsx ^0.18.5`.
 
 ### Fixed
 
 **Backend**
-- `backend/solver/ilp_solver.py::_variable_domains()`: Lock `z_i = 0` for every
-  item (single-layer ground packing). Previously `z_ubs` was set to
-  `max(0, H - h_min)` and nothing in the boundary or non-overlap blocks pulled
-  items down, so the ILP would leave packed items floating mid-air. The proper
-  3DBPP support constraint requires a disjunction binding each `z_i` to either
-  `0` or the top face of a supporting item — out of scope for this milestone
-  and tracked for a follow-up.
-  Thesis ref: section 3.5.2.1 D — variable domains (single-layer simplification)
+- `backend/solver/ilp_solver.py`: Lock `z_i = 0` floor (single-layer ground packing,
+  temporary). Thesis ref: 3.5.2.1 D
 
 ---
 
 ## Sprint 8 — 2026-04-29 · True 3-Strategy DSS Plan Diversity and Playwright Smoke Harness
 
 **Goal:** Replace the three-identical-plan output with three structurally distinct
-packing plans — each driven by a different DSS objective (optimal utilization,
-balanced speed, transit stability) — and add a Playwright browser smoke harness
-that verifies the UI end-to-end in mock mode.
+packing plans and add a Playwright browser smoke harness.
 
 ### Added
 
 **Backend**
-- `backend/api/models.py`: Add `SolveStrategy = Literal["optimal","balanced","stability"]`
-  type alias; add `strategy` and `rationale` fields to `SolveRequest` and `PackingPlan`
-  with safe defaults (`"optimal"` / `""`) so existing fixtures and tests remain valid.
-- `backend/core/optimizer.py`: Extend `OptimizationEngine.optimize()` with a
-  `strategy: SolveStrategy` parameter and `STRATEGY_RATIONALES` dict; dispatch
-  `"optimal"` → ILP (auto-degrades to FFD-volume without Gurobi), `"balanced"` →
-  FFD volume-desc, `"stability"` → FFD weight-desc; stamp `strategy` and `rationale`
-  on every returned `PackingPlan`.
-- `backend/solver/ffd_solver.py`: Add `FFDSolver(presort="volume" | "weight")`
-  constructor; weight-desc presort key `(-stop_id, -weight_kg, -volume)` places the
-  heaviest items first within each `stop_id` group, lowering the center of gravity
-  for transit stability without changing `V_util`.
-  Thesis ref: section 3.5.2.2 — Route-Sequential FFD Phase 1 presort variants
+- `backend/api/models.py`: `SolveStrategy` type alias; `strategy` and `rationale`
+  fields on `SolveRequest` and `PackingPlan`.
+- `backend/core/optimizer.py`: Strategy dispatch — `"optimal"` → ILP/FFD-volume,
+  `"balanced"` → FFD volume-desc, `"stability"` → FFD weight-desc.
+- `backend/solver/ffd_solver.py`: `presort="volume" | "weight"` constructor parameter.
 
 **Frontend**
-- `frontend/src/types/index.ts`: Add `SolveStrategy` type; add `strategy` and
-  `rationale` fields to `PackingPlan`; add optional `strategy` to `SolveRequest`.
-- `frontend/src/api/client.ts`: `fetchSolutions()` now fires 3 parallel
-  `POST /api/solve` requests with `STRATEGIES = ["optimal","balanced","stability"]`
-  instead of 3 identical requests — each plan is structurally distinct in real mode.
-- `frontend/src/components/Dashboard.tsx`: Add "Why This Plan" section rendering
-  a colour-coded strategy badge (violet/teal/amber) and the full rationale paragraph
-  above Performance metrics when a plan is selected.
-- `frontend/src/components/PlanSelector.tsx`: Replace `solver_mode`-derived card
-  label with `STRATEGY_NAMES` map (Optimal / Balanced / Stability).
-- `frontend/src/data/mockPlan.ts`: Stamp all 3 mock plans with `strategy` and
-  `rationale` fields matching the live backend contract; Plan C `t_exec_ms`
-  corrected from 15 ms to 18 ms.
-- `frontend/src/App.tsx`: Replace generic feature chips on empty state with
-  `StrategyCard` components (violet Optimal, teal Balanced, amber Stability)
-  advertising each decision criterion; updated copy to reference "different decision
-  criterion" instead of "3 alternative plans".
+- `frontend/src/types/index.ts`: `SolveStrategy` type + `strategy`/`rationale` fields.
+- `frontend/src/api/client.ts`: 3 parallel strategy requests.
+- `frontend/src/components/Dashboard.tsx`: "Why This Plan" section.
+- `frontend/src/components/PlanSelector.tsx`: Strategy name cards.
 
 **Config & Tooling**
-- `frontend/e2e/strategies.spec.ts`: Playwright smoke test covering empty-state
-  strategy cards, 3-plan output with per-card strategy labels, rationale text
-  switching on card click, `ILP`/`FFD` solver-mode badges, and unplaced-items
-  section visibility for Plan C.
-- `frontend/playwright.config.ts`: Playwright config with Chromium, `webServer`
-  block that boots Vite in mock mode via `cross-env VITE_USE_MOCK=true` on port 5174,
-  `reuseExistingServer` for local dev, traces and screenshots retained on failure.
-- `frontend/package.json`: Add `@playwright/test` devDependency; add `npm run e2e`
-  and `npm run e2e:ui` scripts.
-- `.gitignore`: Add `playwright-report/`, `test-results/`, and `.claude/*.lock`.
-
-### Changed
-
-**Backend**
-- `backend/worker/tasks.py`: Thread `request.strategy` through to
-  `OptimizationEngine.optimize()` so each Celery job respects its per-request
-  strategy.
-- `backend/core/optimizer.py`: `OptimizationEngine` now instantiates two `FFDSolver`
-  instances (`_ffd_volume` and `_ffd_weight`) instead of one, owned for their
-  respective strategy paths.
+- `frontend/e2e/strategies.spec.ts`: Playwright smoke test.
+- `frontend/playwright.config.ts`: Playwright config with mock-mode Vite server.
+- `frontend/package.json`: Add `@playwright/test`.
 
 ---
 
 ## Sprint 7 — 2026-04-28 · Unified Pre-Push Gate and Docker Compose Dev Pipeline
 
-**Goal:** Consolidate the two-step pre-push gate into a single `/ship` slash
-command with a mode flag, and containerize the full live pipeline
-(Redis + FastAPI + Celery + Vite) into a one-command `docker compose up`
-workflow so members no longer juggle four terminals.
+**Goal:** Consolidate the pre-push gate into `/ship` and containerize the full stack.
 
 ### Added
 
 **Config & Tooling**
-- `.claude/commands/ship.md`: New unified slash command — `/ship` (commit
-  mode) runs gitignore audit, lint, tests, type check, secret/conflict/
-  large-file scans, and emits a ready-to-copy conventional commit message;
-  `/ship release` adds Sprint-aware `CHANGELOG.md` regeneration and a
-  semver tag proposal.
-- `docker-compose.yml`: New stack — `redis:7-alpine` with healthcheck,
-  FastAPI on `:8000`, Celery worker on `--pool=solo`, Vite dev server on
-  `:5173`; bind mounts on `./backend` and `./frontend` preserve hot
-  reload; `depends_on: service_healthy` ensures the broker is up before
-  the api and worker start.
-- `backend/Dockerfile`, `backend/.dockerignore`: Containerize FastAPI and
-  Celery on `python:3.11-slim` with `libpq-dev` for `psycopg2-binary`;
-  the same image is reused by both the `backend` and `celery` compose
-  services with a different `command`.
-- `frontend/Dockerfile`, `frontend/.dockerignore`: Containerize the Vite
-  dev server on `node:20-alpine`, bound to `0.0.0.0:5173` so the host
-  browser can reach it from `http://localhost:5173`.
-
-### Changed
-
-**Config & Docs**
-- `README.md`: Replace `/check-git-push` and `/update-changelog`
-  references with the unified `/ship` command (commit + release modes).
-- `.gitignore`: Add `gurobi.lic` so WLS / named-user license files are
-  never committed when mounted into containers via docker-compose.
-- `backend/api/routes.py`, `backend/main.py`, `backend/api/models.py`:
-  Drop unused imports surfaced by `ruff check`.
-- `.gitignore`: Add `.env.local` and `scratch_*.py` so the
-  `VITE_USE_MOCK=false` override and ad-hoc scratch scripts never reach
-  the remote.
+- `.claude/commands/ship.md`: Unified `/ship` slash command (commit + release modes).
+- `docker-compose.yml`: Full `redis` + `backend` + `celery` + `frontend` stack.
+- `backend/Dockerfile`, `frontend/Dockerfile`: Container definitions.
 
 ### Removed
-
-**Config & Tooling**
-- `.claude/commands/check-git-push.md`: Superseded by `/ship`
-  (commit mode).
-- `.claude/commands/update-changelog.md`: Superseded by `/ship release`.
+- `.claude/commands/check-git-push.md`, `.claude/commands/update-changelog.md`:
+  Superseded by `/ship`.
 
 ---
 
 ## Sprint 6 — 2026-04-28 · 3D Furniture Models, Animate Mode, and Manifest UX
 
-**Goal:** Render ShapeNetSem 3D furniture meshes in the loading viewer, add LIFO
-animate-mode playback, replace the free-text item input with a structured furniture
-dropdown, and provide one-click JSON plan export.
+**Goal:** Render ShapeNetSem 3D furniture meshes, add LIFO animate-mode playback,
+replace free-text input with a structured furniture dropdown, and provide JSON export.
 
 ### Added
 
 **Frontend**
-- `frontend/src/data/modelCatalog.ts`: New module — exports `FURNITURE_OPTIONS`
-  (grouped dropdown data for all 8 furniture categories), `FURNITURE_DEFAULTS`
-  (auto-fills `w_i`, `l_i`, `h_i`, `weight_kg`, and `side_up` per furniture prefix),
-  and `resolveModelPath()` (maps `item_id` prefix → ShapeNetSem OBJ path under
-  `/models/`; numeric suffix cycles through the available model files for each category).
-- `frontend/public/models/`: 41 ShapeNetSem OBJ mesh files across 8 categories
-  (Bed, Bookshelf, Chair, Desk, Refrigerator, Sofa\_Couch, Table, Wardrobe\_Cabinet);
-  served statically by Vite and the production build at `/models/<Category>/<id>.obj`.
-- `frontend/src/components/TruckViewer.tsx`: `"▶ Animate"` view mode — packed items
-  sorted by descending `stop_id` (LIFO load order) and revealed one at a time via
-  `animStep` / `isPlaying` / `animSpeed` state machine and `setTimeout` playback loop;
-  most-recently-placed item highlighted with a blue (`0x60a5fa`) edge outline and full
-  opacity while older items dim to 50 %; playback controls bar with ⏮⏪▶⏩⏭, a
-  progress slider, step counter, and Slow / Normal / Fast speed selector.
-  Thesis ref: section 3.5.2.1 E — Route-Sequenced LIFO (animate sort by `stop_id` desc)
-- `frontend/src/components/Dashboard.tsx`: `downloadPlan()` function and "Export JSON"
-  button in the Performance section header; triggers a browser file-save of the full
-  `PackingPlan` as `flow3d_{solver_mode}_{timestamp}.json`.
-
-### Changed
-
-**Frontend**
-- `frontend/src/components/TruckViewer.tsx`: `OBJLoader` integration — loads
-  ShapeNetSem OBJ models into a persistent `modelCacheRef` (Map keyed by path); each
-  loaded `THREE.Group` is deep-cloned per placement and scaled by `fitModelToBox()` to
-  exact `w_i × h_i × l_i` dimensions before being positioned at the placement centre
-  `(cx, cy, cz)`; falls back to `BoxGeometry` when a model is unavailable or the
-  `item_id` prefix is unrecognised.
-- `frontend/src/components/ManifestForm.tsx`: Replace free-text `item_id` input with
-  a categorized `<optgroup>` dropdown; selecting a furniture type auto-generates the
-  smallest unused numeric suffix ID (e.g. `sofa_02`) and pre-fills `w_i`, `l_i`, `h_i`,
-  `weight_kg`, and `side_up` from `FURNITURE_DEFAULTS`; cargo item list now starts
-  empty — items are added exclusively through user action.
-
-### Fixed
-
-**Frontend**
-- `frontend/src/components/TruckViewer.tsx`: Fix React 18 Strict Mode double-invoke
-  bug — the `cancelled` cleanup flag prevented OBJ models from ever loading by marking
-  all paths as in-flight (`null`) during the first effect run and then returning early on
-  the remount because the cache already contained those entries; cleanup now deletes
-  in-flight (`null`) cache entries so the remounted effect starts a fresh
-  `OBJLoader.loadAsync` request.
+- `frontend/src/data/modelCatalog.ts`: `FURNITURE_OPTIONS`, `FURNITURE_DEFAULTS`,
+  `resolveModelPath()`.
+- `frontend/public/models/`: 41 ShapeNetSem OBJ mesh files across 8 categories.
+- `frontend/src/components/TruckViewer.tsx`: Animate mode — LIFO playback with
+  controls bar. Thesis ref: 3.5.2.1 E
+- `frontend/src/components/Dashboard.tsx`: JSON export button.
 
 ---
 
 ## Sprint 5 — 2026-04-27 · Async Pipeline, Payload Constraint, and Live Demo Bring-up
 
-**Goal:** Wire the FastAPI ↔ Celery ↔ Redis ↔ PostgreSQL async pipeline end-to-end,
-add the missing payload-weight constraint to both solvers and the independent
-validator, and document the live bring-up procedure so the full stack can be
-demonstrated outside of mock mode.
+**Goal:** Wire the FastAPI ↔ Celery ↔ Redis ↔ PostgreSQL async pipeline end-to-end
+and add the payload-weight constraint.
 
 ### Added
 
 **Backend**
-- `backend/worker/celery_app.py`, `backend/worker/tasks.py`: Implement Celery + Redis
-  async job queue — `solve_task` runs the full solver pipeline (ILP/FFD +
-  ConstraintValidator) asynchronously; enqueued via `apply_async()` and results stored
-  in Redis; task config enables JSON serialization, 3600-second result retention, and
-  started tracking for polling.
-- `backend/core/db.py`: Implement SQLAlchemy job logging to PostgreSQL — `job_logs`
-  table captures `job_id`, `solver_mode`, `n_items`, `V_util`, `T_exec`, `status`,
-  `error`, and `created_at` for every solve job (success or failure); used for ANOVA
-  benchmarking. DB errors are swallowed gracefully so logging never crashes the solve
-  pipeline; `create_tables()` runs at app startup via lifespan.
-  Thesis ref: section 3.6 — ANOVA benchmarking
-- `backend/solver/ilp_solver.py::_weight()`: Implement payload-capacity constraint
-  `Σ weight_kg_i · b_i ≤ payload_kg`; linear in `b_i` so it adds no integer
-  variables; skipped silently when `payload_kg ≤ 0` (treated as "no payload limit
-  configured"). Wired into `_solve()` between `_lifo()` and `_symmetry_breaking()`.
-  Thesis ref: section 3.5.2.1 — payload constraint
-- `backend/solver/ffd_solver.py::_greedy_placement()`: Add running `placed_weight`
-  counter that rejects items whose `weight_kg` would breach `truck.payload_kg`
-  before any geometry / corner-candidate iteration is attempted; failed items are
-  appended to `unplaced_items`.
-  Thesis ref: section 3.5.2.1 — payload constraint
-- `backend/core/validator.py::validate_weight()`: New post-solve check —
-  `Σ weight_kg_i · b_i ≤ payload_kg` over `is_packed=True` placements; manifest-
-  aware because `Placement` does not carry `weight_kg`. O(n).
-  Thesis ref: section 3.5.2.1 — payload constraint
-- `backend/tests/test_validator.py`: Add 4 pytest cases covering payload overload
-  rejection, under-payload acceptance, unpacked-ignored behaviour, and
-  `validate_all` / `first_failing_check` returning `"weight"` when the cap is
-  violated.
-- `backend/tests/conftest.py::pytest_collection_modifyitems`: Skip
-  `test_integration_solve.py` and `test_smoke.py` cleanly when localhost:6379 is
-  unreachable, with a clear "start Redis to run live tests" reason. Suite stays
-  green on dev machines without Docker; live tests execute as written when Redis
-  is up.
-
-**Frontend**
-- `frontend/.env.local.example`: New template — copy to `.env.local` to set
-  `VITE_USE_MOCK=false` and `VITE_API_URL=http://localhost:8000`. Vite picks
-  `.env.local` up automatically and it is git-ignored by default.
-
-**Config & Tooling**
-- `README.md`: Add "Celery worker" section with the Windows-specific
-  `--pool=solo` requirement (default prefork pool needs `fork()`); add
-  "End-to-end live demo" section listing the 5-step bring-up order
-  (Redis → Postgres → uvicorn → Celery worker → Vite) plus a `curl` health
-  check covering POST `/api/solve` and GET `/api/result/{job_id}`.
+- `backend/worker/celery_app.py`, `backend/worker/tasks.py`: Celery + Redis async
+  job queue.
+- `backend/core/db.py`: SQLAlchemy job logging to PostgreSQL.
+- `backend/solver/ilp_solver.py::_weight()`: Payload constraint
+  `Σ weight_kg_i · b_i ≤ payload_kg`. Thesis ref: 3.5.2.1
+- `backend/solver/ffd_solver.py`: Running `placed_weight` payload gate.
+- `backend/core/validator.py::validate_weight()`: Post-solve payload check.
 
 ### Changed
 
 **Backend**
-- `backend/api/routes.py`: Convert POST/GET endpoints to async Celery queue pattern —
-  `POST /api/solve` now returns HTTP 202 (Accepted) with `job_id` in <100 ms instead
-  of blocking; `GET /api/result/{job_id}` polls Celery's AsyncResult backend, returning
-  `status: pending` while running, `status: done` with full plan on success, or HTTP
-  422 with `failed_check` detail when ConstraintValidator fails; adds 422 error
-  response for infeasible plans and unexpected task crashes.
-- `backend/main.py`: Add FastAPI lifespan context manager — calls
-  `core.db.create_tables()` at startup so PostgreSQL schema is initialized before
-  the first request.
-- `backend/core/validator.py::validate_all()`, `first_failing_check()`: Add optional
-  `items: List[FurnitureItem]` parameter. Weight check is run last and only when
-  the manifest is supplied; placement-only callers (e.g. fixture-loading tests)
-  can omit `items` and the weight check is skipped.
-- `backend/solver/base.py::AbstractSolver.solve()`: Thread `items` through to
-  `first_failing_check` so the post-solve safety net always exercises the weight
-  check on real solver output.
-- `backend/requirements.txt`: Add `sqlalchemy` dependency (was missing but required
-  by `core/db.py`).
-- `backend/tests/test_integration_solve.py`: Fix imports (`_engine` now imported
-  from `worker.tasks`, not `api.routes`); update POST status code assertion
-  from `200` to `202`.
-
-**Frontend**
-- `frontend/src/api/client.ts::fetchSolution()`: Replace the infinite `while(true)`
-  poll loop with a 60-second deadline (`POLL_TIMEOUT_MS`); throws a diagnostic
-  error pointing at the Celery worker as the likely culprit when the deadline
-  passes. Previous behaviour spun the UI forever if the broker stalled.
-
-**Config & Tooling**
-- Fix unused TypeScript and Python imports flagged by `tsc` and `ruff`; add
-  `.env.local` to `.gitignore` so Vite's local environment override file is not
-  accidentally staged.
+- `backend/api/routes.py`: HTTP 202 async job-creation pattern.
+- `backend/main.py`: FastAPI lifespan context manager.
 
 ---
 
 ## Sprint 4 — 2026-04-25 · FFD Heuristic, Post-Solve Safety Net, and Template Method
 
-**Goal:** Ship the live Route-Sequential FFD heuristic (thesis 3.5.2.2), convert
-`AbstractSolver.solve()` into a post-solve safety-net template method, and confirm the
-full pipeline (FFD → ConstraintValidator → PackingPlan) through the smoke test suite.
+**Goal:** Ship the live Route-Sequential FFD heuristic and convert `AbstractSolver`
+into a post-solve safety-net template method.
 
 ### Added
 
 **Backend**
-- `backend/solver/base.py`: Convert `AbstractSolver.solve()` into a template
-  method — runs the subclass `_solve()` then auto-invokes
-  `ConstraintValidator.validate_all()`; raises `PlanValidationError`
-  (carrying the failed plan, truck, and failing-check name) when any of the
-  four thesis 3.5.2.1 constraints (B, C, E, Rigid Orientation) is violated.
-  Solvers can no longer hand an unchecked `PackingPlan` to the API layer.
-- `backend/core/validator.py`: Add `PlanValidationError` exception and
-  `ConstraintValidator.first_failing_check()` helper that returns the name
-  of the first failing check (`non_overlap`, `boundary`, `orientation`,
-  `lifo`) or `None` when the plan is clean — used by the safety net in
-  `AbstractSolver.solve()`.
-- `backend/solver/ffd_solver.py`: Implement live Route-Sequential FFD
-  heuristic — `_lifo_presort()` orders items by `(-stop_id, -volume)` so
-  the deepest-stop, largest items are placed first; `_greedy_placement()`
-  walks corner-derived candidate coordinates in `(y, x, z)` ascending order
-  and accepts the first that satisfies boundary, orientation, non-overlap,
-  and LIFO; orientation enumeration honours `side_up` via
-  `UPRIGHT_ORIENTATIONS`. Items that fail every candidate land in
-  `unplaced_items`. Worst case O(n²) per thesis Table 3.3.
-  Thesis ref: section 3.5.2.2
-- `backend/tests/test_ffd_solver.py`: Add 4 pytest cases for the live FFD
-  path — LIFO pre-sort ordering, end-to-end `_solve()` produces a plan that
-  passes `validate_all()`, oversized items land in `unplaced_items`, and
-  `side_up` items keep `h_i` along the truck z-axis (orientation in `{0, 1}`).
-- `backend/tests/test_integration_solve.py`: End-to-end integration test for
-  the full solver pipeline (ILP and FFD paths, ConstraintValidator pass);
-  automatically skipped when Redis is unreachable on localhost:6379 (skip
-  logic added to `conftest.py` in Sprint 4).
-
-### Changed
-
-**Backend**
-- `backend/solver/ilp_solver.py`: Expose Gurobi solver parameters (time limit,
-  MIP gap) via application settings; tighten decision-variable upper bounds for
-  `x_i`, `y_i`, `z_i` to `W`, `L`, `H` respectively, reducing the Branch-and-Bound
-  search space.
-  Thesis ref: section 3.5.2.1 D — variable domains
-- `backend/solver/ilp_solver.py`, `backend/solver/ffd_solver.py`: Rename
-  the override `solve()` → `_solve()` to match the new template-method
-  contract in `AbstractSolver`. Public `solve()` is unchanged from the
-  caller's perspective.
-- `backend/core/optimizer.py`: Drop the redundant
-  `ConstraintValidator.validate_all()` call — validation is now enforced
-  one layer down inside `AbstractSolver.solve()`, so
-  `OptimizationEngine.optimize()` simply dispatches and returns.
-- `.gitignore`: Add `scratch_*.py` pattern to exclude local experimental
-  scripts from version control.
+- `backend/solver/base.py`: Template method — auto-invokes `ConstraintValidator`
+  after every `_solve()`; raises `PlanValidationError` on violation.
+- `backend/solver/ffd_solver.py`: Live Route-Sequential FFD (O(n²)).
+  Thesis ref: 3.5.2.2
 
 ---
 
 ## Sprint 3 — 2026-04-24 · Live ILP Model and ConstraintValidator
 
-**Goal:** Implement the complete Gurobi ILP formulation (constraints A–E plus Rigid
-Orientation) and the independent ConstraintValidator, replacing all solver stubs with
-production-ready code.
+**Goal:** Implement the complete Gurobi ILP formulation (constraints A–E) and the
+independent ConstraintValidator.
 
 ### Added
 
 **Backend**
-- `backend/solver/ilp_solver.py`: Implement live Gurobi ILP model — `_variable_domains()`
-  defines `b_i ∈ {0,1}`, `s_ij,k ∈ {0,1}` (k=1..6), and integer-mm coordinates
-  `x_i, y_i, z_i ≥ 0` bounded by `W`, `L`, `H`.
-  Thesis ref: section 3.5.2.1 D
-- `backend/solver/ilp_solver.py`: Implement `_boundary()` — enforces `x_i+w_i ≤ W·b_i`,
-  `y_i+l_i ≤ L·b_i`, `z_i+h_i ≤ H·b_i`; unpacked items (`b_i=0`) are pinned to the
-  origin because `w_i`, `l_i`, `h_i` are strictly positive.
-  Thesis ref: section 3.5.2.1 C
-- `backend/solver/ilp_solver.py`: Implement `_non_overlap()` — Big-M disjunctive
-  separation across 6 spatial planes using axis-specific constants `M_x=W`, `M_y=L`,
-  `M_z=H` (tighter LP relaxation than a single global M); adds activation constraint
-  `∑s_ij,k ≥ b_i + b_j − 1`.
-  Thesis ref: section 3.5.2.1 B
-- `backend/solver/ilp_solver.py`: Implement `_lifo()` — Sequential Loading Constraint
-  `y_i + l_i ≤ y_j + L·(2 − b_i − b_j)` for every ordered pair where
-  `stop_i > stop_j`; the `L·(2 − b_i − b_j)` slack gate ensures unpacked items do
-  not pin packed items' `y_i` coordinates.
-  Thesis ref: section 3.5.2.1 E
-- `backend/solver/ilp_solver.py`: Implement Rigid Orientation (`_orientation()`) —
-  adds 6 binary variables `o_i,k` per item; `∑o_i,k = b_i` selects exactly one
-  orientation when packed; `side_up=True` restricts `o_i,k` to upright set `{0,1}`
-  (original `h_i` stays along truck z-axis). `_effective_dims()` linearizes the
-  6-permutation `ORIENTATION_PERMUTATIONS` table so `w_eff`, `l_eff`, `h_eff` replace
-  constants in `_boundary()`, `_non_overlap()`, and `_lifo()`.
-  Thesis ref: section 3.5.2.1 (Rigid Orientation)
-- `backend/solver/ilp_solver.py`: Implement `_objective()` — maximizes
-  `V_util = ∑(v_i · b_i) / (W·L·H)`; denominator is a positive constant so the
-  numerator is maximized directly; coefficients are normalised to `[0,1]` to avoid
-  Gurobi large-coefficient numerical warnings.
-  Thesis ref: section 3.5.2.1 A
-- `backend/solver/ilp_solver.py`: Implement `_extract_plan()` — reads `b_i.X`,
-  `o_i,k.X`, and `x_i/y_i/z_i.X` from the solved model; emits actual
-  `orientation_index` and effective `(w, l, h)` on each `Placement` so downstream
-  consumers (frontend, validator) need no re-computation.
-- `backend/core/validator.py`: Implement `validate_non_overlap()` — O(n²) pairwise
-  scan over packed placements; passes when at least one of the six axis-aligned
-  separation conditions holds for every pair.
-  Thesis ref: section 3.5.2.1 B
-- `backend/core/validator.py`: Implement `validate_boundary()` — rejects any packed
-  placement where `x_i < 0`, or `x_i+w_i > W`, `y_i+l_i > L`, `z_i+h_i > H`.
-  Thesis ref: section 3.5.2.1 C
-- `backend/core/validator.py`: Implement `validate_lifo()` — O(n²) check that every
-  packed pair with `stop_i > stop_j` satisfies `y_i + l_i ≤ y_j`.
-  Thesis ref: section 3.5.2.1 E
-- `backend/core/validator.py`: Implement `validate_orientation()` — asserts
-  `orientation_index ∈ [0,5]` for every placement; `side_up` upright enforcement is
-  delegated to the solver's `_orientation()` constraints (the placement-only view
-  cannot recover the manifest `side_up` flag).
-  Thesis ref: section 3.5.2.1 (Rigid Orientation)
-- `backend/tests/test_validator.py`: Add 9 pytest cases for `ConstraintValidator` —
-  covers happy path (mockPlan.json passes all checks), targeted failures for each of
-  the four check types, touching-face boundary for non-overlap, and the rule that
-  unpacked placements are skipped by all spatial checks.
-
-### Changed
-
-- `README.md`: Expand cross-platform setup instructions; updated with latest project
-  structure and development workflow details.
+- `backend/solver/ilp_solver.py`: Full Gurobi ILP — `_variable_domains` (3.5.2.1 D),
+  `_boundary` (C), `_non_overlap` (B), `_lifo` (E), `_orientation` (Rigid Orientation),
+  `_objective` (A), `_extract_plan`.
+- `backend/core/validator.py`: `validate_non_overlap` (B), `validate_boundary` (C),
+  `validate_lifo` (E), `validate_orientation`; 9 pytest cases.
 
 ---
 
 ## Sprint 2 — 2026-04-27 · Frontend UI — Manifest Form, 3D Hover, Multi-Plan Comparison
 
-**Goal:** Deliver a fully interactive frontend: a complete cargo manifest input form,
-hover tooltips on 3D-packed items, and a three-plan comparison selector so users can
-evaluate trade-offs between ILP and FFD solver outputs.
+**Goal:** Deliver a fully interactive frontend with manifest input, 3D hover tooltips,
+and three-plan comparison.
 
 ### Added
 
 **Frontend**
-- `frontend/src/components/ManifestForm.tsx` — new full manifest input component with
-  truck spec editor, stops editor, and per-item add/validate/delete; pre-populated with
-  5 furniture items across 3 delivery stops for thesis demo.
-- `frontend/src/components/PlanSelector.tsx` — new 3-card comparison panel showing
-  `V_util` colour bar, packed/total count, `T_exec`, and solver mode badge for each
-  alternative plan; selected card highlighted with a blue ring.
-- `frontend/src/components/TruckViewer.tsx` — `THREE.Raycaster` `mousemove` handler;
-  each item mesh stores its `Placement` in `mesh.userData`; renders an `ItemTooltip`
-  overlay showing `item_id`, `w_i × l_i × h_i`, volume (m³), position (`x_i`, `y_i`,
-  `z_i`), `orientation_index`, and `stop_id` colour dot; tooltip auto-flips left when
-  cursor is past 60 % of canvas width.
-  Thesis ref: section 3.5.2.1 — Placement contract (`x_i`, `y_i`, `z_i`, `w_i`,
-  `l_i`, `h_i`, `orientation_index`, `stop_id`)
-- `frontend/src/components/TruckViewer.tsx` — camera position and `OrbitControls`
-  target persisted in `useRef` across scene rebuilds so orbit state survives
-  3D ↔ Exploded ↔ Labels mode switches.
-- `frontend/src/components/Dashboard.tsx` — LIFO load-sequence panel groups packed
-  items by descending `stop_id` (highest loaded first, sits deepest / nearest rear);
-  colour-coded `V_util` progress bar (green ≥ 70 %, amber ≥ 40 %, red below); ILP/FFD
-  solver mode badge; amber callout for `unplaced_items`.
-  Thesis ref: section 3.5.2.1 E — Route-Sequenced LIFO (`stop_i > stop_j → y_i + l_i ≤ y_j`)
-- `frontend/src/api/client.ts` — `fetchSolutions(request): Promise<PackingPlan[]>`
-  returns 3 alternative plans; real mode makes 3 parallel requests, mock mode returns
-  `mockPlans` array.
-- `frontend/src/data/mockPlan.ts` — added `mockPlanB` (FFD, `V_util` 0.41, `T_exec`
-  23 ms, right-shifted layout) and `mockPlanC` (FFD, `V_util` 0.39, `T_exec` 15 ms,
-  `bookshelf_01` unplaced) exported as `mockPlans: PackingPlan[]`.
-- `frontend/src/App.tsx` — replaced single `plan: PackingPlan | null` state with
-  `plans: PackingPlan[]` and `selectedIdx: number`; wires `fetchSolutions`; mounts
-  `PlanSelector` above `Dashboard` in Results tab; loading copy updated to reflect
-  "Generating 3 alternative plans".
+- `frontend/src/components/ManifestForm.tsx`: Full manifest input component.
+- `frontend/src/components/PlanSelector.tsx`: 3-card comparison panel.
+- `frontend/src/components/TruckViewer.tsx`: Raycaster hover tooltip; camera persistence.
+  Thesis ref: 3.5.2.1 — Placement contract
+- `frontend/src/components/Dashboard.tsx`: LIFO load-sequence panel; V_util bar.
+  Thesis ref: 3.5.2.1 E
 
 ---
 
 ## Sprint 1 — 2026-04-24 · Project Bootstrap
 
-**Goal:** Establish the full project scaffold so all members can run the system locally
-and put developer tooling (pre-push gate, changelog, slash commands) in place.
+**Goal:** Establish the full project scaffold and developer tooling.
 
 ### Added
 
 **Backend**
-- `backend/solver/ilp_solver.py` — ILPSolver using Gurobi Branch-and-Bound (exact,
-  O(2^n)); enforces non-overlap Big-M constraints (`s_ij_k`, k=1..6) and route-sequenced
-  LIFO (`y_i + l_i <= y_j` when `stop_i > stop_j`).
-  Thesis ref: section 3.5.2.1 B, E
-- `backend/solver/ffd_solver.py` — FFDSolver using Route-Sequential First-Fit
-  Decreasing (heuristic, O(n²)); items pre-sorted by descending stop order before
-  placement to maintain LIFO along the Y-axis.
-  Thesis ref: section 3.5.2.1 E
-- `backend/core/validator.py` — ConstraintValidator scaffold: stub methods for
-  non-overlap Big-M (`s_ij_k`, k=1..6), boundary conditions (`x_i+w_i ≤ W`,
-  `y_i+l_i ≤ L`, `z_i+h_i ≤ H`), orientation admissibility, and route-sequenced
-  LIFO (all returning `True` pending implementation).
-  Thesis ref: section 3.5.2.1 B, C, E
-- `backend/core/optimizer.py` — hybrid dispatch: routes to ILPSolver when
-  `n ≤ SOLVER_THRESHOLD`, FFDSolver otherwise; always calls
-  `ConstraintValidator.validate_all()` on the result.
-- `backend/api/models.py` — Pydantic models implementing the full Placement and
-  PackingPlan contracts (`item_id`, `x`, `y`, `z`, `w`, `l`, `h`,
-  `orientation_index`, `stop_id`, `is_packed`, `v_util`, `t_exec_ms`, `solver_mode`,
-  `unplaced_items`).
-- `backend/api/routes.py` — FastAPI routes exposing the solver pipeline to the frontend.
-- `backend/tests/test_smoke.py` — smoke tests covering both ILP and FFD solver paths.
-- `backend/requirements.txt`, `ruff.toml`, `pytest.ini`, `settings.py` — backend
-  dependency manifest, linter config, test config, and environment settings.
+- `backend/solver/ilp_solver.py`: ILPSolver scaffold. Thesis ref: 3.5.2.1 B, E
+- `backend/solver/ffd_solver.py`: FFDSolver scaffold. Thesis ref: 3.5.2.1 E
+- `backend/core/validator.py`: ConstraintValidator scaffold. Thesis ref: 3.5.2.1 B, C, E
+- `backend/core/optimizer.py`: Hybrid dispatch (ILP/FFD + validate_all).
+- `backend/api/models.py`: Full Placement + PackingPlan Pydantic contracts.
+- `backend/api/routes.py`: FastAPI solver routes.
 
 **Frontend**
-- `frontend/src/components/TruckViewer.tsx` — Three.js r165+ interactive 3D truck
-  loading viewer; renders each Placement using `x`, `y`, `z`, `w`, `l`, `h` coordinates
-  (millimetres) and colour-codes items by `stop_id`.
-- `frontend/src/components/Dashboard.tsx` — control panel displaying `v_util`,
-  `t_exec_ms`, `solver_mode`, and the list of `unplaced_items` from PackingPlan.
-- `frontend/src/api/client.ts` — typed API client consuming PackingPlan JSON from the
-  FastAPI backend.
-- `frontend/src/types/index.ts` — TypeScript interfaces mirroring the Placement and
-  PackingPlan contracts.
-- `frontend/src/data/mockPlan.ts` — mock PackingPlan for offline frontend development.
-- `docs/mockPlan.json` — reference sample PackingPlan JSON used for manual testing.
+- `frontend/src/components/TruckViewer.tsx`: Three.js r165+ interactive 3D viewer.
+- `frontend/src/components/Dashboard.tsx`: V_util, T_exec, solver_mode panel.
+- `frontend/src/api/client.ts`: Typed API client.
+- `frontend/src/types/index.ts`: TypeScript interfaces for Placement + PackingPlan.
 
 **Config & Tooling**
-- `CLAUDE.md` — project guide covering mandatory variable naming (`x_i`, `l_i`, `w_i`,
-  `h_i`, `V_util`, `s_ij_k`, `b_i`, `L`, `W`, `H`, `T_exec`), JSON placement contract,
-  constraint reference, module separation rules, and cross-platform commands.
-- `.env.example` — environment variable template (`USE_MOCK_SOLVER`, `SOLVER_THRESHOLD`,
-  `REDIS_URL`, `DATABASE_URL`, `GUROBI_LICENSE_FILE`).
-- `.gitignore` — ignores `venv/`, `__pycache__/`, `*.pyc`, `node_modules/`, `dist/`,
-  `.vite/`, Gurobi artefacts (`gurobi.log`, `*.rlp`), OS noise, and
-  `.claude/settings.local.json`.
-- `.claude/commands/check-git-push.md` — `/check-git-push` slash command: five-phase
-  pre-push gate covering .gitignore audit, lint, tests, type check, secret scan,
-  conflict markers, large-file check, and commit message generation.
-- `.claude/commands/update-changelog.md` — `/update-changelog` slash command: reads
-  git log, classifies commits by conventional-commit type, updates CHANGELOG.md sprint
-  blocks, and proposes a semver git tag.
-- `CHANGELOG.md` — this file; sprint log and developer changelog.
-
-### Changed
-
-- `README.md` — expanded with cross-platform setup instructions for backend (Windows
-  and macOS venv activation), frontend (Node/npm), and Redis (Docker on Windows,
-  Homebrew on macOS).
+- `CLAUDE.md`, `.env.example`, `.gitignore`, `CHANGELOG.md`.
 
 ---
 
