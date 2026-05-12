@@ -87,3 +87,12 @@ export interface SolveRequest {
   /** DSS strategy; defaults to "optimal" server-side when omitted */
   strategy?: SolveStrategy;
 }
+
+export interface SavedSession {
+  items:       FurnitureItem[];
+  truck:       TruckSpec;
+  stops:       DeliveryStop[];
+  plans:       PackingPlan[];
+  selectedIdx: number;
+  savedAt:     string;
+}
