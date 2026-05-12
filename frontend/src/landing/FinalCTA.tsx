@@ -1,5 +1,3 @@
-import { Link } from "react-router-dom";
-
 import { ButtonLink } from "./primitives/Button";
 
 export function FinalCTA() {
@@ -17,22 +15,16 @@ export function FinalCTA() {
           Stop packing trucks twice. Let&rsquo;s plan it right the first time.
         </h2>
         <p className="mt-5 text-lg text-gray-400 max-w-2xl mx-auto">
-          Generate your first LIFO-correct loading plan in under a minute. No credit card, no install.
+          Generate your first LIFO-correct loading plan in under a minute.
         </p>
         <div className="mt-9 flex flex-wrap justify-center gap-3">
-          <ButtonLink to="/register" variant="primary" size="lg">
-            Get Started — It&rsquo;s Free
+          <ButtonLink to="/login" variant="primary" size="lg">
+            Sign In
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12h14M13 5l7 7-7 7" />
             </svg>
           </ButtonLink>
         </div>
-        <p className="mt-5 text-sm text-gray-500">
-          Already have an account?{" "}
-          <Link to="/login" className="text-blue-300 hover:text-blue-200 underline underline-offset-2">
-            Sign in
-          </Link>
-        </p>
       </div>
     </section>
   );

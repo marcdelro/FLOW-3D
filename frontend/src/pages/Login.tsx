@@ -3,30 +3,31 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import type { Location } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 
+
 export function Login() {
-  const { login, user } = useAuth();
+  const { login, user, mustChangePassword } = useAuth();
   const navigate        = useNavigate();
   const location        = useLocation();
 
-  const state   = location.state as { from?: Location; expired?: boolean; registered?: boolean } | null;
+  const state   = location.state as { from?: Location; expired?: boolean } | null;
   const from    = state?.from?.pathname;
   const expired = state?.expired ?? false;
 
-  const [username,          setUsername]          = useState("");
-  const [password,          setPassword]          = useState("");
-  const [showPw,            setShowPw]            = useState(false);
-  const [submitting,        setSubmitting]        = useState(false);
-  const [error,             setError]             = useState<string | null>(null);
-  const [expiredDismissed,  setExpiredDismissed]  = useState(false);
-  const [registeredDismissed, setRegisteredDismissed] = useState(false);
+  const [username,         setUsername]         = useState("");
+  const [password,         setPassword]         = useState("");
+  const [showPw,           setShowPw]           = useState(false);
+  const [submitting,       setSubmitting]       = useState(false);
+  const [error,            setError]            = useState<string | null>(null);
+  const [expiredDismissed, setExpiredDismissed] = useState(false);
   const errorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Redirect immediately if already signed in.
   useEffect(() => {
     if (!user) return;
+    if (mustChangePassword) { navigate("/change-password", { replace: true }); return; }
     const dest = from && from !== "/login" ? from : user.role === "admin" ? "/admin" : "/app";
     navigate(dest, { replace: true });
-  }, [user, navigate, from]);
+  }, [user, mustChangePassword, navigate, from]);
 
   function clearError() {
     if (errorTimer.current) clearTimeout(errorTimer.current);
@@ -63,21 +64,6 @@ export function Login() {
             </svg>
             <span className="flex-1">Your session expired. Please sign in again.</span>
             <button onClick={() => setExpiredDismissed(true)} className="text-amber-400 hover:text-amber-200 transition">
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        )}
-
-        {/* Registered-successfully banner */}
-        {state?.registered && !registeredDismissed && (
-          <div className="mb-5 rounded-xl border border-green-500/40 bg-green-950/40 text-green-300 text-sm px-4 py-3 flex items-center gap-2.5">
-            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
-            </svg>
-            <span className="flex-1">Account created! Sign in with your new credentials.</span>
-            <button onClick={() => setRegisteredDismissed(true)} className="text-green-400 hover:text-green-200 transition">
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
@@ -192,13 +178,7 @@ export function Login() {
           </form>
 
           {/* Footer links */}
-          <div className="mt-7 space-y-3 text-center">
-            <p className="text-sm text-gray-400">
-              Don&rsquo;t have an account?{" "}
-              <Link to="/register" className="text-blue-300 hover:text-blue-200 underline underline-offset-2 transition">
-                Register
-              </Link>
-            </p>
+          <div className="mt-7 text-center">
             <p className="text-sm">
               <Link to="/app" className="text-gray-500 hover:text-gray-400 transition underline underline-offset-2">
                 See Simulator Preview &rarr;
