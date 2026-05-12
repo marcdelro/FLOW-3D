@@ -12,6 +12,81 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 20 — 2026-05-12 · Auth Hardening, Real Admin Backend, and Operator Activity Logging
+
+**Goal:** Harden the authentication flow so self-registration is removed and all accounts
+are admin-created; wire the admin panel to a real FastAPI + PostgreSQL backend with JWT
+auth; add a comprehensive per-user session activity log visible in the admin panel; and
+extend admin controls with account reactivation and forced password reset.
+
+### Added
+
+**Backend**
+- `backend/api/auth_routes.py`: `POST /api/auth/login` returns `{ access_token, token_type, must_change_password }`;
+  `POST /api/auth/change-password` validates current token and updates `hashed_password` + clears
+  `must_change_password`. Both endpoints write to `audit_logs`.
+- `backend/api/admin_routes.py`: Full user management API — `GET/POST /api/admin/users`,
+  `PUT /api/admin/users/{id}`, `DELETE /api/admin/users/{id}` (soft deactivate),
+  `POST /api/admin/users/{id}/reactivate`, `POST /api/admin/users/{id}/force-reset`.
+  Every mutation writes a typed audit log entry (`user_created`, `user_modified`,
+  `user_deactivated`, `user_reactivated`, `force_password_reset`).
+- `backend/api/deps.py`: `get_current_user` and `require_admin` FastAPI dependencies
+  using `OAuth2PasswordBearer` + HS256 JWT decode.
+- `backend/core/auth.py`: `hash_password`, `verify_password` (passlib/bcrypt),
+  `create_access_token`, `decode_access_token` (python-jose HS256).
+- `backend/core/db.py`: `reactivate_user()` helper — sets `is_active=True`.
+- `backend/requirements.txt`: Added `passlib[bcrypt]` and `python-jose[cryptography]`.
+- `backend/settings.py`: Added `JWT_SECRET`, `JWT_ALGORITHM`, `JWT_EXPIRE_MINUTES`
+  loaded from `.env`.
+- `backend/main.py`: Lifespan registers `create_tables()` + `seed_admin()` on startup;
+  includes `auth_router` and `admin_router`.
+
+**Frontend**
+- `frontend/src/lib/sessionLog.ts`: New localStorage-backed activity log utility.
+  `appendSessionLog(username, action, detail)` appends to `"flow3d_session_logs"` (500-entry
+  rolling cap); `getSessionLogs()` returns all entries sorted newest-first.
+- `frontend/src/pages/ChangePassword.tsx`: Force-change-password page shown after first
+  login (when `mustChangePassword` is true). Form requires new password (≥ 6 chars) +
+  confirm; calls `changePassword()` from `AuthContext`; redirects to `/admin` or `/app`
+  on success.
+
+### Changed
+
+**Frontend**
+- `frontend/src/auth/AuthContext.tsx`: Added `mustChangePassword: boolean`,
+  `changePassword(newPassword)`, and `registerUser(username, password, role)` to context.
+  Mock path stores extra users in `"flow3d_mock_users"` localStorage JSON and tracks
+  must-change state in `"flow3d_must_change"`. Real path reads `must_change_password`
+  from login response.
+- `frontend/src/pages/Login.tsx`: Removed Register link and registered-success banner.
+  `useEffect` redirects to `/change-password` when `mustChangePassword` is true.
+- `frontend/src/pages/AdminDashboard.tsx`:
+  - Switched from mock-only to real API mode (`VITE_USE_MOCK` flag); all mutations
+    call the FastAPI backend in real mode with `Authorization: Bearer` headers.
+  - Add User modal: removed role selector (new accounts are always `"user"`).
+  - Added **Session Logs** third tab — user filter dropdown, refresh button, color-coded
+    table for all 14 session action types.
+  - Added **Reactivate** button (teal refresh icon) for inactive users in the Users table.
+  - Added **Force Password Reset** button (lock icon) for active users — sets
+    `must_change_password=True` on next login.
+  - Deactivate icon changed from trash to circle-slash for clarity.
+  - Audit log tab: added `user_reactivated` (teal) and `force_password_reset` (violet)
+    action labels and colors.
+- `frontend/src/main.tsx`: Added `/change-password` route (behind `<ProtectedRoute>`);
+  removed `/register` route.
+- `frontend/src/landing/Hero.tsx`, `Nav.tsx`, `FinalCTA.tsx`: Replaced all "Get Started"
+  CTAs with "Sign In" → `/login`. Removed unused Register links.
+- `frontend/src/App.tsx`: Session activity logging via `appendSessionLog` —
+  `session_start`, `session_end`, `solve_submitted`, `solve_success`, `solve_error`,
+  `plan_selected`, `session_saved`, `session_restored`. Restored Log Out button beside
+  Save State in the TruckViewer overlay.
+- `frontend/src/components/ManifestForm.tsx`: Session activity logging for manifest
+  mutations — `item_added` (with generated IDs), `item_edited`, `item_deleted`,
+  `stop_added` (with stop_id), `stop_removed` (with stop_id), `truck_param_changed`
+  (field=value). All logged via `appendSessionLog` using the signed-in username.
+
+---
+
 ## Sprint 19 — 2026-05-12 · Login/Register Authentication, Admin Dashboard, and Simulator Session Save/Restore
 
 **Goal:** Implement a complete JWT-based authentication layer — login and register pages

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import type { UserRole } from "../auth/AuthContext";
+import { getSessionLogs } from "../lib/sessionLog";
+import type { SessionLogEntry } from "../lib/sessionLog";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -53,29 +55,33 @@ function fmt(iso: string | null): string {
 }
 
 const ACTION_CLS: Record<string, string> = {
-  login_ok:        "text-green-400",
-  login_fail:      "text-red-400",
-  logout:          "text-gray-400",
-  user_created:    "text-blue-400",
-  user_modified:   "text-blue-300",
-  user_deactivated:"text-amber-400",
+  login_ok:             "text-green-400",
+  login_fail:           "text-red-400",
+  logout:               "text-gray-400",
+  user_created:         "text-blue-400",
+  user_modified:        "text-blue-300",
+  user_deactivated:     "text-amber-400",
+  user_reactivated:     "text-teal-400",
+  force_password_reset: "text-violet-400",
 };
 
 const ACTION_LABEL: Record<string, string> = {
-  login_ok:        "Login",
-  login_fail:      "Login failed",
-  logout:          "Logout",
-  user_created:    "User created",
-  user_modified:   "User modified",
-  user_deactivated:"User deactivated",
+  login_ok:             "Login",
+  login_fail:           "Login failed",
+  logout:               "Logout",
+  user_created:         "User created",
+  user_modified:        "User modified",
+  user_deactivated:     "User deactivated",
+  user_reactivated:     "User reactivated",
+  force_password_reset: "Password reset forced",
 };
 
-type Tab = "users" | "logs";
+type Tab = "users" | "logs" | "session_logs";
 
 /* ─── Component ───────────────────────────────────────────────────────────── */
 
 export function AdminDashboard() {
-  const { user, token, logout } = useAuth();
+  const { user, token, logout, registerUser } = useAuth();
   const navigate                = useNavigate();
   const [lightMode, setLightMode] = useState(true);
   const [tab,       setTab]       = useState<Tab>("users");
@@ -100,7 +106,6 @@ export function AdminDashboard() {
   const [addOpen,    setAddOpen]    = useState(false);
   const [addUsername,setAddUsername]= useState("");
   const [addPassword,setAddPassword]= useState("");
-  const [addRole,    setAddRole]    = useState<UserRole>("user");
   const [addError,   setAddError]   = useState<string | null>(null);
   const [addSaving,  setAddSaving]  = useState(false);
 
@@ -147,44 +152,29 @@ export function AdminDashboard() {
   }, [token, logout, navigate]);
 
   /* ── Add user ───────────────────────────────────────────────────────────── */
-  function openAdd() { setAddUsername(""); setAddPassword(""); setAddRole("user"); setAddError(null); setAddOpen(true); }
+  function openAdd() { setAddUsername(""); setAddPassword(""); setAddError(null); setAddOpen(true); }
 
   async function submitAdd(e: React.FormEvent) {
     e.preventDefault();
     if (!addUsername.trim() || !addPassword) { setAddError("All fields are required."); return; }
     setAddError(null); setAddSaving(true);
     try {
-      if (USE_MOCK) {
-        await new Promise<void>((r) => setTimeout(r, 500));
-        const conflict = users.find((u) => u.username === addUsername.trim().toLowerCase());
-        if (conflict) { setAddError("Username already taken."); return; }
-        const newUser: UserRow = {
-          id: Math.max(0, ...users.map((u) => u.id)) + 1,
-          username: addUsername.trim().toLowerCase(),
-          role: addRole, is_active: true,
-          created_at: new Date().toISOString(), last_login: null,
-        };
-        setUsers((prev) => [newUser, ...prev]);
-        setLogs((prev) => [{
-          id: prev.length + 1, username: newUser.username, action: "user_created",
-          performed_by: user?.username ?? "admin", ip_address: null,
-          detail: "New account created", created_at: new Date().toISOString(),
-        }, ...prev]);
-        setAddOpen(false);
-        showToast(`User "${newUser.username}" created.`);
-        return;
-      }
-      const res = await fetch(`${API_URL}/api/admin/users`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ username: addUsername.trim(), password: addPassword, role: addRole }),
-      });
-      if (res.status === 409) { setAddError("Username already taken."); return; }
-      if (!res.ok) throw new Error("Failed to create user.");
-      const created = await res.json() as UserRow;
-      setUsers((prev) => [created, ...prev]);
+      await registerUser(addUsername.trim(), addPassword, "user");
+      const uname = addUsername.trim().toLowerCase();
+      const newUser: UserRow = {
+        id: Math.max(0, ...users.map((u) => u.id)) + 1,
+        username: uname,
+        role: "user", is_active: true,
+        created_at: new Date().toISOString(), last_login: null,
+      };
+      setUsers((prev) => [newUser, ...prev]);
+      setLogs((prev) => [{
+        id: prev.length + 1, username: uname, action: "user_created",
+        performed_by: user?.username ?? "admin", ip_address: null,
+        detail: "New account created — must change password on first login", created_at: new Date().toISOString(),
+      }, ...prev]);
       setAddOpen(false);
-      showToast(`User "${created.username}" created.`);
+      showToast(`User "${uname}" created.`);
     } catch (e) {
       setAddError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
@@ -263,6 +253,59 @@ export function AdminDashboard() {
     }
   }
 
+  /* ── Reactivate ─────────────────────────────────────────────────────────── */
+  async function reactivateUser(id: number) {
+    try {
+      if (USE_MOCK) {
+        await new Promise<void>((r) => setTimeout(r, 400));
+        const target = users.find((u) => u.id === id);
+        setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, is_active: true } : u)));
+        setLogs((prev) => [{
+          id: prev.length + 1, username: target?.username ?? String(id), action: "user_reactivated",
+          performed_by: user?.username ?? "admin", ip_address: null,
+          detail: "Account reactivated by admin", created_at: new Date().toISOString(),
+        }, ...prev]);
+        showToast("User reactivated.", true);
+        return;
+      }
+      const res = await fetch(`${API_URL}/api/admin/users/${id}/reactivate`, {
+        method: "POST", headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to reactivate user.");
+      const updated = await res.json() as UserRow;
+      setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+      showToast(`User "${updated.username}" reactivated.`, true);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Something went wrong.", false);
+    }
+  }
+
+  /* ── Force password reset ────────────────────────────────────────────────── */
+  async function forcePasswordReset(id: number) {
+    try {
+      if (USE_MOCK) {
+        await new Promise<void>((r) => setTimeout(r, 300));
+        const target = users.find((u) => u.id === id);
+        setLogs((prev) => [{
+          id: prev.length + 1, username: target?.username ?? String(id), action: "force_password_reset",
+          performed_by: user?.username ?? "admin", ip_address: null,
+          detail: "Admin forced password reset on next login", created_at: new Date().toISOString(),
+        }, ...prev]);
+        showToast(`Password reset forced for "${target?.username}".`, true);
+        return;
+      }
+      const res = await fetch(`${API_URL}/api/admin/users/${id}/force-reset`, {
+        method: "POST", headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to force password reset.");
+      const updated = await res.json() as UserRow;
+      setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+      showToast(`Password reset forced for "${updated.username}".`, true);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Something went wrong.", false);
+    }
+  }
+
   /* ── Theme tokens ───────────────────────────────────────────────────────── */
   const shell      = lightMode ? "bg-slate-50 text-slate-900"  : "bg-gray-950 text-gray-100";
   const sideBg     = lightMode ? "bg-white"                    : "bg-gray-950";
@@ -328,8 +371,8 @@ export function AdminDashboard() {
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {(["users", "logs"] as Tab[]).map((t) => {
-            const labels  = { users: "Users", logs: "Audit Logs" };
+          {(["users", "logs", "session_logs"] as Tab[]).map((t) => {
+            const labels  = { users: "Users", logs: "Audit Logs", session_logs: "Session Logs" };
             const active  = tab === t;
             return (
               <button
@@ -346,10 +389,15 @@ export function AdminDashboard() {
                     <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" />
                     <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
                   </svg>
-                ) : (
+                ) : t === "logs" ? (
                   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" />
                     <line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
                   </svg>
                 )}
                 {labels[t]}
@@ -412,10 +460,22 @@ export function AdminDashboard() {
             onAdd={openAdd}
             onEdit={openEdit}
             onConfirmDeactivate={confirmDeactivate}
+            onReactivate={reactivateUser}
+            onForceReset={forcePasswordReset}
           />
-        ) : (
+        ) : tab === "logs" ? (
           <LogsTab
             logs={logs}
+            lightMode={lightMode}
+            border={border}
+            cardBg={cardBg}
+            headText={headText}
+            secondText={secondText}
+            mutedText={mutedText}
+          />
+        ) : (
+          <SessionLogsTab
+            users={users}
             lightMode={lightMode}
             border={border}
             cardBg={cardBg}
@@ -451,19 +511,6 @@ export function AdminDashboard() {
                 <input type="password" value={addPassword} onChange={(e) => setAddPassword(e.target.value)} disabled={addSaving}
                   className={`w-full rounded-xl border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${lightMode ? "border-slate-200 bg-white text-slate-900 placeholder-slate-400" : "border-gray-700 bg-gray-800 text-gray-100 placeholder-gray-600"}`}
                   placeholder="Enter password" />
-              </div>
-              <div>
-                <label className={`block text-sm font-semibold mb-1.5 ${secondText}`}>Role</label>
-                <div className={`grid grid-cols-2 gap-2 rounded-xl border p-1 ${lightMode ? "border-slate-200 bg-slate-100" : "border-gray-700 bg-gray-800"}`}>
-                  {(["user", "admin"] as UserRole[]).map((r) => (
-                    <button type="button" key={r} onClick={() => setAddRole(r)}
-                      className={`py-2 rounded-lg text-sm font-semibold capitalize transition ${addRole === r
-                        ? r === "admin" ? "bg-violet-600 text-white" : "bg-blue-600 text-white"
-                        : lightMode ? "text-slate-600 hover:text-slate-900" : "text-gray-400 hover:text-gray-200"}`}>
-                      {r}
-                    </button>
-                  ))}
-                </div>
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setAddOpen(false)} disabled={addSaving}
@@ -561,6 +608,7 @@ export function AdminDashboard() {
 function UsersTab({
   users, lightMode, border, cardBg, headText, secondText, mutedText,
   pendingDeactivate, setPendingDeactivate, onAdd, onEdit, onConfirmDeactivate,
+  onReactivate, onForceReset,
 }: {
   users: UserRow[];
   lightMode: boolean;
@@ -570,6 +618,8 @@ function UsersTab({
   onAdd: () => void;
   onEdit: (u: UserRow) => void;
   onConfirmDeactivate: (id: number) => void;
+  onReactivate: (id: number) => void;
+  onForceReset: (id: number) => void;
 }) {
   return (
     <div className="flex-1 overflow-y-auto p-6">
@@ -629,6 +679,7 @@ function UsersTab({
                   <td className={`px-6 py-4 font-mono text-xs ${secondText}`}>{fmt(u.last_login)}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
+                      {/* Edit */}
                       <button
                         onClick={() => onEdit(u)}
                         className={`p-1.5 rounded-lg transition ${lightMode ? "text-slate-500 hover:text-blue-600 hover:bg-blue-50" : "text-gray-500 hover:text-blue-400 hover:bg-blue-950/30"}`}
@@ -639,39 +690,71 @@ function UsersTab({
                           <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
                         </svg>
                       </button>
-                      <div className="relative">
+
+                      {u.is_active ? (
+                        <>
+                          {/* Force password reset */}
+                          <button
+                            onClick={() => onForceReset(u.id)}
+                            className={`p-1.5 rounded-lg transition ${lightMode ? "text-slate-500 hover:text-violet-600 hover:bg-violet-50" : "text-gray-500 hover:text-violet-400 hover:bg-violet-950/30"}`}
+                            aria-label="Force password reset"
+                            title="Force password reset on next login"
+                          >
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                              <path d="M7 11V7a5 5 0 0110 0v4" />
+                            </svg>
+                          </button>
+
+                          {/* Deactivate with confirm popover */}
+                          <div className="relative">
+                            <button
+                              onClick={() => setPendingDeactivate(pendingDeactivate === u.id ? null : u.id)}
+                              className={`p-1.5 rounded-lg transition ${
+                                pendingDeactivate === u.id
+                                  ? "text-red-500 bg-red-50 dark:bg-red-950/30"
+                                  : lightMode ? "text-slate-500 hover:text-red-600 hover:bg-red-50" : "text-gray-500 hover:text-red-400 hover:bg-red-950/30"
+                              }`}
+                              aria-label="Deactivate"
+                              title="Deactivate account"
+                            >
+                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                              </svg>
+                            </button>
+                            {pendingDeactivate === u.id && (
+                              <div className={`absolute bottom-full right-0 mb-2 w-48 rounded-xl shadow-xl border-2 p-3 z-20 ${lightMode ? "bg-white border-red-300" : "bg-gray-900 border-red-900/60"}`}>
+                                <p className={`text-sm font-bold mb-1 ${lightMode ? "text-slate-900" : "text-gray-100"}`}>Deactivate?</p>
+                                <p className={`text-xs mb-3 ${mutedText}`}>"{u.username}" will lose access immediately.</p>
+                                <div className="flex gap-2">
+                                  <button onClick={() => setPendingDeactivate(null)}
+                                    className={`flex-1 text-xs font-semibold rounded-lg py-1.5 border transition ${lightMode ? "border-slate-200 text-slate-700 hover:bg-slate-100" : "border-gray-700 text-gray-300 hover:bg-gray-800"}`}>
+                                    Cancel
+                                  </button>
+                                  <button onClick={() => onConfirmDeactivate(u.id)}
+                                    className="flex-1 text-xs font-semibold rounded-lg py-1.5 bg-red-600 hover:bg-red-500 text-white transition">
+                                    Deactivate
+                                  </button>
+                                </div>
+                                <div className={`absolute bottom-[-6px] right-4 w-3 h-3 rotate-45 border-r-2 border-b-2 ${lightMode ? "bg-white border-red-300" : "bg-gray-900 border-red-900/60"}`} />
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        /* Reactivate */
                         <button
-                          disabled={!u.is_active}
-                          onClick={() => setPendingDeactivate(pendingDeactivate === u.id ? null : u.id)}
-                          className={`p-1.5 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed ${
-                            pendingDeactivate === u.id
-                              ? "text-red-500 bg-red-50 dark:bg-red-950/30"
-                              : lightMode ? "text-slate-500 hover:text-red-600 hover:bg-red-50" : "text-gray-500 hover:text-red-400 hover:bg-red-950/30"
-                          }`}
-                          aria-label="Deactivate"
+                          onClick={() => onReactivate(u.id)}
+                          className={`p-1.5 rounded-lg transition ${lightMode ? "text-slate-500 hover:text-teal-600 hover:bg-teal-50" : "text-gray-500 hover:text-teal-400 hover:bg-teal-950/30"}`}
+                          aria-label="Reactivate"
+                          title="Reactivate account"
                         >
                           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4h6v2" />
+                            <polyline points="23 4 23 10 17 10" />
+                            <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" />
                           </svg>
                         </button>
-                        {pendingDeactivate === u.id && (
-                          <div className={`absolute bottom-full right-0 mb-2 w-48 rounded-xl shadow-xl border-2 p-3 z-20 ${lightMode ? "bg-white border-red-300" : "bg-gray-900 border-red-900/60"}`}>
-                            <p className={`text-sm font-bold mb-1 ${lightMode ? "text-slate-900" : "text-gray-100"}`}>Deactivate?</p>
-                            <p className={`text-xs mb-3 ${mutedText}`}>"{u.username}" will lose access immediately.</p>
-                            <div className="flex gap-2">
-                              <button onClick={() => setPendingDeactivate(null)}
-                                className={`flex-1 text-xs font-semibold rounded-lg py-1.5 border transition ${lightMode ? "border-slate-200 text-slate-700 hover:bg-slate-100" : "border-gray-700 text-gray-300 hover:bg-gray-800"}`}>
-                                Cancel
-                              </button>
-                              <button onClick={() => onConfirmDeactivate(u.id)}
-                                className="flex-1 text-xs font-semibold rounded-lg py-1.5 bg-red-600 hover:bg-red-500 text-white transition">
-                                Deactivate
-                              </button>
-                            </div>
-                            <div className={`absolute bottom-[-6px] right-4 w-3 h-3 rotate-45 border-r-2 border-b-2 ${lightMode ? "bg-white border-red-300" : "bg-gray-900 border-red-900/60"}`} />
-                          </div>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -727,6 +810,147 @@ function LogsTab({
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Session action metadata ─────────────────────────────────────────────── */
+
+const SESSION_ACTION_CLS: Record<string, string> = {
+  session_start:        "text-green-400",
+  session_end:          "text-gray-400",
+  solve_submitted:      "text-blue-400",
+  solve_success:        "text-teal-400",
+  solve_error:          "text-red-400",
+  plan_selected:        "text-sky-400",
+  session_saved:        "text-violet-400",
+  session_restored:     "text-amber-400",
+  item_added:           "text-blue-300",
+  item_edited:          "text-blue-200",
+  item_deleted:         "text-red-300",
+  stop_added:           "text-teal-300",
+  stop_removed:         "text-amber-300",
+  truck_param_changed:  "text-slate-400",
+};
+
+const SESSION_ACTION_LABEL: Record<string, string> = {
+  session_start:        "Session started",
+  session_end:          "Session ended",
+  solve_submitted:      "Solve submitted",
+  solve_success:        "Solve complete",
+  solve_error:          "Solve failed",
+  plan_selected:        "Plan selected",
+  session_saved:        "Session saved",
+  session_restored:     "Session restored",
+  item_added:           "Item added",
+  item_edited:          "Item edited",
+  item_deleted:         "Item deleted",
+  stop_added:           "Stop added",
+  stop_removed:         "Stop removed",
+  truck_param_changed:  "Truck param changed",
+};
+
+/* ─── Session Logs tab ────────────────────────────────────────────────────── */
+
+function SessionLogsTab({
+  users, lightMode, border, cardBg, headText, secondText, mutedText,
+}: {
+  users: UserRow[];
+  lightMode: boolean;
+  border: string; cardBg: string; headText: string; secondText: string; mutedText: string;
+}) {
+  const [entries,        setEntries]        = useState<SessionLogEntry[]>([]);
+  const [filterUsername, setFilterUsername] = useState<string>("__all__");
+
+  useEffect(() => {
+    setEntries(getSessionLogs());
+  }, []);
+
+  const knownUsernames = Array.from(
+    new Set([...users.map((u) => u.username), ...entries.map((e) => e.username)]),
+  ).sort();
+
+  const visible = filterUsername === "__all__"
+    ? entries
+    : entries.filter((e) => e.username === filterUsername);
+
+  return (
+    <div className="flex-1 overflow-y-auto p-6">
+      <div className={`rounded-2xl border-2 ${border} ${cardBg} overflow-hidden`}>
+        {/* Header */}
+        <div className={`px-6 py-4 border-b ${border} flex items-center justify-between gap-4`}>
+          <div>
+            <h2 className={`text-lg font-bold ${headText}`}>Session Logs</h2>
+            <p className={`text-sm ${mutedText}`}>
+              {visible.length} event{visible.length !== 1 ? "s" : ""}
+              {filterUsername !== "__all__" ? ` for ${filterUsername}` : ""}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <label className={`text-xs font-semibold ${mutedText}`}>User</label>
+            <select
+              value={filterUsername}
+              onChange={(e) => setFilterUsername(e.target.value)}
+              className={`rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
+                lightMode
+                  ? "border-slate-200 bg-white text-slate-900"
+                  : "border-gray-700 bg-gray-800 text-gray-100"
+              }`}
+            >
+              <option value="__all__">All users</option>
+              {knownUsernames.map((u) => (
+                <option key={u} value={u}>{u}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => setEntries(getSessionLogs())}
+              title="Refresh"
+              className={`p-2 rounded-xl border transition ${
+                lightMode
+                  ? "border-slate-200 text-slate-600 hover:bg-slate-100"
+                  : "border-gray-700 text-gray-400 hover:bg-gray-800"
+              }`}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+                <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {visible.length === 0 ? (
+          <div className={`px-6 py-12 text-center text-sm ${mutedText}`}>
+            No session events recorded yet.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className={`border-b ${border}`}>
+                  {["Timestamp", "User", "Action", "Detail"].map((h) => (
+                    <th key={h} className={`px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider ${mutedText}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((e) => (
+                  <tr key={e.id} className={`border-b ${border} ${lightMode ? "hover:bg-slate-50" : "hover:bg-gray-800/40"} transition`}>
+                    <td className={`px-6 py-3 font-mono text-xs ${secondText} whitespace-nowrap`}>{fmt(e.timestamp)}</td>
+                    <td className={`px-6 py-3 font-semibold ${headText}`}>{e.username}</td>
+                    <td className="px-6 py-3">
+                      <span className={`text-xs font-bold ${SESSION_ACTION_CLS[e.action] ?? "text-gray-400"}`}>
+                        {SESSION_ACTION_LABEL[e.action] ?? e.action}
+                      </span>
+                    </td>
+                    <td className={`px-6 py-3 text-xs font-mono ${secondText} max-w-xs truncate`}>{e.detail ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

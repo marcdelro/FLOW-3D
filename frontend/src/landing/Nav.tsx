@@ -121,8 +121,7 @@ export function Nav() {
             </div>
           ) : (
             <>
-              <ButtonLink to="/login" variant="ghost" size="md">Sign in</ButtonLink>
-              <ButtonLink to="/register" variant="primary" size="md">Get Started</ButtonLink>
+              <ButtonLink to="/login" variant="primary" size="md">Sign In</ButtonLink>
             </>
           )}
         </div>
@@ -181,8 +180,7 @@ export function Nav() {
                 </>
               ) : (
                 <div className="flex gap-2">
-                  <ButtonLink to="/login" variant="ghost" size="md" onClick={() => setOpen(false)}>Sign in</ButtonLink>
-                  <ButtonLink to="/register" variant="primary" size="md" onClick={() => setOpen(false)}>Get Started</ButtonLink>
+                  <ButtonLink to="/login" variant="primary" size="md" onClick={() => setOpen(false)}>Sign In</ButtonLink>
                 </div>
               )}
             </div>

@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchSolutions } from "./api/client";
 import { useAuth } from "./auth/AuthContext";
+import { appendSessionLog } from "./lib/sessionLog";
 import { Dashboard } from "./components/Dashboard";
 import { Explainability } from "./components/Explainability";
 import { ManifestForm } from "./components/ManifestForm";
@@ -28,6 +29,7 @@ function App() {
   const navigate                        = useNavigate();
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [savedFlash,    setSavedFlash]    = useState(false);
+  const prevUserRef = useRef<string | null>(null);
 
   const SESSION_KEY = user ? `flow3d_state_${user.username}` : null;
 
@@ -43,10 +45,21 @@ function App() {
       setPlans(saved.plans);
       setSelectedIdx(saved.selectedIdx);
       setTab("results");
+      if (user) appendSessionLog(user.username, "session_restored", `items=${saved.items.length}, plans=${saved.plans.length}`);
     } catch {
       localStorage.removeItem(SESSION_KEY);
     }
   }, [SESSION_KEY]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Log session_start once when a user signs in (or page loads with active token).
+  useEffect(() => {
+    const prev = prevUserRef.current;
+    const curr = user?.username ?? null;
+    if (curr && curr !== prev) {
+      appendSessionLog(curr, "session_start", null);
+    }
+    prevUserRef.current = curr;
+  }, [user]);
 
   function saveSession() {
     if (!SESSION_KEY || !solveItems.length) return;
@@ -61,9 +74,11 @@ function App() {
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 2500);
+    if (user) appendSessionLog(user.username, "session_saved", `items=${solveItems.length}, plans=${plans.length}`);
   }
 
   function handleLogout() {
+    if (user) appendSessionLog(user.username, "session_end", null);
     if (SESSION_KEY && solveItems.length) {
       saveSession();
     }
@@ -73,18 +88,32 @@ function App() {
 
   const selectedPlan = plans[selectedIdx] ?? null;
 
+  function handleSelectPlan(idx: number) {
+    setSelectedIdx(idx);
+    if (user && plans[idx]) {
+      const p = plans[idx];
+      appendSessionLog(user.username, "plan_selected", `plan=${idx + 1}, strategy=${p.strategy}, solver=${p.solver_mode}, v_util=${(p.v_util * 100).toFixed(1)}%`);
+    }
+  }
+
   async function handleSolve(req: SolveRequest) {
     setLoading(true);
     setError(null);
     setTruckSpec(req.truck);
     setSolveItems(req.items);
+    if (user) appendSessionLog(user.username, "solve_submitted", `strategy=${req.strategy}, items=${req.items.length}`);
     try {
       const results = await fetchSolutions(req);
       setPlans(results);
       setSelectedIdx(0);
       setTab("results");
+      if (user && results[0]) {
+        appendSessionLog(user.username, "solve_success", `solver=${results[0].solver_mode}, plans=${results.length}, best_v_util=${(results[0].v_util * 100).toFixed(1)}%`);
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong while planning. Please try again.");
+      const msg = e instanceof Error ? e.message : "Something went wrong while planning. Please try again.";
+      setError(msg);
+      if (user) appendSessionLog(user.username, "solve_error", msg.slice(0, 120));
     } finally {
       setLoading(false);
     }
@@ -226,7 +255,7 @@ function App() {
                 <PlanSelector
                   plans={plans}
                   selectedIdx={selectedIdx}
-                  onSelect={setSelectedIdx}
+                  onSelect={handleSelectPlan}
                   lightMode={lightMode}
                 />
                 <div className={`border-t ${sideBorder}`} />
@@ -244,7 +273,7 @@ function App() {
                 <PlanSelector
                   plans={plans}
                   selectedIdx={selectedIdx}
-                  onSelect={setSelectedIdx}
+                  onSelect={handleSelectPlan}
                   lightMode={lightMode}
                 />
                 <div className={`border-t ${sideBorder}`} />
@@ -284,6 +313,63 @@ function App() {
 
       {/* ── Main viewer ─────────────────────────────────────────────────────── */}
       <main className="relative overflow-hidden">
+
+        {/* ── Top-right overlay: Save State + Log Out — always visible when signed in ── */}
+        <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+
+          {/* Save State */}
+          <button
+            onClick={() => user ? saveSession() : setShowSaveModal(true)}
+            title={user ? "Save current session" : "Sign in to save"}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
+              savedFlash
+                ? lightMode
+                  ? "border-green-400 bg-green-50 text-green-700"
+                  : "border-green-700 bg-green-950/70 text-green-300"
+                : lightMode
+                  ? "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400"
+                  : "bg-gray-900 border-gray-600 text-gray-200 hover:bg-gray-800 hover:border-gray-500"
+            }`}
+          >
+            {savedFlash ? (
+              <>
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+                Saved
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
+                  <polyline points="17 21 17 13 7 13 7 21" />
+                  <polyline points="7 3 7 8 15 8" />
+                </svg>
+                Save State
+              </>
+            )}
+          </button>
+
+          {/* Log Out */}
+          {user && (
+            <button
+              onClick={handleLogout}
+              title="Sign out"
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
+                lightMode
+                  ? "bg-white border-slate-300 text-red-600 hover:bg-red-50 hover:border-red-300"
+                  : "bg-gray-900 border-gray-600 text-red-400 hover:bg-red-950/30 hover:border-red-800"
+              }`}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+              </svg>
+              Log Out
+            </button>
+          )}
+
+        </div>
+
         {selectedPlan ? (
           <div className="relative w-full h-full">
             <TruckViewer
@@ -292,61 +378,6 @@ function App() {
               items={solveItems}
               lightMode={lightMode}
             />
-
-            {/* ── Top-right viewer overlay: Save State + Log Out ── */}
-            <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
-
-              {/* Save State */}
-              <button
-                onClick={() => user ? saveSession() : setShowSaveModal(true)}
-                title={user ? "Save current session" : "Sign in to save"}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
-                  savedFlash
-                    ? lightMode
-                      ? "border-green-400 bg-green-50 text-green-700"
-                      : "border-green-700 bg-green-950/70 text-green-300"
-                    : lightMode
-                      ? "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400"
-                      : "bg-gray-900 border-gray-600 text-gray-200 hover:bg-gray-800 hover:border-gray-500"
-                }`}
-              >
-                {savedFlash ? (
-                  <>
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
-                    </svg>
-                    Saved
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
-                      <polyline points="17 21 17 13 7 13 7 21" />
-                      <polyline points="7 3 7 8 15 8" />
-                    </svg>
-                    Save State
-                  </>
-                )}
-              </button>
-
-              {/* Log Out — only when signed in */}
-              {user && (
-                <button
-                  onClick={handleLogout}
-                  title="Sign out"
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
-                    lightMode
-                      ? "bg-white border-slate-300 text-red-600 hover:bg-red-50 hover:border-red-300"
-                      : "bg-gray-900 border-gray-600 text-red-400 hover:bg-red-950/30 hover:border-red-800"
-                  }`}
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
-                  </svg>
-                  Log Out
-                </button>
-              )}
-            </div>
           </div>
         ) : loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-6 px-8">
@@ -439,14 +470,6 @@ function App() {
                 className="w-full rounded-xl px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition"
               >
                 Sign In
-              </button>
-              <button
-                onClick={() => { setShowSaveModal(false); navigate("/register"); }}
-                className={`w-full rounded-xl px-4 py-3 border-2 text-sm font-semibold transition ${
-                  lightMode ? "border-slate-200 text-slate-700 hover:bg-slate-100" : "border-gray-700 text-gray-300 hover:bg-gray-800"
-                }`}
-              >
-                Create Account
               </button>
               <button
                 onClick={() => setShowSaveModal(false)}

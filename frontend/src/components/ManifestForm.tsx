@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { useAuth } from "../auth/AuthContext";
+import { appendSessionLog } from "../lib/sessionLog";
 
 import type {
   DeliveryStop,
@@ -597,6 +599,8 @@ interface ManifestFormProps {
 }
 
 export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFormProps) {
+  const { user } = useAuth();
+
   // ── Theme helpers ──
   const bg     = lightMode ? "bg-white"        : "bg-gray-900";
   const bg2    = lightMode ? "bg-slate-100"    : "bg-gray-950";
@@ -671,10 +675,12 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
 
   function confirmDelete(idx: number) {
     if (editingIdx !== null && idx < editingIdx) setEditingIdx(editingIdx - 1);
+    const deleted = items[idx];
     const newItems = items.filter((_, j) => j !== idx);
     setItems(newItems);
     pushHistory(newItems);
     setPendingDeleteIdx(null);
+    if (user) appendSessionLog(user.username, "item_deleted", deleted.item_id);
   }
 
   function cancelDelete() {
@@ -745,18 +751,21 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
 
   function setTruckField(k: keyof TruckSpec, v: number) {
     setTruck((t) => ({ ...t, [k]: v }));
+    if (user) appendSessionLog(user.username, "truck_param_changed", `${k}=${v}`);
   }
 
   // ── Stop helpers ──
   function addStop() {
     const next = stops.length ? Math.max(...stops.map((s) => s.stop_id)) + 1 : 1;
     setStops((s) => [...s, { stop_id: next, address: "" }]);
+    if (user) appendSessionLog(user.username, "stop_added", `stop_id=${next}`);
   }
 
   function removeStop(idx: number) {
     const removed = stops[idx].stop_id;
     setStops((s) => s.filter((_, i) => i !== idx));
     setItems((its) => its.filter((it) => it.stop_id !== removed));
+    if (user) appendSessionLog(user.username, "stop_removed", `stop_id=${removed}`);
   }
 
   function moveStop(idx: number, dir: -1 | 1) {
@@ -791,6 +800,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
       setDraft(blankItem());
       setDraftQty(1);
       setShowAdd(false);
+      if (user) appendSessionLog(user.username, "item_edited", baseId);
       return;
     }
 
@@ -822,6 +832,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
     setDraft(blankItem());
     setDraftQty(1);
     setShowAdd(false);
+    if (user) appendSessionLog(user.username, "item_added", generated.map((g) => g.item_id).join(", "));
   }
 
   function cancelAdd() {
