@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { fetchSolutions } from "./api/client";
+import { useAuth } from "./auth/AuthContext";
 import { Dashboard } from "./components/Dashboard";
 import { Explainability } from "./components/Explainability";
 import { ManifestForm } from "./components/ManifestForm";
 import { PlanSelector } from "./components/PlanSelector";
 import { TruckViewer } from "./components/TruckViewer";
-import type { FurnitureItem, PackingPlan, SolveRequest, TruckSpec } from "./types";
+import type { FurnitureItem, PackingPlan, SavedSession, SolveRequest, TruckSpec } from "./types";
 
 type Tab = "manifest" | "results" | "explain";
 
@@ -21,6 +23,53 @@ function App() {
     W: 2400, L: 13600, H: 2440, payload_kg: 3000,
   });
   const [solveItems, setSolveItems]     = useState<FurnitureItem[]>([]);
+
+  const { user, logout }                = useAuth();
+  const navigate                        = useNavigate();
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [savedFlash,    setSavedFlash]    = useState(false);
+
+  const SESSION_KEY = user ? `flow3d_state_${user.username}` : null;
+
+  // Restore saved session when a user signs in and no plan is loaded yet.
+  useEffect(() => {
+    if (!SESSION_KEY || plans.length > 0) return;
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return;
+    try {
+      const saved = JSON.parse(raw) as SavedSession;
+      setTruckSpec(saved.truck);
+      setSolveItems(saved.items);
+      setPlans(saved.plans);
+      setSelectedIdx(saved.selectedIdx);
+      setTab("results");
+    } catch {
+      localStorage.removeItem(SESSION_KEY);
+    }
+  }, [SESSION_KEY]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function saveSession() {
+    if (!SESSION_KEY || !solveItems.length) return;
+    const session: SavedSession = {
+      items: solveItems,
+      truck: truckSpec,
+      stops: [],
+      plans,
+      selectedIdx,
+      savedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 2500);
+  }
+
+  function handleLogout() {
+    if (SESSION_KEY && solveItems.length) {
+      saveSession();
+    }
+    logout();
+    navigate("/", { replace: true });
+  }
 
   const selectedPlan = plans[selectedIdx] ?? null;
 
@@ -234,14 +283,71 @@ function App() {
       </aside>
 
       {/* ── Main viewer ─────────────────────────────────────────────────────── */}
-      <main className="overflow-hidden">
+      <main className="relative overflow-hidden">
         {selectedPlan ? (
-          <TruckViewer
-            plan={selectedPlan}
-            truck={{ W: truckSpec.W, L: truckSpec.L, H: truckSpec.H }}
-            items={solveItems}
-            lightMode={lightMode}
-          />
+          <div className="relative w-full h-full">
+            <TruckViewer
+              plan={selectedPlan}
+              truck={{ W: truckSpec.W, L: truckSpec.L, H: truckSpec.H }}
+              items={solveItems}
+              lightMode={lightMode}
+            />
+
+            {/* ── Top-right viewer overlay: Save State + Log Out ── */}
+            <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+
+              {/* Save State */}
+              <button
+                onClick={() => user ? saveSession() : setShowSaveModal(true)}
+                title={user ? "Save current session" : "Sign in to save"}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
+                  savedFlash
+                    ? lightMode
+                      ? "border-green-400 bg-green-50 text-green-700"
+                      : "border-green-700 bg-green-950/70 text-green-300"
+                    : lightMode
+                      ? "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400"
+                      : "bg-gray-900 border-gray-600 text-gray-200 hover:bg-gray-800 hover:border-gray-500"
+                }`}
+              >
+                {savedFlash ? (
+                  <>
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+                    </svg>
+                    Saved
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
+                      <polyline points="17 21 17 13 7 13 7 21" />
+                      <polyline points="7 3 7 8 15 8" />
+                    </svg>
+                    Save State
+                  </>
+                )}
+              </button>
+
+              {/* Log Out — only when signed in */}
+              {user && (
+                <button
+                  onClick={handleLogout}
+                  title="Sign out"
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
+                    lightMode
+                      ? "bg-white border-slate-300 text-red-600 hover:bg-red-50 hover:border-red-300"
+                      : "bg-gray-900 border-gray-600 text-red-400 hover:bg-red-950/30 hover:border-red-800"
+                  }`}
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+                  </svg>
+                  Log Out
+                </button>
+              )}
+            </div>
+          </div>
         ) : loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-6 px-8">
             <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -285,29 +391,75 @@ function App() {
                 to generate 3 alternative LIFO-compliant loading plans.
               </p>
             </div>
-            <div className={`grid grid-cols-3 gap-3 max-w-2xl w-full mt-2`}>
-              <HelpCard
-                step="1"
-                title="Manifest"
-                body="Truck spec, delivery stops, and cargo items."
-                lightMode={lightMode}
-              />
-              <HelpCard
-                step="2"
-                title="Solve"
-                body="ILP for small manifests, FFD for large."
-                lightMode={lightMode}
-              />
-              <HelpCard
-                step="3"
-                title="Review"
-                body="Compare plans in the 3D viewer."
-                lightMode={lightMode}
-              />
+            <div className="grid grid-cols-3 gap-3 max-w-2xl w-full mt-2">
+              <HelpCard step="1" title="Manifest"  body="Truck spec, delivery stops, and cargo items." lightMode={lightMode} />
+              <HelpCard step="2" title="Solve"     body="ILP for small manifests, FFD for large."     lightMode={lightMode} />
+              <HelpCard step="3" title="Review"    body="Compare plans in the 3D viewer."             lightMode={lightMode} />
             </div>
           </div>
         )}
       </main>
+
+      {/* ── Save State modal — sign-in prompt for guest users ── */}
+      {showSaveModal && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4"
+          onClick={() => setShowSaveModal(false)}
+        >
+          <div
+            className={`rounded-2xl border-2 p-6 w-full max-w-sm shadow-2xl ${
+              lightMode ? "bg-white border-slate-200" : "bg-gray-900 border-gray-700"
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Icon */}
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${
+              lightMode ? "bg-blue-50 border-2 border-blue-200" : "bg-blue-950/40 border-2 border-blue-800"
+            }`}>
+              <svg className={`w-6 h-6 ${lightMode ? "text-blue-600" : "text-blue-400"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
+            </div>
+
+            <h2 className={`text-xl font-bold mb-2 ${lightMode ? "text-slate-900" : "text-gray-100"}`}>
+              Save your session
+            </h2>
+            <p className={`text-sm mb-5 leading-relaxed ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
+              Sign in to save your cargo manifest and packing plan so you can pick up right where you left off.
+            </p>
+
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  setShowSaveModal(false);
+                  navigate("/login", { state: { from: { pathname: "/app" } } });
+                }}
+                className="w-full rounded-xl px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition"
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => { setShowSaveModal(false); navigate("/register"); }}
+                className={`w-full rounded-xl px-4 py-3 border-2 text-sm font-semibold transition ${
+                  lightMode ? "border-slate-200 text-slate-700 hover:bg-slate-100" : "border-gray-700 text-gray-300 hover:bg-gray-800"
+                }`}
+              >
+                Create Account
+              </button>
+              <button
+                onClick={() => setShowSaveModal(false)}
+                className={`text-sm text-center mt-1 transition ${
+                  lightMode ? "text-slate-400 hover:text-slate-600" : "text-gray-600 hover:text-gray-400"
+                }`}
+              >
+                Continue without saving
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
