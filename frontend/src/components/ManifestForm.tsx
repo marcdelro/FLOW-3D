@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { useAuth } from "../auth/AuthContext";
+import { appendSessionLog } from "../lib/sessionLog";
 
 import type {
   DeliveryStop,
@@ -17,6 +19,52 @@ import {
   downloadManifestTemplate,
   importManifestFile,
 } from "../data/manifestImport";
+
+// ── Unit helpers ──────────────────────────────────────────────────────────────
+type DimUnit = "mm" | "cm" | "m" | "in";
+
+const UNIT_TO_MM: Record<DimUnit, number> = { mm: 1, cm: 10, m: 1000, in: 25.4 };
+
+function toDisplay(mm: number, unit: DimUnit): number {
+  const val = mm / UNIT_TO_MM[unit];
+  return unit === "m" || unit === "in" ? Math.round(val * 100) / 100 : Math.round(val);
+}
+
+function fromDisplay(v: number, unit: DimUnit): number {
+  return Math.max(1, Math.round(v * UNIT_TO_MM[unit]));
+}
+
+function UnitToggle({
+  unit,
+  onChange,
+  lightMode,
+}: {
+  unit: DimUnit;
+  onChange: (u: DimUnit) => void;
+  lightMode?: boolean;
+}) {
+  const units: DimUnit[] = ["mm", "cm", "m", "in"];
+  return (
+    <div className={`inline-flex rounded-lg overflow-hidden border ${lightMode ? "border-slate-300" : "border-gray-700"}`}>
+      {units.map((u, i) => (
+        <button
+          key={u}
+          type="button"
+          onClick={() => onChange(u)}
+          className={`px-2.5 py-1 text-xs font-semibold transition-colors ${
+            u === unit
+              ? "bg-blue-600 text-white"
+              : lightMode
+                ? "bg-white text-slate-600 hover:bg-slate-100"
+                : "bg-gray-900 text-gray-400 hover:bg-gray-800"
+          } ${i < units.length - 1 ? (lightMode ? "border-r border-slate-300" : "border-r border-gray-700") : ""}`}
+        >
+          {u}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /**
  * Number input that lets the user backspace to empty mid-edit without
@@ -136,17 +184,12 @@ const DEFAULT_ITEMS: FurnitureItem[] = [
   { item_id: "bookshelf_01",    w: 800,  l: 300, h: 1800, weight_kg: 30, stop_id: 1, side_up: true  },
 ];
 
-// ── Shared micro-styles ────────────────────────────────────────────────────────
-const inputCls =
-  "w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-100 " +
-  "focus:outline-none focus:border-blue-600 font-mono placeholder-gray-700";
-const labelCls = "block text-xs text-gray-500 mb-1";
-
 // ── Section header (sticky within the scrollable sidebar) ─────────────────────
 function Section({
   title,
   hint,
   badge,
+  action,
   children,
   bg2,
   border,
@@ -156,6 +199,7 @@ function Section({
   title: string;
   hint?: string;
   badge?: number;
+  action?: ReactNode;
   children: ReactNode;
   bg2: string;
   border: string;
@@ -173,12 +217,17 @@ function Section({
             <div className={`text-sm mt-0.5 leading-snug ${muted}`}>{hint}</div>
           )}
         </div>
-        {badge !== undefined && (
-          <span className={`text-base font-bold px-2.5 py-1 rounded-full shrink-0 ${
-            lightMode ? "bg-slate-200 text-slate-700" : "bg-gray-800 text-gray-300"
-          }`}>
-            {badge}
-          </span>
+        {(action !== undefined || badge !== undefined) && (
+          <div className="flex items-center gap-2 shrink-0">
+            {action}
+            {badge !== undefined && (
+              <span className={`text-base font-bold px-2.5 py-1 rounded-full shrink-0 ${
+                lightMode ? "bg-slate-200 text-slate-700" : "bg-gray-800 text-gray-300"
+              }`}>
+                {badge}
+              </span>
+            )}
+          </div>
         )}
       </div>
       <div className="px-5 py-5">{children}</div>
@@ -199,6 +248,7 @@ function AddItemForm({
   onCancel,
   initialPrefix,
   confirmLabel,
+  unit,
   inputCls,
   labelCls,
   lightMode,
@@ -215,6 +265,7 @@ function AddItemForm({
   onCancel: () => void;
   initialPrefix?: string;
   confirmLabel: string;
+  unit: DimUnit;
   inputCls: string;
   labelCls: string;
   lightMode?: boolean;
@@ -250,6 +301,9 @@ function AddItemForm({
   /** Variant rendered in the preview — hover wins, selection second, first variant last. */
   const previewVariant =
     hoverVariant ?? value.model_variant ?? (variants.length > 0 ? 0 : undefined);
+
+  const dimStep = unit === "m" || unit === "in" ? 0.01 : 1;
+  const dimMin  = unit === "m" || unit === "in" ? 0.001 : 1;
 
   return (
     <div className={`border-2 rounded-2xl p-5 space-y-4 ${lightMode ? "border-slate-300 bg-slate-50" : "border-gray-700 bg-gray-900/40"}`}>
@@ -345,7 +399,7 @@ function AddItemForm({
       )}
 
       <div>
-        <label className={labelCls}>Dimensions (mm)</label>
+        <label className={labelCls}>Dimensions ({unit})</label>
         <div className="grid grid-cols-3 gap-3">
           {(["w", "l", "h"] as const).map((k) => (
             <div key={k}>
@@ -354,9 +408,10 @@ function AddItemForm({
               </div>
               <NumberInput
                 className={inputCls}
-                min={1}
-                value={value[k]}
-                onChange={(n) => set(k, n)}
+                min={dimMin}
+                step={dimStep}
+                value={toDisplay(value[k], unit)}
+                onChange={(n) => set(k, fromDisplay(n, unit))}
               />
             </div>
           ))}
@@ -544,6 +599,8 @@ interface ManifestFormProps {
 }
 
 export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFormProps) {
+  const { user } = useAuth();
+
   // ── Theme helpers ──
   const bg     = lightMode ? "bg-white"        : "bg-gray-900";
   const bg2    = lightMode ? "bg-slate-100"    : "bg-gray-950";
@@ -557,6 +614,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
     (lightMode ? "shadow-sm placeholder-slate-400" : "placeholder-gray-500");
   const labelCls = `block text-base font-semibold ${lightMode ? "text-slate-700" : "text-gray-300"} mb-1.5`;
 
+  // ── Core state ──
   const [truck, setTruck]   = useState<TruckSpec>(DEFAULT_TRUCK);
   const [stops, setStops]   = useState<DeliveryStop[]>(DEFAULT_STOPS);
   const [items, setItems]   = useState<FurnitureItem[]>(DEFAULT_ITEMS);
@@ -565,6 +623,17 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
   const [showAdd, setShowAdd]       = useState(false);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [itemError, setItemError]   = useState<string | null>(null);
+
+  // ── Unit conversion ──
+  const [unit, setUnit] = useState<DimUnit>("mm");
+
+  // ── Undo / redo ──
+  const itemHistory = useRef<FurnitureItem[][]>([[...DEFAULT_ITEMS]]);
+  const [historyIdx, setHistoryIdx] = useState(0);
+
+  // ── Delete confirmation ──
+  const [pendingDeleteIdx, setPendingDeleteIdx] = useState<number | null>(null);
+
   const editFormRef = useRef<HTMLDivElement | null>(null);
 
   // Import flow — file input, drag-overlay, last-import digest
@@ -572,13 +641,84 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
   const [isDragging, setIsDragging] = useState(false);
   const [importMessage, setImportMessage] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
+  // ── History helpers ──
+  function pushHistory(newItems: FurnitureItem[]) {
+    const slice = itemHistory.current.slice(0, historyIdx + 1);
+    const next = [...slice, newItems].slice(-30);
+    itemHistory.current = next;
+    setHistoryIdx(next.length - 1);
+  }
+
+  function undo() {
+    if (historyIdx === 0) return;
+    const newIdx = historyIdx - 1;
+    setHistoryIdx(newIdx);
+    setItems(itemHistory.current[newIdx]);
+    setShowAdd(false);
+    setEditingIdx(null);
+    setItemError(null);
+    setDraft(blankItem());
+    setDraftQty(1);
+  }
+
+  function redo() {
+    if (historyIdx === itemHistory.current.length - 1) return;
+    const newIdx = historyIdx + 1;
+    setHistoryIdx(newIdx);
+    setItems(itemHistory.current[newIdx]);
+  }
+
+  // ── Delete confirmation helpers ──
+  function requestDelete(idx: number) {
+    setPendingDeleteIdx(idx);
+  }
+
+  function confirmDelete(idx: number) {
+    if (editingIdx !== null && idx < editingIdx) setEditingIdx(editingIdx - 1);
+    const deleted = items[idx];
+    const newItems = items.filter((_, j) => j !== idx);
+    setItems(newItems);
+    pushHistory(newItems);
+    setPendingDeleteIdx(null);
+    if (user) appendSessionLog(user.username, "item_deleted", deleted.item_id);
+  }
+
+  function cancelDelete() {
+    setPendingDeleteIdx(null);
+  }
+
+  // Stable ref so keyboard handler always calls the latest closures.
+  const historyActionsRef = useRef({ undo, redo, cancelDelete });
+  historyActionsRef.current = { undo, redo, cancelDelete };
+
+  // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Y / Ctrl+Shift+Z redo, Escape cancel delete.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.ctrlKey && !e.shiftKey && e.key === "z") {
+        e.preventDefault();
+        historyActionsRef.current.undo();
+      } else if ((e.ctrlKey && e.key === "y") || (e.ctrlKey && e.shiftKey && e.key === "z")) {
+        e.preventDefault();
+        historyActionsRef.current.redo();
+      } else if (e.key === "Escape") {
+        historyActionsRef.current.cancelDelete();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   async function handleFile(file: File) {
     setImportMessage(null);
     try {
       const result = await importManifestFile(file);
       if (result.truck) setTruck(result.truck);
       if (result.stops && result.stops.length > 0) setStops(result.stops);
-      if (result.items) setItems(result.items);
+      if (result.items) {
+        setItems(result.items);
+        itemHistory.current = [result.items];
+        setHistoryIdx(0);
+      }
 
       const parts: string[] = [];
       if (result.truck) parts.push("truck");
@@ -611,18 +751,21 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
 
   function setTruckField(k: keyof TruckSpec, v: number) {
     setTruck((t) => ({ ...t, [k]: v }));
+    if (user) appendSessionLog(user.username, "truck_param_changed", `${k}=${v}`);
   }
 
   // ── Stop helpers ──
   function addStop() {
     const next = stops.length ? Math.max(...stops.map((s) => s.stop_id)) + 1 : 1;
     setStops((s) => [...s, { stop_id: next, address: "" }]);
+    if (user) appendSessionLog(user.username, "stop_added", `stop_id=${next}`);
   }
 
   function removeStop(idx: number) {
     const removed = stops[idx].stop_id;
     setStops((s) => s.filter((_, i) => i !== idx));
     setItems((its) => its.filter((it) => it.stop_id !== removed));
+    if (user) appendSessionLog(user.username, "stop_removed", `stop_id=${removed}`);
   }
 
   function moveStop(idx: number, dir: -1 | 1) {
@@ -650,13 +793,14 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
     if (editingIdx !== null) {
       if (items.some((it, j) => it.item_id === baseId && j !== editingIdx))
         return setItemError("Item ID must be unique.");
-      setItems((its) =>
-        its.map((it, j) => j === editingIdx ? { ...draft, item_id: baseId } : it),
-      );
+      const newItems = items.map((it, j) => j === editingIdx ? { ...draft, item_id: baseId } : it);
+      setItems(newItems);
+      pushHistory(newItems);
       setEditingIdx(null);
       setDraft(blankItem());
       setDraftQty(1);
       setShowAdd(false);
+      if (user) appendSessionLog(user.username, "item_edited", baseId);
       return;
     }
 
@@ -664,9 +808,6 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
     // the trailing _NN suffix so each clone has a unique item_id.
     const qty = Math.max(1, Math.min(99, draftQty));
 
-    // Either append to an existing prefix (e.g. "chair_01" → next free chair_NN)
-    // or, if the user typed a free-form id without a numeric suffix, just
-    // append "_01", "_02", … starting from 1.
     const m = baseId.match(/^(.+)_(\d+)$/);
     const prefix = m ? m[1] : baseId;
 
@@ -685,10 +826,13 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
       n++;
     }
 
-    setItems((its) => [...its, ...generated]);
+    const newItems = [...items, ...generated];
+    setItems(newItems);
+    pushHistory(newItems);
     setDraft(blankItem());
     setDraftQty(1);
     setShowAdd(false);
+    if (user) appendSessionLog(user.username, "item_added", generated.map((g) => g.item_id).join(", "));
   }
 
   function cancelAdd() {
@@ -700,6 +844,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
   }
 
   function startEdit(idx: number) {
+    setPendingDeleteIdx(null);
     setEditingIdx(idx);
     setDraft({ ...items[idx] });
     setDraftQty(1);
@@ -710,10 +855,49 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
     }, 0);
   }
 
-  function deleteItem(idx: number) {
-    if (editingIdx !== null && idx < editingIdx) setEditingIdx(editingIdx - 1);
-    setItems((its) => its.filter((_, j) => j !== idx));
-  }
+  // ── Truck dimension step/min based on current unit ──
+  const truckDimStep = unit === "m" || unit === "in" ? 0.01 : 1;
+  const truckDimMin  = unit === "m" || unit === "in" ? 0.001 : 1;
+
+  // ── Undo/redo buttons for Cargo Items section header ──
+  const undoRedoAction = (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={undo}
+        disabled={historyIdx === 0}
+        title="Undo (Ctrl+Z)"
+        aria-label="Undo"
+        className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-default ${
+          lightMode
+            ? "text-slate-600 hover:text-blue-700 hover:bg-blue-50 border border-slate-300 hover:border-blue-300"
+            : "text-gray-400 hover:text-blue-300 hover:bg-blue-950/40 border border-gray-700 hover:border-blue-800"
+        }`}
+      >
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="1 4 1 10 7 10" />
+          <path d="M3.51 15a9 9 0 1 0 .49-3.68" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        onClick={redo}
+        disabled={historyIdx === itemHistory.current.length - 1}
+        title="Redo (Ctrl+Y)"
+        aria-label="Redo"
+        className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-default ${
+          lightMode
+            ? "text-slate-600 hover:text-blue-700 hover:bg-blue-50 border border-slate-300 hover:border-blue-300"
+            : "text-gray-400 hover:text-blue-300 hover:bg-blue-950/40 border border-gray-700 hover:border-blue-800"
+        }`}
+      >
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="23 4 23 10 17 10" />
+          <path d="M20.49 15a9 9 0 1 1-.49-3.68" />
+        </svg>
+      </button>
+    </div>
+  );
 
   return (
     <div
@@ -851,17 +1035,24 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
         muted={muted}
         lightMode={lightMode}
       >
+        {/* Unit toggle */}
+        <div className="flex items-center justify-between mb-4">
+          <span className={`text-sm ${muted}`}>Display unit</span>
+          <UnitToggle unit={unit} onChange={setUnit} lightMode={lightMode} />
+        </div>
+
         <div className="grid grid-cols-2 gap-3 mb-3">
           {(["W", "L", "H"] as const).map((k) => (
             <div key={k}>
               <label className={labelCls}>
-                {k === "W" ? "Width" : k === "L" ? "Length" : "Height"} (mm)
+                {k === "W" ? "Width" : k === "L" ? "Length" : "Height"} ({unit})
               </label>
               <NumberInput
                 className={inputCls}
-                min={1}
-                value={truck[k]}
-                onChange={(n) => setTruckField(k, n)}
+                min={truckDimMin}
+                step={truckDimStep}
+                value={toDisplay(truck[k], unit)}
+                onChange={(n) => setTruckField(k, fromDisplay(n, unit))}
               />
             </div>
           ))}
@@ -1003,19 +1194,26 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
         title="Cargo Items"
         hint="Furniture to be packed into the truck."
         badge={items.length}
+        action={undoRedoAction}
         bg2={bg2}
         border={border}
         muted={muted}
         lightMode={lightMode}
       >
+        {/* Unit toggle */}
+        <div className="flex items-center justify-between mb-4">
+          <span className={`text-sm ${muted}`}>Display unit</span>
+          <UnitToggle unit={unit} onChange={setUnit} lightMode={lightMode} />
+        </div>
+
         {items.length > 0 && (
-          <div className={`rounded-xl border-2 ${border} overflow-hidden mb-3`}>
+          <div className={`rounded-xl border-2 ${border} mb-3 ${pendingDeleteIdx !== null ? "overflow-visible" : "overflow-hidden"}`}>
             <table className="w-full table-fixed">
               <thead>
                 <tr className={`${bg2} border-b-2 ${border}`}>
                   <th className={`text-left px-3 py-3 font-bold text-sm ${lightMode ? "text-slate-700" : "text-gray-300"}`}>Item</th>
                   <th className={`text-right px-3 py-3 font-bold text-sm w-28 ${lightMode ? "text-slate-700" : "text-gray-300"}`}>
-                    Size
+                    Size ({unit})
                   </th>
                   <th className={`text-center px-2 py-3 font-bold text-sm w-12 ${lightMode ? "text-slate-700" : "text-gray-300"}`}>Stop</th>
                   <th className="w-20" />
@@ -1026,10 +1224,12 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
                   <tr
                     key={item.item_id}
                     onClick={() => startEdit(i)}
-                    className={`border-t ${border} cursor-pointer ${
-                      editingIdx === i
-                        ? lightMode ? "bg-blue-50" : "bg-blue-950/30"
-                        : lightMode ? "hover:bg-slate-50" : "hover:bg-gray-800/30"
+                    className={`relative border-t ${border} cursor-pointer transition-colors ${
+                      pendingDeleteIdx === i
+                        ? lightMode ? "bg-red-50" : "bg-red-950/30"
+                        : editingIdx === i
+                          ? lightMode ? "bg-blue-50" : "bg-blue-950/30"
+                          : lightMode ? "hover:bg-slate-50" : "hover:bg-gray-800/30"
                     }`}
                   >
                     <td className="px-3 py-2.5" title={item.item_id}>
@@ -1069,8 +1269,8 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
                         </div>
                       )}
                     </td>
-                    <td className={`px-3 py-3 text-right text-sm truncate ${muted}`}>
-                      {item.w}×{item.l}×{item.h}
+                    <td className={`px-3 py-3 text-right text-sm font-mono truncate ${muted}`}>
+                      {toDisplay(item.w, unit)}×{toDisplay(item.l, unit)}×{toDisplay(item.h, unit)}
                     </td>
                     <td className="px-2 py-3 text-center">
                       <span
@@ -1085,10 +1285,10 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
                         {item.stop_id}
                       </span>
                     </td>
-                    <td className="pr-3 py-3 text-right whitespace-nowrap">
+                    <td className="pr-3 py-3 text-right overflow-visible">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
-                          onClick={() => startEdit(i)}
+                          onClick={(e) => { e.stopPropagation(); startEdit(i); }}
                           title="Change this item"
                           aria-label={`Edit ${item.item_id}`}
                           className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
@@ -1102,29 +1302,83 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
                             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                           </svg>
                         </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); deleteItem(i); }}
-                          disabled={editingIdx === i}
-                          title="Delete this item"
-                          aria-label={`Delete ${item.item_id}`}
-                          className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
-                            editingIdx === i
-                              ? (lightMode
-                                  ? "opacity-30 cursor-not-allowed text-slate-600 border border-slate-300"
-                                  : "opacity-30 cursor-not-allowed text-gray-400 border border-gray-700")
-                              : lightMode
-                                ? "text-slate-600 hover:text-red-600 hover:bg-red-50 border border-slate-300 hover:border-red-300"
-                                : "text-gray-400 hover:text-red-400 hover:bg-red-950/30 border border-gray-700 hover:border-red-800"
-                          }`}
-                        >
-                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6"/>
-                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                            <path d="M10 11v6"/>
-                            <path d="M14 11v6"/>
-                            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-                          </svg>
-                        </button>
+                        <div className="relative">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              pendingDeleteIdx === i ? cancelDelete() : requestDelete(i);
+                            }}
+                            disabled={editingIdx === i}
+                            title={pendingDeleteIdx === i ? "Cancel delete" : "Delete this item"}
+                            aria-label={`Delete ${item.item_id}`}
+                            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
+                              editingIdx === i
+                                ? (lightMode
+                                    ? "opacity-30 cursor-not-allowed text-slate-600 border border-slate-300"
+                                    : "opacity-30 cursor-not-allowed text-gray-400 border border-gray-700")
+                                : pendingDeleteIdx === i
+                                  ? lightMode
+                                    ? "text-red-600 bg-red-50 border border-red-300"
+                                    : "text-red-400 bg-red-950/40 border border-red-800"
+                                  : lightMode
+                                    ? "text-slate-600 hover:text-red-600 hover:bg-red-50 border border-slate-300 hover:border-red-300"
+                                    : "text-gray-400 hover:text-red-400 hover:bg-red-950/30 border border-gray-700 hover:border-red-800"
+                            }`}
+                          >
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6"/>
+                              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                              <path d="M10 11v6"/>
+                              <path d="M14 11v6"/>
+                              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                            </svg>
+                          </button>
+                          {pendingDeleteIdx === i && (
+                            <div
+                              className={`absolute bottom-full right-0 mb-2 w-44 rounded-xl shadow-xl border-2 p-3 z-20 ${
+                                lightMode ? "bg-white border-gray-200" : "bg-gray-800 border-gray-700"
+                              }`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className={`text-xs font-semibold truncate mb-1.5 ${lightMode ? "text-slate-500" : "text-gray-400"}`}>
+                                {item.item_id}
+                              </div>
+                              <div className={`flex items-center gap-1.5 mb-3 ${lightMode ? "text-slate-900" : "text-gray-100"}`}>
+                                <svg className="w-4 h-4 shrink-0 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="3 6 5 6 21 6"/>
+                                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                                  <path d="M10 11v6"/>
+                                  <path d="M14 11v6"/>
+                                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                                </svg>
+                                <span className="text-sm font-bold">Remove this item?</span>
+                              </div>
+                              <div className="flex flex-col gap-1.5">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); confirmDelete(i); }}
+                                  className="w-full py-1.5 text-sm font-semibold rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
+                                >
+                                  Delete
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); cancelDelete(); }}
+                                  className={`w-full py-1.5 text-sm font-semibold rounded-lg border-2 transition-colors ${
+                                    lightMode
+                                      ? "border-slate-300 text-slate-700 hover:bg-slate-100"
+                                      : "border-gray-700 text-gray-300 hover:bg-gray-800"
+                                  }`}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                              <div className={`absolute bottom-[-6px] right-3 w-3 h-3 rotate-45 ${
+                                lightMode
+                                  ? "bg-white border-r-2 border-b-2 border-gray-200"
+                                  : "bg-gray-800 border-r-2 border-b-2 border-gray-700"
+                              }`} />
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -1155,6 +1409,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
                   ? `Add ${draftQty}`
                   : "Add"
             }
+            unit={unit}
             inputCls={inputCls}
             labelCls={labelCls}
             lightMode={lightMode}

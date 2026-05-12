@@ -12,9 +12,152 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
-## Sprint 18 — 2026-05-12 · Public Landing Page and Vercel Deployment
+## Sprint 20 — 2026-05-12 · Auth Hardening, Real Admin Backend, and Operator Activity Logging
 
-**Goal:** Ship a public-facing landing page at `/` with a proximity-wave interactive
+**Goal:** Harden the authentication flow so self-registration is removed and all accounts
+are admin-created; wire the admin panel to a real FastAPI + PostgreSQL backend with JWT
+auth; add a comprehensive per-user session activity log visible in the admin panel; and
+extend admin controls with account reactivation and forced password reset.
+
+### Added
+
+**Backend**
+- `backend/api/auth_routes.py`: `POST /api/auth/login` returns `{ access_token, token_type, must_change_password }`;
+  `POST /api/auth/change-password` validates current token and updates `hashed_password` + clears
+  `must_change_password`. Both endpoints write to `audit_logs`.
+- `backend/api/admin_routes.py`: Full user management API — `GET/POST /api/admin/users`,
+  `PUT /api/admin/users/{id}`, `DELETE /api/admin/users/{id}` (soft deactivate),
+  `POST /api/admin/users/{id}/reactivate`, `POST /api/admin/users/{id}/force-reset`.
+  Every mutation writes a typed audit log entry (`user_created`, `user_modified`,
+  `user_deactivated`, `user_reactivated`, `force_password_reset`).
+- `backend/api/deps.py`: `get_current_user` and `require_admin` FastAPI dependencies
+  using `OAuth2PasswordBearer` + HS256 JWT decode.
+- `backend/core/auth.py`: `hash_password`, `verify_password` (passlib/bcrypt),
+  `create_access_token`, `decode_access_token` (python-jose HS256).
+- `backend/core/db.py`: `reactivate_user()` helper — sets `is_active=True`.
+- `backend/requirements.txt`: Added `passlib[bcrypt]` and `python-jose[cryptography]`.
+- `backend/settings.py`: Added `JWT_SECRET`, `JWT_ALGORITHM`, `JWT_EXPIRE_MINUTES`
+  loaded from `.env`.
+- `backend/main.py`: Lifespan registers `create_tables()` + `seed_admin()` on startup;
+  includes `auth_router` and `admin_router`.
+
+**Frontend**
+- `frontend/src/lib/sessionLog.ts`: New localStorage-backed activity log utility.
+  `appendSessionLog(username, action, detail)` appends to `"flow3d_session_logs"` (500-entry
+  rolling cap); `getSessionLogs()` returns all entries sorted newest-first.
+- `frontend/src/pages/ChangePassword.tsx`: Force-change-password page shown after first
+  login (when `mustChangePassword` is true). Form requires new password (≥ 6 chars) +
+  confirm; calls `changePassword()` from `AuthContext`; redirects to `/admin` or `/app`
+  on success.
+
+### Changed
+
+**Frontend**
+- `frontend/src/auth/AuthContext.tsx`: Added `mustChangePassword: boolean`,
+  `changePassword(newPassword)`, and `registerUser(username, password, role)` to context.
+  Mock path stores extra users in `"flow3d_mock_users"` localStorage JSON and tracks
+  must-change state in `"flow3d_must_change"`. Real path reads `must_change_password`
+  from login response.
+- `frontend/src/pages/Login.tsx`: Removed Register link and registered-success banner.
+  `useEffect` redirects to `/change-password` when `mustChangePassword` is true.
+- `frontend/src/pages/AdminDashboard.tsx`:
+  - Switched from mock-only to real API mode (`VITE_USE_MOCK` flag); all mutations
+    call the FastAPI backend in real mode with `Authorization: Bearer` headers.
+  - Add User modal: removed role selector (new accounts are always `"user"`).
+  - Added **Session Logs** third tab — user filter dropdown, refresh button, color-coded
+    table for all 14 session action types.
+  - Added **Reactivate** button (teal refresh icon) for inactive users in the Users table.
+  - Added **Force Password Reset** button (lock icon) for active users — sets
+    `must_change_password=True` on next login.
+  - Deactivate icon changed from trash to circle-slash for clarity.
+  - Audit log tab: added `user_reactivated` (teal) and `force_password_reset` (violet)
+    action labels and colors.
+- `frontend/src/main.tsx`: Added `/change-password` route (behind `<ProtectedRoute>`);
+  removed `/register` route.
+- `frontend/src/landing/Hero.tsx`, `Nav.tsx`, `FinalCTA.tsx`: Replaced all "Get Started"
+  CTAs with "Sign In" → `/login`. Removed unused Register links.
+- `frontend/src/App.tsx`: Session activity logging via `appendSessionLog` —
+  `session_start`, `session_end`, `solve_submitted`, `solve_success`, `solve_error`,
+  `plan_selected`, `session_saved`, `session_restored`. Restored Log Out button beside
+  Save State in the TruckViewer overlay.
+- `frontend/src/components/ManifestForm.tsx`: Session activity logging for manifest
+  mutations — `item_added` (with generated IDs), `item_edited`, `item_deleted`,
+  `stop_added` (with stop_id), `stop_removed` (with stop_id), `truck_param_changed`
+  (field=value). All logged via `appendSessionLog` using the signed-in username.
+
+---
+
+## Sprint 19 — 2026-05-12 · Login/Register Authentication, Admin Dashboard, and Simulator Session Save/Restore
+
+**Goal:** Implement a complete JWT-based authentication layer — login and register pages
+matching the existing dark glass-card design system, a role-aware navigation bar, an
+admin dashboard for user management and audit logging, and per-user simulator session
+persistence via `localStorage` so signed-in users never lose their packing plans.
+
+### Added
+
+**Frontend**
+- `frontend/src/auth/AuthContext.tsx`: New `AuthProvider` and `useAuth()` hook — stores
+  a JWT in `localStorage` under `"flow3d_token"`, decodes expiry on init, and exposes
+  `login()` / `logout()` / `user: AuthUser | null` / `isAdmin: boolean`. Mock path
+  (enabled when `VITE_USE_MOCK !== "false"`) issues base64 mock tokens for
+  `admin/admin123` (role `"admin"`) and `user/user123` (role `"user"`) with an 8-hour
+  expiry; real path calls `POST /api/auth/login`.
+- `frontend/src/auth/ProtectedRoute.tsx`: New route guard component. Unauthenticated
+  users are redirected to `/login` with `state: { from: location }` for post-login
+  redirect. Non-admin users accessing a `requireAdmin` route are redirected to `/app`.
+- `frontend/src/pages/Login.tsx`: Replace stub with a full dark glass-card login form —
+  session-expired amber banner and registered-success green banner (both dismissible);
+  username + password fields with show/hide toggle; error notification with 5 s
+  auto-dismiss; X close button; post-login redirect honors `state.from`; admin users
+  land on `/admin`, regular users on `/app`; "See Simulator Preview →" guest link;
+  `admin / admin123` and `user / user123` demo credential hint.
+- `frontend/src/pages/Register.tsx`: Replace stub with a full register form — client-side
+  validation (username ≥ 3 chars, password ≥ 6 chars, passwords match); X close button;
+  mock mode always succeeds and redirects to `/login` with `{ registered: true }`;
+  real mode calls `POST /api/auth/register`; "See Simulator Preview →" guest link.
+  `StubCard` export kept for backward compatibility.
+- `frontend/src/pages/AdminDashboard.tsx`: New admin panel with a `grid grid-cols-[280px_1fr]`
+  shell. **Users tab** — paginated table showing username (avatar initial), role badge
+  (violet = admin, teal = user), status badge, and last-login; Add User modal (username /
+  password / role segmented toggle); Edit User modal (password blank = keep current);
+  Deactivate confirmation popover (`absolute bottom-full right-0 mb-2`) with caret
+  triangle — same pattern as ManifestForm delete popover. **Audit Logs tab** — color-coded
+  action chips: `login_ok` green, `login_fail` red, `logout` gray, `user_created /
+  modified` blue, `user_deactivated` amber. Toast system at `fixed bottom-6 right-6 z-50`
+  (green success / red error). All mutations update local state and append a new log row.
+- `frontend/src/types/index.ts`: New `SavedSession` interface —
+  `{ items, truck, stops, plans, selectedIdx, savedAt }` — the `localStorage` envelope
+  written by Save State.
+
+### Changed
+
+**Frontend**
+- `frontend/src/landing/Nav.tsx`: Auth-aware navigation bar. When signed in: avatar
+  initial pill with username, `ADMIN` role badge (violet), outside-click dropdown —
+  "Open Simulator", "Admin Panel" (admin only), divider, "Sign Out". `handleSignOut()`
+  calls `logout()` then `navigate("/", { replace: true })`. Mobile menu mirrors the same
+  auth state. When signed out: original "Sign in" + "Get Started" buttons unchanged.
+- `frontend/src/main.tsx`: Router wrapped in `<AuthProvider>`; `/admin` route added
+  behind `<ProtectedRoute requireAdmin>`; `/login` and `/register` now resolve to the
+  live `Login` and `Register` pages instead of stubs.
+- `frontend/src/App.tsx`: Auth integration — `useAuth()` provides `user` and `logout`;
+  `SESSION_KEY = flow3d_state_${user.username}` (null for guests); one-time `useEffect`
+  restores a saved session from `localStorage` when a user signs in and no plan is
+  loaded. **Save State button** (`absolute top-4 right-4 z-20` overlay on TruckViewer)
+  serializes the full session to `localStorage` and shows a 2.5 s green flash; guests
+  see a sign-in modal (Sign In / Create Account / Continue without saving). **Log Out
+  button** auto-saves the session before calling `logout()` + `navigate("/")`.
+
+---
+
+## Sprint 18 — 2026-05-12 · Manifest Form UX: Undo/Redo, Unit Conversion, and Delete Confirmation, Public Landing Page and Vercel Deployment
+
+**Goal:** Reduce user error and friction in the cargo manifest editor by adding a
+30-entry undo/redo stack scoped to cargo-item mutations, a shared mm/cm/m/in dimension
+unit toggle across both the Truck Specification and Cargo Items sections, and a
+polished floating popover confirmation card that replaces the cramped inline delete strip.
+Ship a public-facing landing page at `/` with a proximity-wave interactive
 3D hero (furniture pieces replacing abstract boxes), full marketing sections, and
 route the existing simulator to `/app` — making FLOW-3D deployable to Vercel as a
 standalone frontend with zero backend dependency on the landing experience.
@@ -22,6 +165,33 @@ standalone frontend with zero backend dependency on the landing experience.
 ### Added
 
 **Frontend**
+- `frontend/src/components/ManifestForm.tsx`: New `DimUnit` type (`"mm" | "cm" | "m" | "in"`),
+  `UNIT_TO_MM` conversion table, `toDisplay(mm, unit)` (integer for mm/cm, 2 d.p. for m/in),
+  and `fromDisplay(v, unit)` (`Math.max(1, Math.round(v * factor))`) helpers. All stored
+  dimension values remain whole-mm integers; the conversion layer is purely presentational.
+- `frontend/src/components/ManifestForm.tsx`: New `UnitToggle` pill component — four
+  segmented buttons (`mm | cm | m | in`), shared `unit` state across both Truck Specification
+  and Cargo Items sections so switching one updates both simultaneously. The active unit is
+  reflected in section labels ("Width (cm)"), the Size column header, and the AddItemForm
+  dimension label.
+- `frontend/src/components/ManifestForm.tsx`: 30-entry undo/redo stack for cargo-item
+  mutations. `itemHistory: useRef<FurnitureItem[][]>` holds snapshots; `historyIdx: useState`
+  drives the undo/redo button disabled states and re-renders. `pushHistory(newItems)` slices
+  any redo branch before appending and caps at 30 entries. History resets on file import.
+  Undo (↺) and redo (↻) icon buttons (36×36 px) appear in the Cargo Items section header
+  via the new `Section action` prop.
+- `frontend/src/components/ManifestForm.tsx`: Keyboard shortcuts — Ctrl+Z undo, Ctrl+Y /
+  Ctrl+Shift+Z redo, Escape dismisses pending delete. Implemented via a one-time
+  `useEffect([], [])` handler that reads from `historyActionsRef.current` so it never
+  captures stale closures.
+- `frontend/src/components/ManifestForm.tsx`: Delete confirmation popover anchored above
+  the trash button (`absolute bottom-full right-0 mb-2 w-44 rounded-xl shadow-xl border-2
+  z-20`). Shows the item ID as a muted subtitle, "Remove this item?" with a red trash icon,
+  and full-width stacked Delete (solid red) / Cancel (ghost) buttons. A rotated `w-3 h-3`
+  caret diamond connects the card to the button. The trash button toggles the popover on
+  re-click and turns red while the popover is open. The table container switches from
+  `overflow-hidden` to `overflow-visible` while any popover is active so the card clears
+  the rounded clip boundary.
 - `frontend/src/pages/Landing.tsx`: New root route (`/`) — composes Nav, Hero,
   SocialProof, AboutSection, HowItWorks, FAQ, FinalCTA, and Footer sections into
   the public marketing page.
@@ -98,6 +268,25 @@ standalone frontend with zero backend dependency on the landing experience.
 ### Changed
 
 **Frontend**
+- `frontend/src/components/ManifestForm.tsx::Section`: Add optional `action?: ReactNode`
+  prop. When supplied, it renders beside the badge in the sticky header inside a
+  `flex items-center gap-2` wrapper so undo/redo buttons and the item count coexist.
+- `frontend/src/components/ManifestForm.tsx::AddItemForm`: Add `unit: DimUnit` prop.
+  Dimension fields (`w`, `l`, `h`) display `toDisplay(value[k], unit)` and commit
+  `fromDisplay(n, unit)` on change; `step` is 0.01 for m/in and 1 for mm/cm.
+- `frontend/src/components/ManifestForm.tsx::commitAdd`: Both the edit path and the add
+  path now capture `newItems` as an explicit variable before calling `setItems`, then
+  immediately pass `newItems` to `pushHistory` so the snapshot is always consistent with
+  what was written to state.
+- `frontend/src/components/ManifestForm.tsx::startEdit`: Calls `setPendingDeleteIdx(null)`
+  first so clicking a row to edit it dismisses any open delete confirmation.
+- `frontend/src/components/ManifestForm.tsx`: Remove `deleteItem()` function. Replaced by
+  `requestDelete(idx)` → `confirmDelete(idx)` → `cancelDelete()` flow; `confirmDelete`
+  adjusts `editingIdx` and calls `pushHistory` so deletes are undoable.
+- `frontend/src/components/ManifestForm.tsx`: Cargo table size column header updated to
+  "Size ({unit})" and cell values updated to `toDisplay(item.w, unit)×…` with `font-mono`.
+- `frontend/src/components/ManifestForm.tsx`: Table row tint extended — `bg-red-50` /
+  `bg-red-950/30` when `pendingDeleteIdx === i`, taking priority over the blue edit tint.
 - `frontend/src/main.tsx`: Wrap app in `<BrowserRouter>` with `<Routes>` —
   `/` → `Landing`, `/app/*` → existing simulator (was previously at `/`),
   `/register` → `Register`, `/login` → `Login`, `*` → `Landing`.

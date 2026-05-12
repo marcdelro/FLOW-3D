@@ -93,8 +93,8 @@ export function Hero() {
           </p>
 
           <div className="pointer-events-auto mt-9 flex flex-wrap items-center gap-3">
-            <ButtonLink to="/register" variant="primary" size="lg">
-              Get Started — It&rsquo;s Free
+            <ButtonLink to="/login" variant="primary" size="lg">
+              Sign In
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M5 12h14M13 5l7 7-7 7" />
               </svg>
