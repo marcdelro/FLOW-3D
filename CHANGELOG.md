@@ -12,6 +12,63 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 24 — 2026-05-14 · Scrollless Results/Explain Sub-Tabs and In-App Help & Feedback
+
+**Goal:** Cut the vertical scrolling out of the Results and Explainability panels
+by splitting each into a sticky sub-tab strip, and add a floating Help button in
+the simulator that bundles a detailed user guide with a "Send Feedback" contact
+form so users can report bugs and request features without leaving the app.
+
+### Added
+
+**Frontend**
+- `frontend/src/components/HelpModal.tsx`: New theme-aware support modal opened
+  from the simulator's top-right toolbar. Two primary tabs — **User Guide** and
+  **Send Feedback**. The Guide has a left-rail navigation with seven sections:
+  Quick Start (workflow overview + solver pipeline), Manifest Tab (truck spec,
+  stops, items, side-up / boxed / fragile flags, undo/redo, import/export), Results
+  Tab (Plan Selector + Overview / Sequence / Issues sub-tabs), Explain Tab
+  (Dispatch / Metrics / Constraints sub-tabs), 3D Viewer (mouse + touch controls,
+  camera toolbar with PAN D-pad / Zoom / VIEW presets, animate-mode LIFO playback,
+  stop colors, fragile decals, fallback-geometry chip), Keyboard Shortcuts (Ctrl+Z,
+  Ctrl+Y, Ctrl+Shift+Z, Esc), and Tips &amp; FAQ ("why is my item unplaced",
+  "why FFD over ILP", "how to share a plan", operational LTO/LTFRB reminder).
+  Send Feedback reuses `landing/ContactForm` so messages reach the thesis team
+  via `mailto:yuktingyukti143@gmail.com` from inside the simulator.
+- `frontend/src/App.tsx`: New floating **Help** button (question-mark icon, blue
+  accent) added to the top-right overlay beside Save State / Log Out; opens
+  `HelpModal` via a new `showHelpModal` state slot.
+
+### Changed
+
+**Frontend**
+- `frontend/src/components/Dashboard.tsx`: Refactored from a stacked-section
+  layout (Why This Plan + Performance + LIFO Load Sequence + Unplaced Items, all
+  scrolled vertically) to a sticky 3-tab strip — **Overview** (rationale chip +
+  `V_util` bar + `T_exec` / solver / packed stat cards + Export-JSON button all
+  on one screen), **Sequence** (compact rear-to-door direction guide on top,
+  per-stop cards below), **Issues** (only rendered when `plan.unplaced_items` is
+  non-empty; tab itself is hidden otherwise). Tab strip uses `sticky top-0` so
+  it stays visible while scrolling within a single tab; `SectionHeader` component
+  removed (no longer needed). Stat-card sizing tightened (`text-2xl` → `text-xl`,
+  `p-4` → `p-3`) so the Overview tab fits the sidebar without scroll for typical
+  plans.
+- `frontend/src/components/Explainability.tsx`: Refactored from three stacked
+  sections (Solver Dispatch + Performance Snapshot + Constraints in Effect) to
+  a sticky 3-tab strip — **Dispatch** (decision banner with solver mode + the
+  Strategy → Solver mapping table with the `ACTIVE` chip and `n` vs
+  `SOLVER_THRESHOLD` bar for the Optimal strategy), **Metrics** (`V_util`,
+  `T_exec`, Packed cards plus a "What these numbers mean" legend), **Constraints**
+  (Route-Sequenced LIFO, Fragile No-Stacking with fragile-item chips, Truck
+  Payload bar with binding-constraint commentary, and the unplaced explainer
+  card). Tab strip uses `sticky top-0` and matches the Dashboard sub-tab
+  styling for visual continuity.
+- `frontend/src/landing/FAQ.tsx`: Trimmed the "Is FLOW-3D free?" answer to drop
+  the trailing sentence about production-account pricing announcements, keeping
+  the answer focused on the current pilot status.
+
+---
+
 ## Sprint 23 — 2026-05-14 · Zod + React Hook Form Validation Migration
 
 **Goal:** Replace all ad-hoc `useState`-based form validation across the frontend
