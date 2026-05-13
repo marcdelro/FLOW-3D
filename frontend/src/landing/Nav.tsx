@@ -43,12 +43,17 @@ export function Nav() {
     navigate("/", { replace: true });
   }
 
+  // At the top of the page the hero is light-coloured, so we render the nav
+  // with dark ink. Once the user scrolls past the hero the standard dark
+  // glassmorphism bar kicks in (same as before).
+  const atTop = !scrolled;
+
   return (
     <header
       className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${
         scrolled
           ? "bg-[#0b0d12]/70 backdrop-blur-xl border-b border-white/[0.06]"
-          : "bg-transparent border-b border-transparent"
+          : "bg-white/30 backdrop-blur border-b border-slate-900/[0.07]"
       }`}
     >
       <div className="mx-auto max-w-7xl px-6 md:px-10 h-16 flex items-center justify-between">
@@ -59,12 +64,22 @@ export function Nav() {
               <path d="M12 3v18M2 7.5l10 4.5 10-4.5" />
             </svg>
           </div>
-          <span className="font-bold tracking-tight text-white text-lg">FLOW-3D</span>
+          <span className={`font-bold tracking-tight text-lg transition-colors duration-300 ${atTop ? "text-slate-900" : "text-white"}`}>
+            FLOW-3D
+          </span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-1">
           {LINKS.map((l) => (
-            <a key={l.href} href={l.href} className="px-3 py-2 text-sm text-gray-300 hover:text-white rounded-md hover:bg-white/[0.05] transition">
+            <a
+              key={l.href}
+              href={l.href}
+              className={`px-3 py-2 text-sm rounded-md transition-colors duration-300 ${
+                atTop
+                  ? "text-slate-700 hover:text-slate-900 hover:bg-slate-900/[0.06]"
+                  : "text-gray-300 hover:text-white hover:bg-white/[0.05]"
+              }`}
+            >
               {l.label}
             </a>
           ))}
@@ -76,12 +91,16 @@ export function Nav() {
             <div className="relative" ref={dropRef}>
               <button
                 onClick={() => setDropOpen((v) => !v)}
-                className="flex items-center gap-2.5 rounded-full px-3 py-1.5 border border-white/15 bg-white/[0.06] hover:bg-white/[0.1] transition"
+                className={`flex items-center gap-2.5 rounded-full px-3 py-1.5 border transition ${
+                  atTop
+                    ? "border-slate-900/15 bg-slate-900/[0.06] hover:bg-slate-900/[0.1]"
+                    : "border-white/15 bg-white/[0.06] hover:bg-white/[0.1]"
+                }`}
               >
                 <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-xs font-bold text-white shrink-0">
                   {user.username.charAt(0).toUpperCase()}
                 </div>
-                <span className="text-sm font-semibold text-gray-100">{user.username}</span>
+                <span className={`text-sm font-semibold transition-colors duration-300 ${atTop ? "text-slate-800" : "text-gray-100"}`}>{user.username}</span>
                 {isAdmin && (
                   <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-violet-950/80 text-violet-300 border border-violet-800">ADMIN</span>
                 )}
@@ -121,7 +140,14 @@ export function Nav() {
             </div>
           ) : (
             <>
-              <ButtonLink to="/login" variant="primary" size="md">Sign In</ButtonLink>
+              <ButtonLink
+                to="/login"
+                variant="primary"
+                size="md"
+                className={atTop ? "!bg-slate-900 !text-white hover:!bg-slate-800" : ""}
+              >
+                Sign In
+              </ButtonLink>
             </>
           )}
         </div>
@@ -131,7 +157,9 @@ export function Nav() {
           onClick={() => setOpen((v) => !v)}
           aria-label="Toggle menu"
           aria-expanded={open}
-          className="md:hidden p-2 rounded-md text-gray-200 hover:bg-white/[0.06]"
+          className={`md:hidden p-2 rounded-md transition-colors duration-300 ${
+            atTop ? "text-slate-700 hover:bg-slate-900/[0.06]" : "text-gray-200 hover:bg-white/[0.06]"
+          }`}
         >
           <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             {open ? (

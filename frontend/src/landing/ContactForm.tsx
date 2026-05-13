@@ -1,39 +1,36 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+
+import { contactSchema, type ContactInput } from "../lib/formSchemas";
 
 const CONTACT_EMAIL = "yuktingyukti143@gmail.com";
 
 type Status = "idle" | "sending" | "sent";
 
 export function ContactForm({ onClose }: { onClose: () => void }) {
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName]   = useState("");
-  const [email, setEmail]         = useState("");
-  const [message, setMessage]     = useState("");
-  const [status, setStatus]       = useState<Status>("idle");
-  const [error, setError]         = useState<string | null>(null);
+  const [status, setStatus] = useState<Status>("idle");
 
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<ContactInput>({
+    resolver: zodResolver(contactSchema),
+    mode: "onTouched",
+    defaultValues: { firstName: "", lastName: "", email: "", message: "" },
+  });
 
-    if (!firstName.trim() || !lastName.trim() || !email.trim() || !message.trim()) {
-      setError("Please fill in every field.");
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError("Please enter a valid email address.");
-      return;
-    }
-
+  function onSubmit(values: ContactInput) {
     setStatus("sending");
 
     const subject = encodeURIComponent(
-      `FLOW-3D Contact — ${firstName.trim()} ${lastName.trim()}`,
+      `FLOW-3D Contact — ${values.firstName.trim()} ${values.lastName.trim()}`,
     );
     const body = encodeURIComponent(
-      `Name: ${firstName.trim()} ${lastName.trim()}\n` +
-      `Email: ${email.trim()}\n\n` +
-      `Message:\n${message.trim()}\n`,
+      `Name: ${values.firstName.trim()} ${values.lastName.trim()}\n` +
+      `Email: ${values.email.trim()}\n\n` +
+      `Message:\n${values.message.trim()}\n`,
     );
 
     // Open the user's email client with the message pre-populated so it lands
@@ -68,7 +65,7 @@ export function ContactForm({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
       <p className="text-gray-400 -mt-1">
         Send a message to the FLOW-3D thesis team. Submitting opens your email client
         with the message pre-filled and addressed to{" "}
@@ -76,58 +73,48 @@ export function ContactForm({ onClose }: { onClose: () => void }) {
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="First Name" htmlFor="first-name">
+        <Field label="First Name" htmlFor="contact-first" error={errors.firstName?.message}>
           <input
-            id="first-name"
+            id="contact-first"
             type="text"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            required
             autoComplete="given-name"
-            className={inputCls}
+            aria-invalid={!!errors.firstName}
+            className={fieldInputCls(!!errors.firstName)}
+            {...register("firstName")}
           />
         </Field>
-        <Field label="Last Name" htmlFor="last-name">
+        <Field label="Last Name" htmlFor="contact-last" error={errors.lastName?.message}>
           <input
-            id="last-name"
+            id="contact-last"
             type="text"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            required
             autoComplete="family-name"
-            className={inputCls}
+            aria-invalid={!!errors.lastName}
+            className={fieldInputCls(!!errors.lastName)}
+            {...register("lastName")}
           />
         </Field>
       </div>
 
-      <Field label="Email" htmlFor="contact-email">
+      <Field label="Email" htmlFor="contact-email" error={errors.email?.message}>
         <input
           id="contact-email"
           type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
           autoComplete="email"
-          className={inputCls}
+          aria-invalid={!!errors.email}
+          className={fieldInputCls(!!errors.email)}
+          {...register("email")}
         />
       </Field>
 
-      <Field label="Message" htmlFor="contact-message">
+      <Field label="Message" htmlFor="contact-message" error={errors.message?.message}>
         <textarea
           id="contact-message"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          required
           rows={6}
-          className={`${inputCls} resize-y min-h-[120px]`}
+          aria-invalid={!!errors.message}
+          className={`${fieldInputCls(!!errors.message)} resize-y min-h-[120px]`}
+          {...register("message")}
         />
       </Field>
-
-      {error && (
-        <p className="text-sm text-rose-300 bg-rose-950/40 border border-rose-500/30 rounded-md px-3 py-2">
-          {error}
-        </p>
-      )}
 
       <div className="flex items-center justify-end gap-3 pt-1">
         <button
@@ -152,24 +139,44 @@ export function ContactForm({ onClose }: { onClose: () => void }) {
   );
 }
 
-const inputCls =
-  "w-full rounded-lg bg-[#0b0d12] border border-white/10 px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 transition";
+function fieldInputCls(invalid: boolean): string {
+  return [
+    "w-full rounded-lg px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500",
+    "bg-[#0b0d12] border focus:outline-none focus:ring-2 transition",
+    invalid
+      ? "border-red-500/60 focus:border-red-400 focus:ring-red-400/30"
+      : "border-white/10 focus:border-blue-400 focus:ring-blue-400/30",
+  ].join(" ");
+}
 
 function Field({
   label,
   htmlFor,
+  error,
   children,
 }: {
   label: string;
   htmlFor: string;
+  error?: string;
   children: React.ReactNode;
 }) {
+  const errorId = `${htmlFor}-error`;
   return (
     <label htmlFor={htmlFor} className="block">
       <span className="block text-xs font-semibold tracking-wide uppercase text-gray-400 mb-1.5">
         {label}
       </span>
       {children}
+      {error && (
+        <p id={errorId} role="alert" className="mt-1.5 text-xs text-red-300 flex items-start gap-1.5">
+          <svg className="w-3.5 h-3.5 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <span>{error}</span>
+        </p>
+      )}
     </label>
   );
 }

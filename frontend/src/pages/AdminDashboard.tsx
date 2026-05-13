@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import type { UserRole } from "../auth/AuthContext";
+import { adminInputClass } from "../components/forms/FormField";
+import {
+  addUserSchema,
+  editUserSchema,
+  type AddUserInput,
+  type EditUserInput,
+} from "../lib/formSchemas";
 import { getSessionLogs } from "../lib/sessionLog";
 import type { SessionLogEntry } from "../lib/sessionLog";
 
@@ -102,20 +111,26 @@ export function AdminDashboard() {
     toastTimer.current = setTimeout(() => setToast(null), 4000);
   }
 
-  /* Add-user modal */
-  const [addOpen,    setAddOpen]    = useState(false);
-  const [addUsername,setAddUsername]= useState("");
-  const [addPassword,setAddPassword]= useState("");
-  const [addError,   setAddError]   = useState<string | null>(null);
-  const [addSaving,  setAddSaving]  = useState(false);
+  /* Add-user modal — server-side error lives outside the form so we can
+   * surface backend rejections (duplicate username, network failure, etc.)
+   * alongside Zod's field-level validation messages. */
+  const [addOpen,         setAddOpen]         = useState(false);
+  const [addServerError,  setAddServerError]  = useState<string | null>(null);
+  const addForm = useForm<AddUserInput>({
+    resolver: zodResolver(addUserSchema),
+    mode: "onTouched",
+    defaultValues: { username: "", password: "" },
+  });
 
   /* Edit-user modal */
-  const [editUser,   setEditUser]   = useState<UserRow | null>(null);
-  const [editUsername,setEditUsername]= useState("");
-  const [editPassword,setEditPassword]= useState("");
-  const [editRole,   setEditRole]   = useState<UserRole>("user");
-  const [editSaving, setEditSaving] = useState(false);
-  const [editError,  setEditError]  = useState<string | null>(null);
+  const [editUser,        setEditUser]        = useState<UserRow | null>(null);
+  const [editServerError, setEditServerError] = useState<string | null>(null);
+  const editForm = useForm<EditUserInput>({
+    resolver: zodResolver(editUserSchema),
+    mode: "onTouched",
+    defaultValues: { username: "", password: "", role: "user" },
+  });
+  const editRole = editForm.watch("role");
 
   /* Deactivate confirmation popover */
   const [pendingDeactivate, setPendingDeactivate] = useState<number | null>(null);
@@ -152,15 +167,17 @@ export function AdminDashboard() {
   }, [token, logout, navigate]);
 
   /* ── Add user ───────────────────────────────────────────────────────────── */
-  function openAdd() { setAddUsername(""); setAddPassword(""); setAddError(null); setAddOpen(true); }
+  function openAdd() {
+    addForm.reset({ username: "", password: "" });
+    setAddServerError(null);
+    setAddOpen(true);
+  }
 
-  async function submitAdd(e: React.FormEvent) {
-    e.preventDefault();
-    if (!addUsername.trim() || !addPassword) { setAddError("All fields are required."); return; }
-    setAddError(null); setAddSaving(true);
+  async function submitAdd(values: AddUserInput) {
+    setAddServerError(null);
     try {
-      await registerUser(addUsername.trim(), addPassword, "user");
-      const uname = addUsername.trim().toLowerCase();
+      await registerUser(values.username.trim(), values.password, "user");
+      const uname = values.username.trim().toLowerCase();
       const newUser: UserRow = {
         id: Math.max(0, ...users.map((u) => u.id)) + 1,
         username: uname,
@@ -176,39 +193,37 @@ export function AdminDashboard() {
       setAddOpen(false);
       showToast(`User "${uname}" created.`);
     } catch (e) {
-      setAddError(e instanceof Error ? e.message : "Something went wrong.");
-    } finally {
-      setAddSaving(false);
+      setAddServerError(e instanceof Error ? e.message : "Something went wrong.");
     }
   }
 
   /* ── Edit user ──────────────────────────────────────────────────────────── */
   function openEdit(u: UserRow) {
-    setEditUser(u); setEditUsername(u.username); setEditPassword(""); setEditRole(u.role); setEditError(null);
+    setEditUser(u);
+    editForm.reset({ username: u.username, password: "", role: u.role });
+    setEditServerError(null);
   }
 
-  async function submitEdit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submitEdit(values: EditUserInput) {
     if (!editUser) return;
-    if (!editUsername.trim()) { setEditError("Username is required."); return; }
-    setEditError(null); setEditSaving(true);
+    setEditServerError(null);
     try {
       if (USE_MOCK) {
         await new Promise<void>((r) => setTimeout(r, 500));
         setUsers((prev) => prev.map((u) =>
-          u.id === editUser.id ? { ...u, username: editUsername.trim(), role: editRole } : u,
+          u.id === editUser.id ? { ...u, username: values.username.trim(), role: values.role } : u,
         ));
         setLogs((prev) => [{
-          id: prev.length + 1, username: editUsername.trim(), action: "user_modified",
+          id: prev.length + 1, username: values.username.trim(), action: "user_modified",
           performed_by: user?.username ?? "admin", ip_address: null,
           detail: "Account details updated", created_at: new Date().toISOString(),
         }, ...prev]);
-        showToast(`User "${editUsername.trim()}" updated.`);
+        showToast(`User "${values.username.trim()}" updated.`);
         setEditUser(null);
         return;
       }
-      const body: Record<string, string> = { username: editUsername.trim(), role: editRole };
-      if (editPassword) body.password = editPassword;
+      const body: Record<string, string> = { username: values.username.trim(), role: values.role };
+      if (values.password) body.password = values.password;
       const res = await fetch(`${API_URL}/api/admin/users/${editUser.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -220,9 +235,7 @@ export function AdminDashboard() {
       showToast(`User "${updated.username}" updated.`);
       setEditUser(null);
     } catch (e) {
-      setEditError(e instanceof Error ? e.message : "Something went wrong.");
-    } finally {
-      setEditSaving(false);
+      setEditServerError(e instanceof Error ? e.message : "Something went wrong.");
     }
   }
 
@@ -491,35 +504,52 @@ export function AdminDashboard() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
           <div className={`rounded-2xl border-2 ${border} ${cardBg} p-6 w-full max-w-sm shadow-2xl`} onClick={(e) => e.stopPropagation()}>
             <h2 className={`text-xl font-bold mb-5 ${headText}`}>Add User</h2>
-            <form onSubmit={submitAdd} className="space-y-4">
-              {addError && (
-                <div className={`rounded-xl border px-4 py-3 text-sm flex items-center gap-2 ${lightMode ? "border-red-300 bg-red-50 text-red-800" : "border-red-900/50 bg-red-950/40 text-red-300"}`}>
+            <form onSubmit={addForm.handleSubmit(submitAdd)} noValidate className="space-y-4">
+              {addServerError && (
+                <div role="alert" className={`rounded-xl border px-4 py-3 text-sm flex items-center gap-2 ${lightMode ? "border-red-300 bg-red-50 text-red-800" : "border-red-900/50 bg-red-950/40 text-red-300"}`}>
                   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
                   </svg>
-                  {addError}
+                  {addServerError}
                 </div>
               )}
               <div>
-                <label className={`block text-sm font-semibold mb-1.5 ${secondText}`}>Username</label>
-                <input value={addUsername} onChange={(e) => { setAddUsername(e.target.value); setAddError(null); }} disabled={addSaving}
-                  className={`w-full rounded-xl border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${lightMode ? "border-slate-200 bg-white text-slate-900 placeholder-slate-400" : "border-gray-700 bg-gray-800 text-gray-100 placeholder-gray-600"}`}
-                  placeholder="Enter username" />
+                <label htmlFor="add-username" className={`block text-sm font-semibold mb-1.5 ${secondText}`}>Username</label>
+                <input
+                  id="add-username"
+                  disabled={addForm.formState.isSubmitting}
+                  placeholder="Enter username"
+                  aria-invalid={!!addForm.formState.errors.username}
+                  className={adminInputClass(!!addForm.formState.errors.username, lightMode)}
+                  {...addForm.register("username", { onChange: () => setAddServerError(null) })}
+                />
+                {addForm.formState.errors.username && (
+                  <p role="alert" className="mt-1.5 text-xs text-red-400">{addForm.formState.errors.username.message}</p>
+                )}
               </div>
               <div>
-                <label className={`block text-sm font-semibold mb-1.5 ${secondText}`}>Password</label>
-                <input type="password" value={addPassword} onChange={(e) => setAddPassword(e.target.value)} disabled={addSaving}
-                  className={`w-full rounded-xl border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${lightMode ? "border-slate-200 bg-white text-slate-900 placeholder-slate-400" : "border-gray-700 bg-gray-800 text-gray-100 placeholder-gray-600"}`}
-                  placeholder="Enter password" />
+                <label htmlFor="add-password" className={`block text-sm font-semibold mb-1.5 ${secondText}`}>Password</label>
+                <input
+                  id="add-password"
+                  type="password"
+                  disabled={addForm.formState.isSubmitting}
+                  placeholder="At least 6 characters"
+                  aria-invalid={!!addForm.formState.errors.password}
+                  className={adminInputClass(!!addForm.formState.errors.password, lightMode)}
+                  {...addForm.register("password")}
+                />
+                {addForm.formState.errors.password && (
+                  <p role="alert" className="mt-1.5 text-xs text-red-400">{addForm.formState.errors.password.message}</p>
+                )}
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setAddOpen(false)} disabled={addSaving}
+                <button type="button" onClick={() => setAddOpen(false)} disabled={addForm.formState.isSubmitting}
                   className={`flex-1 rounded-xl py-2.5 text-sm font-semibold border-2 transition ${lightMode ? "border-slate-200 text-slate-700 hover:bg-slate-100" : "border-gray-700 text-gray-300 hover:bg-gray-800"}`}>
                   Cancel
                 </button>
-                <button type="submit" disabled={addSaving || !addUsername.trim() || !addPassword}
+                <button type="submit" disabled={addForm.formState.isSubmitting}
                   className="flex-1 rounded-xl py-2.5 text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                  {addSaving ? <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Creating…</> : "Create"}
+                  {addForm.formState.isSubmitting ? <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Creating…</> : "Create"}
                 </button>
               </div>
             </form>
@@ -532,31 +562,48 @@ export function AdminDashboard() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
           <div className={`rounded-2xl border-2 ${border} ${cardBg} p-6 w-full max-w-sm shadow-2xl`} onClick={(e) => e.stopPropagation()}>
             <h2 className={`text-xl font-bold mb-5 ${headText}`}>Edit User</h2>
-            <form onSubmit={submitEdit} className="space-y-4">
-              {editError && (
-                <div className={`rounded-xl border px-4 py-3 text-sm flex items-center gap-2 ${lightMode ? "border-red-300 bg-red-50 text-red-800" : "border-red-900/50 bg-red-950/40 text-red-300"}`}>
+            <form onSubmit={editForm.handleSubmit(submitEdit)} noValidate className="space-y-4">
+              {editServerError && (
+                <div role="alert" className={`rounded-xl border px-4 py-3 text-sm flex items-center gap-2 ${lightMode ? "border-red-300 bg-red-50 text-red-800" : "border-red-900/50 bg-red-950/40 text-red-300"}`}>
                   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
                   </svg>
-                  {editError}
+                  {editServerError}
                 </div>
               )}
               <div>
-                <label className={`block text-sm font-semibold mb-1.5 ${secondText}`}>Username</label>
-                <input value={editUsername} onChange={(e) => { setEditUsername(e.target.value); setEditError(null); }} disabled={editSaving}
-                  className={`w-full rounded-xl border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${lightMode ? "border-slate-200 bg-white text-slate-900" : "border-gray-700 bg-gray-800 text-gray-100"}`} />
+                <label htmlFor="edit-username" className={`block text-sm font-semibold mb-1.5 ${secondText}`}>Username</label>
+                <input
+                  id="edit-username"
+                  disabled={editForm.formState.isSubmitting}
+                  aria-invalid={!!editForm.formState.errors.username}
+                  className={adminInputClass(!!editForm.formState.errors.username, lightMode)}
+                  {...editForm.register("username", { onChange: () => setEditServerError(null) })}
+                />
+                {editForm.formState.errors.username && (
+                  <p role="alert" className="mt-1.5 text-xs text-red-400">{editForm.formState.errors.username.message}</p>
+                )}
               </div>
               <div>
-                <label className={`block text-sm font-semibold mb-1.5 ${secondText}`}>New password <span className={`font-normal ${mutedText}`}>(leave blank to keep)</span></label>
-                <input type="password" value={editPassword} onChange={(e) => setEditPassword(e.target.value)} disabled={editSaving}
+                <label htmlFor="edit-password" className={`block text-sm font-semibold mb-1.5 ${secondText}`}>New password <span className={`font-normal ${mutedText}`}>(leave blank to keep)</span></label>
+                <input
+                  id="edit-password"
+                  type="password"
+                  disabled={editForm.formState.isSubmitting}
                   placeholder="Enter new password"
-                  className={`w-full rounded-xl border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${lightMode ? "border-slate-200 bg-white text-slate-900 placeholder-slate-400" : "border-gray-700 bg-gray-800 text-gray-100 placeholder-gray-600"}`} />
+                  aria-invalid={!!editForm.formState.errors.password}
+                  className={adminInputClass(!!editForm.formState.errors.password, lightMode)}
+                  {...editForm.register("password")}
+                />
+                {editForm.formState.errors.password && (
+                  <p role="alert" className="mt-1.5 text-xs text-red-400">{editForm.formState.errors.password.message}</p>
+                )}
               </div>
               <div>
                 <label className={`block text-sm font-semibold mb-1.5 ${secondText}`}>Role</label>
                 <div className={`grid grid-cols-2 gap-2 rounded-xl border p-1 ${lightMode ? "border-slate-200 bg-slate-100" : "border-gray-700 bg-gray-800"}`}>
                   {(["user", "admin"] as UserRole[]).map((r) => (
-                    <button type="button" key={r} onClick={() => setEditRole(r)}
+                    <button type="button" key={r} onClick={() => editForm.setValue("role", r, { shouldDirty: true })}
                       className={`py-2 rounded-lg text-sm font-semibold capitalize transition ${editRole === r
                         ? r === "admin" ? "bg-violet-600 text-white" : "bg-blue-600 text-white"
                         : lightMode ? "text-slate-600 hover:text-slate-900" : "text-gray-400 hover:text-gray-200"}`}>
@@ -566,13 +613,13 @@ export function AdminDashboard() {
                 </div>
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setEditUser(null)} disabled={editSaving}
+                <button type="button" onClick={() => setEditUser(null)} disabled={editForm.formState.isSubmitting}
                   className={`flex-1 rounded-xl py-2.5 text-sm font-semibold border-2 transition ${lightMode ? "border-slate-200 text-slate-700 hover:bg-slate-100" : "border-gray-700 text-gray-300 hover:bg-gray-800"}`}>
                   Cancel
                 </button>
-                <button type="submit" disabled={editSaving || !editUsername.trim()}
+                <button type="submit" disabled={editForm.formState.isSubmitting}
                   className="flex-1 rounded-xl py-2.5 text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                  {editSaving ? <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Saving…</> : "Save"}
+                  {editForm.formState.isSubmitting ? <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Saving…</> : "Save"}
                 </button>
               </div>
             </form>
