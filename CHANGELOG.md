@@ -12,6 +12,76 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 23 — 2026-05-14 · Zod + React Hook Form Validation Migration
+
+**Goal:** Replace all ad-hoc `useState`-based form validation across the frontend
+with a unified Zod + React Hook Form layer — centralised schema library, reusable
+accessible field wrapper, and per-field on-touch error display — and fix nav text
+visibility on the light pastel hero.
+
+### Added
+
+**Frontend**
+- `frontend/src/lib/formSchemas.ts`: New centralised Zod schema library —
+  `loginSchema`, `registerSchema`, `changePasswordSchema`, `contactSchema`,
+  `addUserSchema`, and `editUserSchema`. `personNameSchema` accepts Unicode letters,
+  hyphens, apostrophes, and periods (matches Philippine name conventions).
+  `registerSchema` and `changePasswordSchema` use Zod `.refine()` for cross-field
+  password-match validation attached to the `confirm` / `confirmPassword` path so
+  the error surfaces under the correct field. `editUserSchema.password` accepts a
+  blank string (keep existing) or enforces ≥ 6 characters via a single `.refine()`
+  to avoid a second error message.
+- `frontend/src/components/forms/FormField.tsx`: New shared `FormField` label + error
+  wrapper — renders accessible `role="alert"` error paragraphs with an inline SVG
+  warning icon; `aria-invalid` / `aria-describedby` wiring standardised across all
+  call sites. Exports `inputClass(invalid, extra?)` for dark-theme inputs and
+  `adminInputClass(invalid, lightMode)` for the theme-aware admin dashboard inputs.
+
+### Changed
+
+**Frontend**
+- `frontend/src/pages/Login.tsx`: Replaced manual `useState` for field values,
+  dirty tracking, and error state with `useForm<LoginInput>({ resolver:
+  zodResolver(loginSchema), mode: "onTouched" })`; server errors kept in a separate
+  `serverError` state with a 5 s auto-dismiss timer so they do not interfere with
+  field-level validation; `register("username", { onChange: clearServerError })` and
+  `register("password", { onChange: clearServerError })` clear the server error banner
+  on re-type.
+- `frontend/src/pages/Register.tsx`: Replaced the `validate()` guard function and
+  four `useState` slots with `useForm<RegisterInput>`; cross-field password match
+  is enforced by Zod `.refine()` so "Passwords do not match" surfaces under the
+  Confirm Password field on blur without additional state.
+- `frontend/src/pages/ChangePassword.tsx`: Replaced `newPassword` / `confirmPassword`
+  length and match `useState` checks with `useForm<ChangePasswordInput>`; show/hide
+  toggle preserved via a single `showPw` state shared across both inputs.
+- `frontend/src/landing/ContactForm.tsx`: Replaced five-field manual validation
+  (`required` + email regex) with `useForm<ContactInput>({ resolver:
+  zodResolver(contactSchema), mode: "onTouched" })`; message field now enforces
+  10–2000 character range; submit still fires `window.location.href = mailto:...`
+  with prefilled subject and body — no backend SMTP required.
+- `frontend/src/pages/AdminDashboard.tsx`: Add-user and edit-user modals fully
+  migrated from raw `addUsername / addPassword / addError / addSaving` and
+  `editUsername / editPassword / editRole / editError / editSaving` `useState` slots
+  to `addForm = useForm<AddUserInput>()` and `editForm = useForm<EditUserInput>()`.
+  Role segmented toggle controlled via `editForm.setValue("role", r, { shouldDirty:
+  true })` + `editForm.watch("role")` since no native `<input>` is registered for it.
+  `openAdd()` calls `addForm.reset({ username: "", password: "" })`; `openEdit(u)`
+  calls `editForm.reset({ username: u.username, password: "", role: u.role })` so
+  stale values from a previous modal open never bleed through. Submit handlers
+  accept `(values: AddUserInput)` / `(values: EditUserInput)` directly from
+  `handleSubmit`.
+- `frontend/src/landing/Nav.tsx`: Fix nav text visibility on the light pastel hero —
+  `atTop = !scrolled` boolean serves two complete style sets: when unscrolled
+  (`atTop = true`) the bar uses `bg-white/30 backdrop-blur border-slate-900/[0.07]`
+  with `text-slate-700 / text-slate-900` links and a `!bg-slate-900 !text-white`
+  Sign In button; when scrolled, the existing dark `bg-[#0b0d12]/70 backdrop-blur-xl`
+  glass with `text-gray-300 / text-white` and the default blue Sign In button are
+  restored. Mobile hamburger and avatar pill adapt accordingly.
+- `frontend/package.json`: Added production dependencies `react-hook-form ^7.75.0`,
+  `@hookform/resolvers ^5.2.2`, and `zod ^4.4.3`.
+
+---
+
 ## Sprint 22 — 2026-05-14 · Legal Modals, Contact Form, and Hero Redesign with Truck Illustration
 
 **Goal:** Add interactive Privacy Policy (R.A. 10173 compliant) and Terms of Service
