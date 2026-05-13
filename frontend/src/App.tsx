@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchSolutions } from "./api/client";
 import { useAuth } from "./auth/AuthContext";
 import { appendSessionLog } from "./lib/sessionLog";
+import { buildPreviewPlan } from "./lib/previewPacker";
 import { Dashboard } from "./components/Dashboard";
 import { Explainability } from "./components/Explainability";
 import { ManifestForm } from "./components/ManifestForm";
@@ -24,6 +25,26 @@ function App() {
     W: 2400, L: 13600, H: 2440, payload_kg: 3000,
   });
   const [solveItems, setSolveItems]     = useState<FurnitureItem[]>([]);
+
+  // Live preview state — mirrors the in-progress ManifestForm contents so the
+  // 3D viewer can render items as soon as they're added, without running the
+  // ILP/FFD solver. Distinct from solveItems/truckSpec, which freeze the
+  // manifest used by the last completed solve.
+  const [previewItems, setPreviewItems] = useState<FurnitureItem[]>([]);
+  const [previewTruck, setPreviewTruck] = useState<TruckSpec>({
+    W: 0, L: 0, H: 0, payload_kg: 0,
+  });
+
+  function handlePreviewChange(items: FurnitureItem[], truck: TruckSpec) {
+    setPreviewItems(items);
+    setPreviewTruck(truck);
+  }
+
+  const previewPlan = useMemo<PackingPlan | null>(() => {
+    if (previewItems.length === 0) return null;
+    if (previewTruck.W <= 0 || previewTruck.L <= 0 || previewTruck.H <= 0) return null;
+    return buildPreviewPlan(previewItems, previewTruck);
+  }, [previewItems, previewTruck]);
 
   const { user, logout }                = useAuth();
   const navigate                        = useNavigate();
@@ -247,7 +268,12 @@ function App() {
         {/* Content area */}
         <div className="flex-1 overflow-y-auto">
           <div className={tab === "manifest" ? "" : "hidden"}>
-            <ManifestForm onSolve={handleSolve} loading={loading} lightMode={lightMode} />
+            <ManifestForm
+              onSolve={handleSolve}
+              loading={loading}
+              lightMode={lightMode}
+              onPreviewChange={handlePreviewChange}
+            />
           </div>
           {tab === "results" &&
             (plans.length > 0 ? (
@@ -378,6 +404,30 @@ function App() {
               items={solveItems}
               lightMode={lightMode}
             />
+          </div>
+        ) : previewPlan ? (
+          <div className="relative w-full h-full">
+            <TruckViewer
+              plan={previewPlan}
+              truck={{ W: previewTruck.W, L: previewTruck.L, H: previewTruck.H }}
+              items={previewItems}
+              lightMode={lightMode}
+            />
+            {/* Preview badge — distinguishes naive placement from a solved plan */}
+            <div className={`absolute top-4 left-4 z-10 flex items-center gap-2 px-3.5 py-2 rounded-xl border-2 text-sm font-semibold shadow-sm ${
+              lightMode
+                ? "bg-amber-50 border-amber-300 text-amber-900"
+                : "bg-amber-950/70 border-amber-700 text-amber-200"
+            }`}>
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8"  x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span>
+                Preview only — click <span className="font-bold">Solve Packing Plan</span> for the optimised layout
+              </span>
+            </div>
           </div>
         ) : loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-6 px-8">

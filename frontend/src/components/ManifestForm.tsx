@@ -163,26 +163,16 @@ const STOP_BADGE: Record<number, string> = {
 const badgeColor = (id: number) => STOP_BADGE[id] ?? "#888780";
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
-const DEFAULT_TRUCK: TruckSpec = { W: 2400, L: 13600, H: 2440, payload_kg: 3000 };
+const DEFAULT_TRUCK: TruckSpec = { W: 0, L: 0, H: 0, payload_kg: 0 };
 
-const DEFAULT_STOPS: DeliveryStop[] = [
-  { stop_id: 1, address: "123 Quezon Ave, Manila" },
-  { stop_id: 2, address: "456 Ortigas Ave, Pasig" },
-  { stop_id: 3, address: "789 EDSA, Makati" },
-];
+const DEFAULT_STOPS: DeliveryStop[] = [];
 
 const blankItem = (): FurnitureItem => ({
   item_id: "", w: 800, l: 600, h: 1000, weight_kg: 30, stop_id: 1, side_up: false,
   boxed: false, fragile: false,
 });
 
-const DEFAULT_ITEMS: FurnitureItem[] = [
-  { item_id: "wardrobe_01",     w: 1200, l: 600, h: 1800, weight_kg: 90, stop_id: 3, side_up: true  },
-  { item_id: "desk_01",         w: 1200, l: 600, h: 750,  weight_kg: 40, stop_id: 3, side_up: false },
-  { item_id: "dining_table_01", w: 1500, l: 900, h: 750,  weight_kg: 50, stop_id: 2, side_up: false },
-  { item_id: "sofa_01",         w: 2000, l: 900, h: 850,  weight_kg: 80, stop_id: 1, side_up: false },
-  { item_id: "bookshelf_01",    w: 800,  l: 300, h: 1800, weight_kg: 30, stop_id: 1, side_up: true  },
-];
+const DEFAULT_ITEMS: FurnitureItem[] = [];
 
 // ── Section header (sticky within the scrollable sidebar) ─────────────────────
 function Section({
@@ -596,9 +586,11 @@ interface ManifestFormProps {
   onSolve: (req: SolveRequest) => void;
   loading: boolean;
   lightMode?: boolean;
+  /** Fires whenever items or truck state changes — drives the live truck preview. */
+  onPreviewChange?: (items: FurnitureItem[], truck: TruckSpec) => void;
 }
 
-export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFormProps) {
+export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewChange }: ManifestFormProps) {
   const { user } = useAuth();
 
   // ── Theme helpers ──
@@ -626,6 +618,14 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
 
   // ── Unit conversion ──
   const [unit, setUnit] = useState<DimUnit>("mm");
+
+  // ── Active panel tab ──
+  const [activeTab, setActiveTab] = useState<"truck" | "stops" | "items">("truck");
+
+  // ── Live preview notification — fires on every items/truck change ──
+  useEffect(() => {
+    onPreviewChange?.(items, truck);
+  }, [items, truck, onPreviewChange]);
 
   // ── Undo / redo ──
   const itemHistory = useRef<FurnitureItem[][]>([[...DEFAULT_ITEMS]]);
@@ -1026,7 +1026,47 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
         </div>
       )}
 
+      {/* ── Panel tab navigation ──────────────────────────────────────────── */}
+      <div className={`flex border-b-2 ${border} ${bg2}`} role="tablist">
+        {([
+          { id: "truck" as const, label: "Truck",  badge: null as number | null },
+          { id: "stops" as const, label: "Stops",  badge: stops.length },
+          { id: "items" as const, label: "Items",  badge: items.length },
+        ]).map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 px-3 py-3.5 text-base font-semibold border-b-2 -mb-[2px] transition-colors flex items-center justify-center gap-2 ${
+                isActive
+                  ? lightMode
+                    ? "border-blue-600 text-blue-700 bg-blue-50"
+                    : "border-blue-500 text-blue-300 bg-blue-950/30"
+                  : lightMode
+                    ? "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                    : "border-transparent text-gray-400 hover:text-gray-100 hover:bg-gray-900/40"
+              }`}
+            >
+              <span>{tab.label}</span>
+              {tab.badge !== null && (
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full min-w-[1.5rem] text-center ${
+                  isActive
+                    ? lightMode ? "bg-blue-200 text-blue-800"  : "bg-blue-800 text-blue-100"
+                    : lightMode ? "bg-slate-200 text-slate-700" : "bg-gray-800 text-gray-300"
+                }`}>
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       {/* ── Truck Specification ────────────────────────────────────────────── */}
+      {activeTab === "truck" && (
       <Section
         title="Truck Specification"
         hint="Interior dimensions and payload limit."
@@ -1080,8 +1120,10 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
           </div>
         </div>
       </Section>
+      )}
 
       {/* ── Delivery Stops ─────────────────────────────────────────────────── */}
+      {activeTab === "stops" && (
       <Section
         title="Delivery Stops"
         hint="Listed in delivery order. Stop 1 is unloaded first."
@@ -1188,8 +1230,10 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
           Stop 1 = first delivery (near door). Higher # = deeper in truck (LIFO).
         </p>
       </Section>
+      )}
 
       {/* ── Cargo Items ────────────────────────────────────────────────────── */}
+      {activeTab === "items" && (
       <Section
         title="Cargo Items"
         hint="Furniture to be packed into the truck."
@@ -1437,6 +1481,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false }: ManifestFo
           </p>
         )}
       </Section>
+      )}
 
       {/* ── Big Solve button ───────────────────────────────────────────────── */}
       <div className="px-5 pt-3 pb-1">

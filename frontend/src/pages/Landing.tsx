@@ -5,7 +5,6 @@ import { Footer } from "../landing/Footer";
 import { Hero } from "../landing/Hero";
 import { HowItWorks } from "../landing/HowItWorks";
 import { Nav } from "../landing/Nav";
-import { SocialProof } from "../landing/SocialProof";
 
 export function Landing() {
   return (
@@ -13,7 +12,6 @@ export function Landing() {
       <Nav />
       <main>
         <Hero />
-        <SocialProof />
         <AboutSection />
         <HowItWorks />
         <FAQ />
