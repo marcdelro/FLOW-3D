@@ -1,36 +1,27 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
-const COLS = [
-  {
-    title: "Product",
-    links: [
-      { label: "Features", href: "#features" },
-      { label: "How it works", href: "#how" },
-      { label: "FAQ", href: "#faq" },
-    ],
-  },
-  {
-    title: "Project",
-    links: [
-      { label: "About the thesis", href: "#features" },
-      { label: "Panel", href: "#features" },
-      { label: "Contact", href: "mailto:onlymrcdelro@gmail.com" },
-    ],
-  },
-  {
-    title: "Legal",
-    links: [
-      { label: "Privacy", href: "#" },
-      { label: "Terms", href: "#" },
-    ],
-  },
+import { ContactForm } from "./ContactForm";
+import { Modal } from "./Modal";
+import { PrivacyPolicy } from "./PrivacyPolicy";
+import { TermsOfService } from "./TermsOfService";
+
+type ModalKey = "privacy" | "terms" | "contact" | null;
+
+const PRODUCT_LINKS = [
+  { label: "Features", href: "#features" },
+  { label: "How it works", href: "#how" },
+  { label: "FAQ", href: "#faq" },
 ];
 
 export function Footer() {
+  const [openModal, setOpenModal] = useState<ModalKey>(null);
+  const close = () => setOpenModal(null);
+
   return (
     <footer className="border-t border-white/[0.06] bg-[#070a0f] text-gray-400">
       <div className="mx-auto max-w-7xl px-6 md:px-10 py-14">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-10">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-10">
           <div className="col-span-2">
             <Link to="/" className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center">
@@ -47,18 +38,33 @@ export function Footer() {
             </p>
           </div>
 
-          {COLS.map((c) => (
-            <div key={c.title}>
-              <h3 className="text-white font-semibold text-sm tracking-tight mb-3">{c.title}</h3>
-              <ul className="space-y-2 text-sm">
-                {c.links.map((l) => (
-                  <li key={l.label}>
-                    <a href={l.href} className="hover:text-white transition">{l.label}</a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          <div>
+            <h3 className="text-white font-semibold text-sm tracking-tight mb-3">Product</h3>
+            <ul className="space-y-2 text-sm">
+              {PRODUCT_LINKS.map((l) => (
+                <li key={l.label}>
+                  <a href={l.href} className="hover:text-white transition">
+                    {l.label}
+                  </a>
+                </li>
+              ))}
+              <li>
+                <FooterButton onClick={() => setOpenModal("contact")}>Contact</FooterButton>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="text-white font-semibold text-sm tracking-tight mb-3">Legal</h3>
+            <ul className="space-y-2 text-sm">
+              <li>
+                <FooterButton onClick={() => setOpenModal("privacy")}>Privacy Policy</FooterButton>
+              </li>
+              <li>
+                <FooterButton onClick={() => setOpenModal("terms")}>Terms of Service</FooterButton>
+              </li>
+            </ul>
+          </div>
         </div>
 
         <div className="mt-12 pt-6 border-t border-white/[0.06] flex flex-col gap-3 text-xs text-gray-500">
@@ -69,6 +75,28 @@ export function Footer() {
           </p>
         </div>
       </div>
+
+      <Modal open={openModal === "privacy"} onClose={close} title="Privacy Policy">
+        <PrivacyPolicy />
+      </Modal>
+      <Modal open={openModal === "terms"} onClose={close} title="Terms of Service">
+        <TermsOfService />
+      </Modal>
+      <Modal open={openModal === "contact"} onClose={close} title="Contact the FLOW-3D Team" size="md">
+        <ContactForm onClose={close} />
+      </Modal>
     </footer>
+  );
+}
+
+function FooterButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-left hover:text-white transition cursor-pointer"
+    >
+      {children}
+    </button>
   );
 }
