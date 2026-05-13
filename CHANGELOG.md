@@ -12,6 +12,70 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 22 — 2026-05-14 · Legal Modals, Contact Form, and Hero Redesign with Truck Illustration
+
+**Goal:** Add interactive Privacy Policy (R.A. 10173 compliant) and Terms of Service
+modals to the footer, replace dead-anchor contact link with a working contact form that
+sends to the thesis team, remove the Project footer column, and redesign the landing
+hero with a light pastel background, warm glow cursor, and a decorative SVG truck
+illustration that shows LIFO-ordered furniture inside the cargo box.
+
+### Added
+
+**Frontend**
+- `frontend/src/landing/Modal.tsx`: New reusable overlay modal — Escape key + backdrop
+  click to dismiss; `document.body.overflow` scroll-lock while open; accessible
+  `role="dialog"` `aria-modal` with configurable `size="md" | "lg"`.
+- `frontend/src/landing/PrivacyPolicy.tsx`: Full R.A. 10173 (Data Privacy Act of 2012,
+  Philippines) compliant disclosure — seven sections covering account data (username /
+  email / hashed password), manifest data, contact email correspondence, cookies /
+  local storage (session token + UI preference flags), aggregated anonymised analytics,
+  lawful basis (consent + performance of service + legitimate academic interest), all six
+  NPC data-subject rights (access, correct, object, erasure, portability, NPC complaint),
+  retention, sharing/disclosure, cookie behaviour, and DPO contact at yuktingyukti143@gmail.com.
+- `frontend/src/landing/TermsOfService.tsx`: 13-section Terms of Service — eligibility
+  (18+), accurate input obligation, acceptable-use prohibitions (reverse-engineering,
+  illegal goods transport, DoS, misrepresentation of advisory output), advisory-output
+  safety clauses (LTO/LTFRB/DOTr compliance, physical load verification), IP ownership
+  (thesis team + FEU Institute of Technology), service availability ("as is"), Philippine
+  law liability cap, suspension/termination, governing law (Republic of the Philippines /
+  Metro Manila courts), change notification policy, and contact.
+- `frontend/src/landing/ContactForm.tsx`: First Name / Last Name / Email / Message form
+  with client-side validation (all fields required, email format check); submit opens
+  the user's mail client via `mailto:yuktingyukti143@gmail.com` with subject
+  `"FLOW-3D Contact — <Name>"` and body pre-filled; confirmation screen shown after the
+  mailto link fires.
+- `frontend/src/landing/TruckIllustration.tsx`: Decorative SVG truck with a cut-away
+  cargo box — refrigerator (stop 3, rear of truck), sofa (stop 2), chair (stop 1, near
+  door), and floor lamp arranged in LIFO delivery order; stop-badge circles on each item;
+  spinning wheel spokes (animated when `animated={true}`); dashed route arrow with
+  colored stop waypoints above the cab; soft pulsing glow halo; responsive via
+  `compact` prop for mobile layout.
+
+### Changed
+
+**Frontend**
+- `frontend/src/landing/Footer.tsx`: Removed "Project" column (About the thesis / Panel
+  / Contact). Renamed "Privacy" → "Privacy Policy" and "Terms" → "Terms of Service".
+  All three legal/contact entries are now `<button>` elements that open the respective
+  modal via `useState<ModalKey>` instead of dead `href="#"` anchors. Contact moved into
+  the Product column. Grid changed from `md:grid-cols-5` to `md:grid-cols-4`.
+- `frontend/src/landing/Hero.tsx`: Replaced dark `#0b0d12` background with a
+  `linear-gradient(135deg, #fef3ec → #fde7d8 → #e7f0ff → #dbe9ff → #c7defc)` soft
+  peach → cream → sky → indigo pastel gradient; retuned pointer-aware spotlight to a
+  warm amber + sky radial gradient with `mix-blend-mode: multiply` so the glow reads
+  against the light surface (cursor tracking via `--mx`/`--my` CSS vars updated through
+  `requestAnimationFrame` unchanged); added a third violet pulsing orb; updated grid
+  hairlines from `rgba(255,255,255,0.45)` to `rgba(30,41,59,0.6)` for readability on
+  the light background; headline text changed from `text-white` to `text-slate-900`;
+  accent keywords updated from `text-sky-300/pink-300/amber-300` to
+  `text-sky-600/rose-600/amber-600`; split layout into `lg:col-span-7` copy +
+  `lg:col-span-5` `<TruckIllustration>` columns; responsive mobile illustration block
+  below the copy on smaller screens; CTA buttons re-skinned for the light surface
+  (`!bg-slate-900 !text-white` primary, `!bg-white/70 !text-slate-900` secondary).
+
+---
+
 ## Sprint 21 — 2026-05-13 · Vercel Deployment Hardening, Landing Page Hero Redesign, and Manifest Form UX Overhaul
 
 **Goal:** Harden the Vercel deployment so all routes resolve correctly and the
