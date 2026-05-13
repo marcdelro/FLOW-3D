@@ -318,80 +318,116 @@ function App() {
             ))}
         </div>
 
-        {error && (
-          <div className={`px-5 py-4 border-t-2 text-base shrink-0 flex gap-3 items-start ${
-            lightMode
-              ? "border-red-300 bg-red-50 text-red-800"
-              : "border-red-900/50 bg-red-950/40 text-red-300"
-          }`}>
-            <svg className="w-6 h-6 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            <div>
-              <div className="font-bold mb-0.5">Could not finish</div>
-              <div>{error}</div>
-            </div>
-          </div>
-        )}
       </aside>
 
       {/* ── Main viewer ─────────────────────────────────────────────────────── */}
       <main className="relative overflow-hidden">
 
-        {/* ── Top-right overlay: Save State + Log Out — always visible when signed in ── */}
-        <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+        {/* ── Top-right overlay: Save State + Log Out + notification banners ── */}
+        <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2 max-w-sm">
 
-          {/* Save State */}
-          <button
-            onClick={() => user ? saveSession() : setShowSaveModal(true)}
-            title={user ? "Save current session" : "Sign in to save"}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
-              savedFlash
-                ? lightMode
-                  ? "border-green-400 bg-green-50 text-green-700"
-                  : "border-green-700 bg-green-950/70 text-green-300"
-                : lightMode
-                  ? "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400"
-                  : "bg-gray-900 border-gray-600 text-gray-200 hover:bg-gray-800 hover:border-gray-500"
-            }`}
-          >
-            {savedFlash ? (
-              <>
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
-                </svg>
-                Saved
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
-                  <polyline points="17 21 17 13 7 13 7 21" />
-                  <polyline points="7 3 7 8 15 8" />
-                </svg>
-                Save State
-              </>
-            )}
-          </button>
-
-          {/* Log Out */}
-          {user && (
+          {/* Buttons row */}
+          <div className="flex items-center gap-2">
+            {/* Save State */}
             <button
-              onClick={handleLogout}
-              title="Sign out"
+              onClick={() => user ? saveSession() : setShowSaveModal(true)}
+              title={user ? "Save current session" : "Sign in to save"}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
-                lightMode
-                  ? "bg-white border-slate-300 text-red-600 hover:bg-red-50 hover:border-red-300"
-                  : "bg-gray-900 border-gray-600 text-red-400 hover:bg-red-950/30 hover:border-red-800"
+                savedFlash
+                  ? lightMode
+                    ? "border-green-400 bg-green-50 text-green-700"
+                    : "border-green-700 bg-green-950/70 text-green-300"
+                  : lightMode
+                    ? "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400"
+                    : "bg-gray-900 border-gray-600 text-gray-200 hover:bg-gray-800 hover:border-gray-500"
               }`}
             >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
-              </svg>
-              Log Out
+              {savedFlash ? (
+                <>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+                  </svg>
+                  Saved
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
+                    <polyline points="17 21 17 13 7 13 7 21" />
+                    <polyline points="7 3 7 8 15 8" />
+                  </svg>
+                  Save State
+                </>
+              )}
             </button>
+
+            {/* Log Out */}
+            {user && (
+              <button
+                onClick={handleLogout}
+                title="Sign out"
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
+                  lightMode
+                    ? "bg-white border-slate-300 text-red-600 hover:bg-red-50 hover:border-red-300"
+                    : "bg-gray-900 border-gray-600 text-red-400 hover:bg-red-950/30 hover:border-red-800"
+                }`}
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+                </svg>
+                Log Out
+              </button>
+            )}
+          </div>
+
+          {/* Solve error banner */}
+          {error && (
+            <div className={`w-full rounded-xl border-2 px-4 py-3 text-sm flex gap-2.5 items-start shadow-lg ${
+              lightMode
+                ? "border-red-300 bg-red-50 text-red-800"
+                : "border-red-900/50 bg-red-950/90 text-red-300"
+            }`}>
+              <svg className="w-4 h-4 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <div>
+                <div className="font-bold mb-0.5">Could not finish</div>
+                <div>{error}</div>
+              </div>
+              <button onClick={() => setError(null)} className="ml-auto shrink-0 opacity-60 hover:opacity-100 transition">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+          )}
+
+          {/* Unplaced items banner */}
+          {selectedPlan && selectedPlan.unplaced_items.length > 0 && (
+            <div className={`w-full rounded-xl border-2 px-4 py-3 text-sm shadow-lg ${
+              lightMode
+                ? "border-amber-300 bg-amber-50 text-amber-900"
+                : "border-amber-700/60 bg-amber-950/90 text-amber-200"
+            }`}>
+              <div className="flex gap-2.5 items-start">
+                <svg className="w-4 h-4 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                <div className="flex-1">
+                  <div className="font-bold mb-1">
+                    {selectedPlan.unplaced_items.length} item{selectedPlan.unplaced_items.length > 1 ? "s" : ""} could not be packed
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {selectedPlan.unplaced_items.map((id) => (
+                      <span key={id} className={`text-xs font-mono px-1.5 py-0.5 rounded ${
+                        lightMode ? "bg-amber-100 text-amber-800" : "bg-amber-900/50 text-amber-200"
+                      }`}>{id}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
 
         </div>

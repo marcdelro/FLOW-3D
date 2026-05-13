@@ -706,7 +706,8 @@ function UsersTab({
                             </svg>
                           </button>
 
-                          {/* Deactivate with confirm popover */}
+                          {/* Deactivate — hidden for admin accounts */}
+                          {u.role !== "admin" && (
                           <div className="relative">
                             <button
                               onClick={() => setPendingDeactivate(pendingDeactivate === u.id ? null : u.id)}
@@ -740,6 +741,7 @@ function UsersTab({
                               </div>
                             )}
                           </div>
+                          )}
                         </>
                       ) : (
                         /* Reactivate */
