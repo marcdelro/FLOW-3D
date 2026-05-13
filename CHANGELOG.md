@@ -12,6 +12,76 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 21 — 2026-05-13 · Vercel Deployment Hardening, Landing Page Hero Redesign, and Manifest Form UX Overhaul
+
+**Goal:** Harden the Vercel deployment so all routes resolve correctly and the
+frontend can call the backend without CORS errors; replace the Three.js hero canvas
+with a zero-bundle CSS-only interactive background for faster landing page load;
+overhaul the manifest sidebar into a tabbed panel with a live 3D preview so users
+see items placed in the truck as they type.
+
+### Added
+
+**Frontend**
+- `frontend/src/lib/previewPacker.ts`: New naive grid packer for live 3D preview —
+  walks items in input order, wraps by X-row → Y-plane → Z-layer, no LIFO or
+  constraint optimisation; returns `PackingPlan` with `solver_mode: "FFD"` and a
+  clear rationale string distinguishing it from a solved plan.
+- `frontend/src/App.tsx`: Live preview state (`previewItems`, `previewTruck`) and
+  `handlePreviewChange` callback; derives `previewPlan` via `useMemo` from
+  `buildPreviewPlan`; renders `TruckViewer` with an amber "Preview only — click
+  Solve Packing Plan for the optimised layout" badge when items are in the form
+  but no solve has been run yet.
+- `frontend/src/components/ManifestForm.tsx`: Tabbed panel navigation
+  (Truck / Stops / Items) with live count badges on the Stops and Items tabs;
+  `onPreviewChange` prop that fires on every items/truck state change to drive the
+  live 3D preview in `App.tsx`.
+
+### Changed
+
+**Frontend**
+- `frontend/src/components/ManifestForm.tsx`: Cleared all default truck/stop/item
+  data — removed pre-populated truck dimensions, three sample stops, and five sample
+  items (wardrobe, desk, dining table, sofa, bookshelf) so new users start from a
+  blank manifest.
+- `frontend/src/landing/Hero.tsx`: Replaced Three.js `Hero3D` canvas with a
+  CSS-only interactive background — pointer-aware spotlight via `--mx`/`--my` CSS
+  vars updated through `requestAnimationFrame` (one DOM write per animation frame,
+  no React re-renders); two GPU-composited `animate-pulse` orbs at 9 s/11 s; ambient
+  aurora radial gradient; vignette grid with radial mask. Eliminates the Three.js
+  `@react-three/fiber` + `Hero3D` bundle from the landing page critical path.
+  Replaced `bg-clip-text text-transparent` gradient emphasis words (*route*,
+  *fragile*, *truck*) with `italic font-black` solid colours (`text-sky-300`,
+  `text-pink-300`, `text-amber-300`) and two-layer neon `textShadow` glow for clear
+  legibility against the dark `#0b0d12` background. Removed `pointer-events-none`
+  from the copy column so CTAs are always interactive.
+
+### Fixed
+
+**Config**
+- `frontend/vercel.json` (moved from repo root): Relocated `vercel.json` into
+  `frontend/` to match the Vercel project's configured root directory; the root-level
+  file was silently ignored.
+- `frontend/vercel.json`: Removed `ignoreCommand` field that caused Vercel to cancel
+  builds on non-frontend commits, preventing deployment of backend-only pushes from
+  triggering frontend rebuilds unnecessarily.
+- `frontend/vercel.json`: Added SPA rewrite rule
+  `{ "source": "/(.*)", "destination": "/index.html" }` so all React Router client-
+  side routes (e.g. `/app`, `/login`, `/admin`) serve `index.html` — fixes 404 on
+  direct URL navigation and hard refresh.
+- `backend/main.py`: Added `ALLOWED_ORIGINS` environment variable support to the
+  CORS middleware so the deployed Vercel frontend domain can call the FastAPI backend
+  without CORS errors in production.
+
+### Removed
+
+**Frontend**
+- `frontend/src/pages/Landing.tsx`: Removed `<SocialProof />` section, which
+  contained placeholder pilot testimonials marked `// TODO: replace` and was not
+  ready for public release.
+
+---
+
 ## Sprint 20 — 2026-05-12 · Auth Hardening, Real Admin Backend, and Operator Activity Logging
 
 **Goal:** Harden the authentication flow so self-registration is removed and all accounts
