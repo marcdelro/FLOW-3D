@@ -7,6 +7,7 @@ import { appendSessionLog } from "./lib/sessionLog";
 import { buildPreviewPlan } from "./lib/previewPacker";
 import { Dashboard } from "./components/Dashboard";
 import { Explainability } from "./components/Explainability";
+import { HelpModal } from "./components/HelpModal";
 import { ManifestForm } from "./components/ManifestForm";
 import { PlanSelector } from "./components/PlanSelector";
 import { TruckViewer } from "./components/TruckViewer";
@@ -49,6 +50,7 @@ function App() {
   const { user, logout }                = useAuth();
   const navigate                        = useNavigate();
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
   const [savedFlash,    setSavedFlash]    = useState(false);
   const prevUserRef = useRef<string | null>(null);
 
@@ -340,8 +342,27 @@ function App() {
       {/* ── Main viewer ─────────────────────────────────────────────────────── */}
       <main className="relative overflow-hidden">
 
-        {/* ── Top-right overlay: Save State + Log Out — always visible when signed in ── */}
+        {/* ── Top-right overlay: Help + Save State + Log Out — always visible when signed in ── */}
         <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+
+          {/* Help / Feedback */}
+          <button
+            onClick={() => setShowHelpModal(true)}
+            title="Help & feedback"
+            aria-label="Help and feedback"
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
+              lightMode
+                ? "bg-white border-slate-300 text-blue-600 hover:bg-blue-50 hover:border-blue-300"
+                : "bg-gray-900 border-gray-600 text-blue-400 hover:bg-blue-950/30 hover:border-blue-800"
+            }`}
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            Help
+          </button>
 
           {/* Save State */}
           <button
@@ -480,6 +501,9 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* ── Help & Feedback modal ── */}
+      <HelpModal open={showHelpModal} onClose={() => setShowHelpModal(false)} />
 
       {/* ── Save State modal — sign-in prompt for guest users ── */}
       {showSaveModal && (
