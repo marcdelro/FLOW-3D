@@ -7,7 +7,7 @@ type QA = { q: string; a: string };
 const ITEMS: QA[] = [
   {
     q: "Is FLOW-3D free?",
-    a: "Yes during the thesis pilot. The web app and 3D viewer are free to use while we collect feedback from real haulers. Pricing for production accounts will be announced before pilot ends.",
+    a: "Yes during the thesis pilot. The web app and 3D viewer are free to use while we collect feedback from real haulers.",
   },
   {
     q: "Do my items have to be perfect rectangles?",

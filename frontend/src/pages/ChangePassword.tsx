@@ -1,31 +1,37 @@
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate } from "react-router-dom";
+
 import { useAuth } from "../auth/AuthContext";
+import { FormField, inputClass } from "../components/forms/FormField";
+import { changePasswordSchema, type ChangePasswordInput } from "../lib/formSchemas";
 
 export function ChangePassword() {
   const { user, changePassword } = useAuth();
   const navigate = useNavigate();
 
-  const [newPassword,     setNewPassword]     = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPw,          setShowPw]          = useState(false);
-  const [submitting,      setSubmitting]      = useState(false);
-  const [error,           setError]           = useState<string | null>(null);
+  const [showPw, setShowPw] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (newPassword.length < 6) { setError("Password must be at least 6 characters."); return; }
-    if (newPassword !== confirmPassword) { setError("Passwords do not match."); return; }
-    setError(null);
-    setSubmitting(true);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<ChangePasswordInput>({
+    resolver: zodResolver(changePasswordSchema),
+    mode: "onTouched",
+    defaultValues: { newPassword: "", confirmPassword: "" },
+  });
+
+  async function onSubmit(values: ChangePasswordInput) {
+    setServerError(null);
     try {
-      await changePassword(newPassword);
+      await changePassword(values.newPassword);
       const dest = user?.role === "admin" ? "/admin" : "/app";
       navigate(dest, { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setSubmitting(false);
+      setServerError(err instanceof Error ? err.message : "Something went wrong.");
     }
   }
 
@@ -47,28 +53,34 @@ export function ChangePassword() {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} noValidate className="space-y-5">
-            {error && (
-              <div className="rounded-xl border border-red-500/40 bg-red-950/40 text-red-300 text-sm px-4 py-3 flex items-center gap-2.5">
+          <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
+            {serverError && (
+              <div role="alert" className="rounded-xl border border-red-500/40 bg-red-950/40 text-red-300 text-sm px-4 py-3 flex items-center gap-2.5">
                 <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
-                {error}
+                {serverError}
               </div>
             )}
 
-            <div>
-              <label className="block text-sm font-semibold text-gray-300 mb-1.5">New Password</label>
+            <FormField
+              label="New Password"
+              htmlFor="cp-new"
+              error={errors.newPassword?.message}
+              hint="At least 6 characters."
+            >
               <div className="relative">
                 <input
+                  id="cp-new"
                   type={showPw ? "text" : "password"}
                   autoComplete="new-password"
                   autoFocus
-                  value={newPassword}
-                  onChange={(e) => { setNewPassword(e.target.value); setError(null); }}
-                  disabled={submitting}
+                  disabled={isSubmitting}
                   placeholder="At least 6 characters"
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 pr-12 text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition disabled:opacity-50"
+                  aria-invalid={!!errors.newPassword}
+                  aria-describedby={errors.newPassword ? "cp-new-error" : undefined}
+                  className={inputClass(!!errors.newPassword, "pr-12")}
+                  {...register("newPassword", { onChange: () => setServerError(null) })}
                 />
                 <button
                   type="button"
@@ -89,27 +101,28 @@ export function ChangePassword() {
                   )}
                 </button>
               </div>
-            </div>
+            </FormField>
 
-            <div>
-              <label className="block text-sm font-semibold text-gray-300 mb-1.5">Confirm Password</label>
+            <FormField label="Confirm Password" htmlFor="cp-confirm" error={errors.confirmPassword?.message}>
               <input
+                id="cp-confirm"
                 type={showPw ? "text" : "password"}
                 autoComplete="new-password"
-                value={confirmPassword}
-                onChange={(e) => { setConfirmPassword(e.target.value); setError(null); }}
-                disabled={submitting}
+                disabled={isSubmitting}
                 placeholder="Repeat your new password"
-                className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition disabled:opacity-50"
+                aria-invalid={!!errors.confirmPassword}
+                aria-describedby={errors.confirmPassword ? "cp-confirm-error" : undefined}
+                className={inputClass(!!errors.confirmPassword)}
+                {...register("confirmPassword", { onChange: () => setServerError(null) })}
               />
-            </div>
+            </FormField>
 
             <button
               type="submit"
-              disabled={submitting || !newPassword || !confirmPassword}
+              disabled={isSubmitting}
               className="w-full rounded-xl px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
             >
-              {submitting ? (
+              {isSubmitting ? (
                 <>
                   <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />

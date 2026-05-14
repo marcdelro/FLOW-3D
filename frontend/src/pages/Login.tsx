@@ -1,25 +1,36 @@
 import { useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import type { Location } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
 
+import { useAuth } from "../auth/AuthContext";
+import { FormField, inputClass } from "../components/forms/FormField";
+import { loginSchema, type LoginInput } from "../lib/formSchemas";
 
 export function Login() {
   const { login, user, mustChangePassword } = useAuth();
-  const navigate        = useNavigate();
-  const location        = useLocation();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const state   = location.state as { from?: Location; expired?: boolean } | null;
   const from    = state?.from?.pathname;
   const expired = state?.expired ?? false;
 
-  const [username,         setUsername]         = useState("");
-  const [password,         setPassword]         = useState("");
-  const [showPw,           setShowPw]           = useState(false);
-  const [submitting,       setSubmitting]       = useState(false);
-  const [error,            setError]            = useState<string | null>(null);
+  const [showPw, setShowPw] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
   const [expiredDismissed, setExpiredDismissed] = useState(false);
   const errorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginInput>({
+    resolver: zodResolver(loginSchema),
+    mode: "onTouched",
+    defaultValues: { username: "", password: "" },
+  });
 
   // Redirect immediately if already signed in.
   useEffect(() => {
@@ -29,25 +40,20 @@ export function Login() {
     navigate(dest, { replace: true });
   }, [user, mustChangePassword, navigate, from]);
 
-  function clearError() {
+  function clearServerError() {
     if (errorTimer.current) clearTimeout(errorTimer.current);
-    setError(null);
+    setServerError(null);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!username.trim() || !password) return;
-    clearError();
-    setSubmitting(true);
+  async function onSubmit(values: LoginInput) {
+    clearServerError();
     try {
-      await login(username.trim(), password);
+      await login(values.username.trim(), values.password);
       // Navigation handled by the useEffect above once user state updates.
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Something went wrong. Please try again.";
-      setError(msg);
-      errorTimer.current = setTimeout(() => setError(null), 5000);
-    } finally {
-      setSubmitting(false);
+      setServerError(msg);
+      errorTimer.current = setTimeout(() => setServerError(null), 5000);
     }
   }
 
@@ -95,46 +101,46 @@ export function Login() {
             <p className="mt-1.5 text-sm text-gray-400 text-center">Sign in to your FLOW-3D account</p>
           </div>
 
-          <form onSubmit={handleSubmit} noValidate className="space-y-5">
-            {/* Error notification */}
-            {error && (
-              <div className="rounded-xl border border-red-500/40 bg-red-950/40 text-red-300 text-sm px-4 py-3 flex items-center gap-2.5">
+          <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
+            {/* Server-side error notification */}
+            {serverError && (
+              <div role="alert" className="rounded-xl border border-red-500/40 bg-red-950/40 text-red-300 text-sm px-4 py-3 flex items-center gap-2.5">
                 <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="10" />
                   <line x1="12" y1="8" x2="12" y2="12" />
                   <line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
-                {error}
+                {serverError}
               </div>
             )}
 
-            {/* Username */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-300 mb-1.5">Username</label>
+            <FormField label="Username" htmlFor="login-username" error={errors.username?.message}>
               <input
+                id="login-username"
                 type="text"
                 autoComplete="username"
                 autoFocus
-                value={username}
-                onChange={(e) => { setUsername(e.target.value); clearError(); }}
-                disabled={submitting}
+                disabled={isSubmitting}
                 placeholder="Enter your username"
-                className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition disabled:opacity-50"
+                aria-invalid={!!errors.username}
+                aria-describedby={errors.username ? "login-username-error" : undefined}
+                className={inputClass(!!errors.username)}
+                {...register("username", { onChange: clearServerError })}
               />
-            </div>
+            </FormField>
 
-            {/* Password */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-300 mb-1.5">Password</label>
+            <FormField label="Password" htmlFor="login-password" error={errors.password?.message}>
               <div className="relative">
                 <input
+                  id="login-password"
                   type={showPw ? "text" : "password"}
                   autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => { setPassword(e.target.value); clearError(); }}
-                  disabled={submitting}
+                  disabled={isSubmitting}
                   placeholder="Enter your password"
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 pr-12 text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition disabled:opacity-50"
+                  aria-invalid={!!errors.password}
+                  aria-describedby={errors.password ? "login-password-error" : undefined}
+                  className={inputClass(!!errors.password, "pr-12")}
+                  {...register("password", { onChange: clearServerError })}
                 />
                 <button
                   type="button"
@@ -155,15 +161,15 @@ export function Login() {
                   )}
                 </button>
               </div>
-            </div>
+            </FormField>
 
             {/* Submit */}
             <button
               type="submit"
-              disabled={submitting || !username.trim() || !password}
+              disabled={isSubmitting}
               className="w-full rounded-xl px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
             >
-              {submitting ? (
+              {isSubmitting ? (
                 <>
                   <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />

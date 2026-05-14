@@ -7,6 +7,7 @@ import { appendSessionLog } from "./lib/sessionLog";
 import { buildPreviewPlan } from "./lib/previewPacker";
 import { Dashboard } from "./components/Dashboard";
 import { Explainability } from "./components/Explainability";
+import { HelpModal } from "./components/HelpModal";
 import { ManifestForm } from "./components/ManifestForm";
 import { PlanSelector } from "./components/PlanSelector";
 import { TruckViewer } from "./components/TruckViewer";
@@ -49,6 +50,7 @@ function App() {
   const { user, logout }                = useAuth();
   const navigate                        = useNavigate();
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
   const [savedFlash,    setSavedFlash]    = useState(false);
   const prevUserRef = useRef<string | null>(null);
 
@@ -323,8 +325,60 @@ function App() {
       {/* ── Main viewer ─────────────────────────────────────────────────────── */}
       <main className="relative overflow-hidden">
 
-        {/* ── Top-right overlay: Save State + Log Out + notification banners ── */}
-        <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2 max-w-sm">
+        {/* ── Top-right overlay: Help + Save State + Log Out — always visible when signed in ── */}
+        <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+
+          {/* Help / Feedback */}
+          <button
+            onClick={() => setShowHelpModal(true)}
+            title="Help & feedback"
+            aria-label="Help and feedback"
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
+              lightMode
+                ? "bg-white border-slate-300 text-blue-600 hover:bg-blue-50 hover:border-blue-300"
+                : "bg-gray-900 border-gray-600 text-blue-400 hover:bg-blue-950/30 hover:border-blue-800"
+            }`}
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            Help
+          </button>
+
+          {/* Save State */}
+          <button
+            onClick={() => user ? saveSession() : setShowSaveModal(true)}
+            title={user ? "Save current session" : "Sign in to save"}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
+              savedFlash
+                ? lightMode
+                  ? "border-green-400 bg-green-50 text-green-700"
+                  : "border-green-700 bg-green-950/70 text-green-300"
+                : lightMode
+                  ? "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400"
+                  : "bg-gray-900 border-gray-600 text-gray-200 hover:bg-gray-800 hover:border-gray-500"
+            }`}
+          >
+            {savedFlash ? (
+              <>
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+                Saved
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
+                  <polyline points="17 21 17 13 7 13 7 21" />
+                  <polyline points="7 3 7 8 15 8" />
+                </svg>
+                Save State
+              </>
+            )}
+          </button>
 
           {/* Buttons row */}
           <div className="flex items-center gap-2">
@@ -516,6 +570,9 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* ── Help & Feedback modal ── */}
+      <HelpModal open={showHelpModal} onClose={() => setShowHelpModal(false)} />
 
       {/* ── Save State modal — sign-in prompt for guest users ── */}
       {showSaveModal && (
