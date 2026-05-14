@@ -73,6 +73,9 @@ export interface TruckSpec {
   /** Internal height H in mm */
   H: number;
   payload_kg: number;
+  /** Load-bearing axles. Drives the per-axle load variance score used by
+   *  the axle_balance FFD strategy. Defaults to 2 server-side when omitted. */
+  axle_count?: number;
 }
 
 export interface DeliveryStop {

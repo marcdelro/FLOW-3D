@@ -347,39 +347,6 @@ function App() {
             Help
           </button>
 
-          {/* Save State */}
-          <button
-            onClick={() => user ? saveSession() : setShowSaveModal(true)}
-            title={user ? "Save current session" : "Sign in to save"}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
-              savedFlash
-                ? lightMode
-                  ? "border-green-400 bg-green-50 text-green-700"
-                  : "border-green-700 bg-green-950/70 text-green-300"
-                : lightMode
-                  ? "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400"
-                  : "bg-gray-900 border-gray-600 text-gray-200 hover:bg-gray-800 hover:border-gray-500"
-            }`}
-          >
-            {savedFlash ? (
-              <>
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
-                </svg>
-                Saved
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
-                  <polyline points="17 21 17 13 7 13 7 21" />
-                  <polyline points="7 3 7 8 15 8" />
-                </svg>
-                Save State
-              </>
-            )}
-          </button>
-
           {/* Buttons row */}
           <div className="flex items-center gap-2">
             {/* Save State */}
@@ -503,8 +470,10 @@ function App() {
               items={previewItems}
               lightMode={lightMode}
             />
-            {/* Preview badge — distinguishes naive placement from a solved plan */}
-            <div className={`absolute top-4 left-4 z-10 flex items-center gap-2 px-3.5 py-2 rounded-xl border-2 text-sm font-semibold shadow-sm ${
+            {/* Preview badge — distinguishes naive placement from a solved plan.
+                Anchored to bottom-center so it doesn't overlap the 3D/Exploded/
+                Labels/Animate view-mode buttons in TruckViewer's top-left. */}
+            <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3.5 py-2 rounded-xl border-2 text-sm font-semibold shadow-sm ${
               lightMode
                 ? "bg-amber-50 border-amber-300 text-amber-900"
                 : "bg-amber-950/70 border-amber-700 text-amber-200"

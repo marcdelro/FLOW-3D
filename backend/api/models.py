@@ -51,6 +51,18 @@ class TruckSpec(BaseModel):
     L: int = Field(13600, ge=1, description="Internal length L in millimetres")
     H: int = Field(2440, ge=1, description="Internal height H in millimetres")
     payload_kg: float = Field(3000.0, gt=0.0, description="Maximum payload in kilograms")
+    axle_count: int = Field(
+        2,
+        ge=2,
+        le=6,
+        description=(
+            "Number of load-bearing axles on the truck. Used by the "
+            "axle_balance FFD strategy to compute a per-axle load variance "
+            "score across N axles equispaced along the cargo bay length L, "
+            "rather than the 2-axle midpoint approximation. Defaults to 2 "
+            "(four-wheeler rigid van)."
+        ),
+    )
 
 
 class DeliveryStop(BaseModel):

@@ -71,10 +71,54 @@ function makeTextSprite(text: string, lightMode?: boolean): THREE.Sprite {
 }
 
 /**
- * Scale and orient a loaded OBJ group so its bounding box exactly fills
- * (w_mm × h_mm × l_mm) in Three.js space (X = truck width, Y = up, Z = truck depth).
- * After the call, the bbox min-corner sits at world origin so the caller can
- * position by adding the placement corner (p.x/10, p.z/10, p.y/10 + zOffset).
+ * Quaternion that rotates an axis-aligned model originally fitted to the
+ * ORIGINAL item dims (w, h, l) along (X, Y, Z) so that, after rotation, its
+ * AABB matches the rotated dims dictated by `orientation_index`.
+ *
+ * Mirrors ORIENTATION_PERMUTATIONS in backend/solver/ilp_solver.py:
+ *   0: (w,l,h) → bbox (w,h,l) identity
+ *   1: (l,w,h) → bbox (l,h,w) 90° about Y (vertical)
+ *   2: (w,h,l) → bbox (w,l,h) 90° about X
+ *   3: (h,l,w) → bbox (h,w,l) 90° about Z
+ *   4: (l,h,w) → bbox (l,w,h) Ry(90°) then Rx(90°)
+ *   5: (h,w,l) → bbox (h,l,w) Rz(90°) then Rx(90°)
+ * Without this rotation, fitting the model to the *rotated* AABB stretched
+ * the geometry non-uniformly, visually changing the model's proportions — a
+ * regression the user explicitly flagged ("dimensions should never change").
+ */
+function orientationQuaternion(idx: number): THREE.Quaternion {
+  const X = new THREE.Vector3(1, 0, 0);
+  const Y = new THREE.Vector3(0, 1, 0);
+  const Z = new THREE.Vector3(0, 0, 1);
+  const q = new THREE.Quaternion();
+  const tmp = new THREE.Quaternion();
+  switch (idx) {
+    case 0: break;
+    case 1: q.setFromAxisAngle(Y, Math.PI / 2); break;
+    case 2: q.setFromAxisAngle(X, Math.PI / 2); break;
+    case 3: q.setFromAxisAngle(Z, Math.PI / 2); break;
+    case 4:
+      q.setFromAxisAngle(Y, Math.PI / 2);
+      tmp.setFromAxisAngle(X, Math.PI / 2);
+      q.premultiply(tmp);
+      break;
+    case 5:
+      q.setFromAxisAngle(Z, Math.PI / 2);
+      tmp.setFromAxisAngle(X, Math.PI / 2);
+      q.premultiply(tmp);
+      break;
+  }
+  return q;
+}
+
+/**
+ * Scale and orient a loaded OBJ group so its rotated bounding box matches
+ * the placement's AABB in Three.js space (X = truck width, Y = up,
+ * Z = truck depth). The model is fitted to the ORIGINAL (unrotated) item
+ * dims, then rotated according to `orientation_index` so its proportions
+ * are preserved across orientations. After the call, the bbox min-corner
+ * sits at world origin so the caller can position by adding the placement
+ * corner (p.x/10, p.z/10, p.y/10 + zOffset).
  */
 function fitModelToBox(
   obj: THREE.Group,
@@ -82,6 +126,7 @@ function fitModelToBox(
   l_mm: number,
   h_mm: number,
   axisUp: AxisUp = "auto",
+  orientation_index: number = 0,
 ): void {
   obj.position.set(0, 0, 0);
   obj.rotation.set(0, 0, 0);
@@ -124,9 +169,22 @@ function fitModelToBox(
   obj.scale.set(sx, sy, sz);
   obj.updateMatrixWorld(true);
 
+  // Apply orientation rotation about the fitted bbox center so the model
+  // rotates in place rather than around the world origin. After this the
+  // rotated AABB will match (w_eff, l_eff, h_eff) for the requested
+  // orientation_index.
+  if (orientation_index !== 0) {
+    const fitted = new THREE.Box3().setFromObject(obj);
+    const center = fitted.getCenter(new THREE.Vector3());
+    const q = orientationQuaternion(orientation_index);
+    obj.position.sub(center).applyQuaternion(q).add(center);
+    obj.quaternion.premultiply(q);
+    obj.updateMatrixWorld(true);
+  }
+
   const placed = new THREE.Box3().setFromObject(obj);
   const mn = placed.min;
-  obj.position.set(-mn.x, -mn.y, -mn.z);
+  obj.position.set(obj.position.x - mn.x, obj.position.y - mn.y, obj.position.z - mn.z);
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -153,9 +211,21 @@ interface TooltipState {
 
 export function TruckViewer({ plan, truck, items = [], lightMode = false }: TruckViewerProps) {
   // item_id → input metadata so we can render boxed wrappers / fragile decals
-  // without round-tripping the data through the solver.
-  const itemMeta = new Map<string, { boxed?: boolean; fragile?: boolean }>();
-  for (const it of items) itemMeta.set(it.item_id, { boxed: it.boxed, fragile: it.fragile });
+  // and report ORIGINAL dimensions (independent of the solver's chosen
+  // orientation_index) without round-tripping the data through the solver.
+  const itemMeta = new Map<
+    string,
+    { boxed?: boolean; fragile?: boolean; w: number; l: number; h: number }
+  >();
+  for (const it of items) {
+    itemMeta.set(it.item_id, {
+      boxed: it.boxed,
+      fragile: it.fragile,
+      w: it.w,
+      l: it.l,
+      h: it.h,
+    });
+  }
   const mountRef        = useRef<HTMLDivElement | null>(null);
   const cameraPosRef    = useRef(new THREE.Vector3(-600, 600, 1400));
   const cameraTargetRef = useRef<THREE.Vector3 | null>(null);
@@ -411,7 +481,15 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
 
       if (hasModel) {
         clone = (cachedModel as THREE.Group).clone(true);
-        fitModelToBox(clone, p.w, p.l, p.h, meta!.axisUp);
+        // Fit to ORIGINAL item dims (if available) and apply the orientation
+        // rotation, so the model is rotated rather than stretched into the
+        // rotated AABB. Falls back to the placement AABB when the original
+        // item metadata wasn't passed (e.g. plan loaded from history).
+        const orig = itemMeta.get(p.item_id);
+        const fitW = orig?.w ?? p.w;
+        const fitL = orig?.l ?? p.l;
+        const fitH = orig?.h ?? p.h;
+        fitModelToBox(clone, fitW, fitL, fitH, meta!.axisUp, p.orientation_index);
         const cloneBbox = new THREE.Box3().setFromObject(clone);
         useModel = !cloneBbox.isEmpty();
       }
@@ -1082,12 +1160,19 @@ function ItemTooltip({
   lightMode = false,
 }: {
   placement: Placement;
-  meta?: { boxed?: boolean; fragile?: boolean };
+  meta?: { boxed?: boolean; fragile?: boolean; w?: number; l?: number; h?: number };
   x: number;
   y: number;
   mountWidth: number;
   lightMode?: boolean;
 }) {
+  // Always report the ORIGINAL item dimensions when the input metadata is
+  // available — the solver may pick orientation_index != 0 and swap the
+  // axes, but a sofa's nominal dimensions must never change between plans.
+  const origW = meta?.w ?? p.w;
+  const origL = meta?.l ?? p.l;
+  const origH = meta?.h ?? p.h;
+  const rotated = p.orientation_index !== 0 && meta?.w !== undefined;
   const flipLeft = x > mountWidth * 0.6;
   const color = `#${(STOP_PALETTE[(p.stop_id - 1) % STOP_PALETTE.length] ?? FALLBACK_COLOR)
     .toString(16)
@@ -1111,7 +1196,7 @@ function ItemTooltip({
           <div className="flex justify-between gap-4">
             <span className={lightMode ? "text-slate-600" : "text-gray-400"}>W × L × H</span>
             <span className={`font-mono ${lightMode ? "text-slate-900" : "text-gray-100"}`}>
-              {p.w} × {p.l} × {p.h}
+              {origW} × {origL} × {origH}
               <span className={`ml-1 ${lightMode ? "text-slate-500" : "text-gray-500"}`}>mm</span>
             </span>
           </div>
@@ -1119,10 +1204,20 @@ function ItemTooltip({
           <div className="flex justify-between gap-4">
             <span className={lightMode ? "text-slate-600" : "text-gray-400"}>Volume</span>
             <span className={`font-mono ${lightMode ? "text-slate-900" : "text-gray-100"}`}>
-              {((p.w * p.l * p.h) / 1e9).toFixed(3)}
+              {((origW * origL * origH) / 1e9).toFixed(3)}
               <span className={`ml-1 ${lightMode ? "text-slate-500" : "text-gray-500"}`}>m³</span>
             </span>
           </div>
+
+          {rotated && (
+            <div className="flex justify-between gap-4">
+              <span className={lightMode ? "text-slate-600" : "text-gray-400"}>Rotated AABB</span>
+              <span className={`font-mono text-xs ${lightMode ? "text-slate-500" : "text-gray-400"}`}>
+                {p.w} × {p.l} × {p.h}
+                <span className={`ml-1 ${lightMode ? "text-slate-400" : "text-gray-500"}`}>mm</span>
+              </span>
+            </div>
+          )}
 
           <div className="flex justify-between gap-4">
             <span className={lightMode ? "text-slate-600" : "text-gray-400"}>Position</span>

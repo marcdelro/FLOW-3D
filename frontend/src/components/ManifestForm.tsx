@@ -167,37 +167,37 @@ const TRUCK_PRESETS: { label: string; description: string; truck: TruckSpec }[] 
   {
     label: "L300 / Aluminum Van",
     description: "1.6 × 3.0 × 1.5 m · 800 kg",
-    truck: { W: 1600, L: 3000, H: 1500, payload_kg: 800 },
+    truck: { W: 1600, L: 3000, H: 1500, payload_kg: 800, axle_count: 2 },
   },
   {
     label: "10-Footer Closed Van",
     description: "1.8 × 3.0 × 1.8 m · 1,500 kg",
-    truck: { W: 1800, L: 3000, H: 1800, payload_kg: 1500 },
+    truck: { W: 1800, L: 3000, H: 1800, payload_kg: 1500, axle_count: 2 },
   },
   {
     label: "14-Footer Closed Van",
     description: "2.0 × 4.2 × 2.0 m · 3,000 kg",
-    truck: { W: 2000, L: 4200, H: 2000, payload_kg: 3000 },
+    truck: { W: 2000, L: 4200, H: 2000, payload_kg: 3000, axle_count: 2 },
   },
   {
     label: "20-Footer Closed Van",
     description: "2.2 × 6.0 × 2.2 m · 5,000 kg",
-    truck: { W: 2200, L: 6000, H: 2200, payload_kg: 5000 },
+    truck: { W: 2200, L: 6000, H: 2200, payload_kg: 5000, axle_count: 2 },
   },
   {
     label: "6-Wheeler (Elf/Forward)",
     description: "2.1 × 5.0 × 2.0 m · 4,000 kg",
-    truck: { W: 2100, L: 5000, H: 2000, payload_kg: 4000 },
+    truck: { W: 2100, L: 5000, H: 2000, payload_kg: 4000, axle_count: 2 },
   },
   {
     label: "10-Wheeler Truck",
-    description: "2.3 × 7.5 × 2.3 m · 10,000 kg",
-    truck: { W: 2300, L: 7500, H: 2300, payload_kg: 10000 },
+    description: "2.3 × 7.5 × 2.3 m · 10,000 kg · tridem rear",
+    truck: { W: 2300, L: 7500, H: 2300, payload_kg: 10000, axle_count: 3 },
   },
 ];
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
-const DEFAULT_TRUCK: TruckSpec = { W: 0, L: 0, H: 0, payload_kg: 0 };
+const DEFAULT_TRUCK: TruckSpec = { W: 0, L: 0, H: 0, payload_kg: 0, axle_count: 2 };
 
 const DEFAULT_STOPS: DeliveryStop[] = [];
 

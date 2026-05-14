@@ -12,6 +12,35 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 26 — 2026-05-14 · Multi-Axle Balance, Orientation-Stable Rendering, and RQ3 t-Test Documentation
+
+**Goal:** Generalise the axle-balance FFD heuristic to honour the truck's real axle count, kill the visual "dimensions change between plans" regression caused by the 3D viewer non-uniformly scaling models into rotated AABBs, declutter the top-right overlay (duplicate Save State + preview-toast overlap), and add a one-sample *t*-test to the RQ3 chapter that turns the FFD bounded-execution-time claim into an inferential result.
+
+### Added
+
+**Backend**
+- `backend/api/models.py`: Added `axle_count: int = Field(2, ge=2, le=6)` to `TruckSpec`. Defaults to 2 so existing fixtures keep working.
+- `backend/tests/test_axle_balance.py::test_axle_balance_uses_truck_axle_count`: Locks in that a 3-axle truck and a 2-axle truck both produce feasible plans under the new variance-based scoring on a shared manifest.
+
+**Frontend**
+- `frontend/scripts/verify-orientation-quaternion.mjs`: Standalone Node script that asserts each of the 6 `orientationQuaternion(idx)` values produces the rotated AABB demanded by `ORIENTATION_PERMUTATIONS[idx]`. Run via `node frontend/scripts/verify-orientation-quaternion.mjs`.
+
+**Docs**
+- `docs/chapter4_rq3.md`, `docs/chapter4_rq3.docx`: New subsection **4.3.5.1 One-Sample *t*-Test on FFD Bounded Execution Time** testing H₀: μ ≥ 100 ms against H₁: μ < 100 ms (Nielsen interactive-response threshold) on the 11 per-size FFD median observations from §4.3.5. Reports *t*(10) = −348.0, *p* < 0.0001, Cohen's *d* ≈ −104.9 → reject H₀; elevates the bounded-execution-time claim of RQ3 from a descriptive observation to an inferential statement.
+- `docs/chapter4_rq1.md`, `docs/chapter4_rq1.docx`: RQ1 chapter draft added alongside RQ3.
+
+### Changed
+
+**Backend**
+- `backend/solver/ffd_solver.py`: Rewrote the `axle_balance` candidate-scoring rule from "minimise `|y_CoG − L/2|`" (a 2-axle midpoint approximation) to "minimise the variance of per-axle loads" across `truck.axle_count` axles. Axles are modelled as end-supported equispaced beam reactions at `y_k = L · k / (N − 1)`, and each item's weight is split between its two adjacent axles by the simply-supported lever rule (`_distribute_to_axles()` helper). For `N = 2` this collapses to the previous behaviour; for `N = 3` (tridem 10-wheelers) the middle axle now picks up its proper share. Worst-case complexity stays `O(n²)`.
+
+**Frontend**
+- `frontend/src/components/TruckViewer.tsx`: 3D models are now fitted to the **original** item dimensions (looked up from the `items` prop) and rotated according to `orientation_index` via a new `orientationQuaternion()` helper, rather than being non-uniformly scaled to fill the rotated AABB. Previously, a solver-selected orientation (commonly `1`, the 90° width↔length swap) stretched the geometry into a different aspect ratio, visually changing the model's proportions across plans. The hover tooltip now reports the original `W × L × H` (with a secondary "Rotated AABB" row when `orientation_index ≠ 0`) so the displayed measurements stay constant regardless of solver mode (optimal / axle_balance / stability).
+- `frontend/src/App.tsx`: Removed the duplicate "Save State" button in the top-right overlay — only one button (grouped with Log Out) now renders. The preview-mode toast ("Preview only — click Solve Packing Plan…") was moved from `top-4 left-4` to `bottom-6 left-1/2 -translate-x-1/2` (bottom-center) so it no longer overlaps the 3D / Exploded / Labels / Animate view-mode buttons inside `TruckViewer`.
+- `frontend/src/types/index.ts`, `frontend/src/components/ManifestForm.tsx`: Added `axle_count` to the `TruckSpec` interface and tagged each preset with its real-world axle count (4-wheelers → 2, 10-wheeler tridem → 3).
+
+---
+
 ## Sprint 25 — 2026-05-13 · Compact Items Table, Quantity Editing, and Admin Deactivation Guard
 
 **Goal:** Reduce visual clutter in the cargo manifest by collapsing repeated same-prefix

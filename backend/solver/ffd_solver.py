@@ -17,6 +17,41 @@ from solver.base import AbstractSolver
 from solver.ilp_solver import ORIENTATION_PERMUTATIONS, UPRIGHT_ORIENTATIONS
 
 
+def _distribute_to_axles(
+    current_loads: List[float],
+    axle_y: List[float],
+    item_y: float,
+    item_weight: float,
+) -> List[float]:
+    """Return a new per-axle load vector after adding an item.
+
+    Splits `item_weight` between the two adjacent axles using the simply-
+    supported lever rule: an item at y between axles k and k+1 places
+    weight · (axle_y[k+1] − y) / (axle_y[k+1] − axle_y[k]) on axle k and
+    the remainder on axle k+1. Items outside the axle span are assigned
+    fully to the nearest axle. Used by the axle_balance FFD score so the
+    candidate ranking matches LTO per-axle weight regulations (rather than
+    the 2-axle y-CoG midpoint approximation, which is only correct when
+    N = 2).
+    """
+    n = len(axle_y)
+    new_loads = list(current_loads)
+    if item_y <= axle_y[0]:
+        new_loads[0] += item_weight
+        return new_loads
+    if item_y >= axle_y[-1]:
+        new_loads[-1] += item_weight
+        return new_loads
+    for k in range(n - 1):
+        if axle_y[k] <= item_y <= axle_y[k + 1]:
+            span = axle_y[k + 1] - axle_y[k]
+            share_next = (item_y - axle_y[k]) / span if span > 0 else 0.5
+            new_loads[k] += item_weight * (1.0 - share_next)
+            new_loads[k + 1] += item_weight * share_next
+            return new_loads
+    return new_loads
+
+
 class FFDSolver(AbstractSolver):
     """Deterministic greedy heuristic; O(n^2) worst case.
 
@@ -29,14 +64,18 @@ class FFDSolver(AbstractSolver):
     Stop-id ordering is always descending so the LIFO Y-axis layout is preserved.
 
     The `axle_balance` flag changes Phase 3's candidate selection rule from
-    pure first-fit to "best-fit by longitudinal centre-of-mass". Each
-    feasible (cx, cy, cz) candidate is scored by how close placing the
-    item there would bring the cumulative cargo y-CoG to truck.L / 2
-    (uniform-beam approximation: target mid-bay so front and rear axles
-    share load evenly). All other thesis 3.5.2.1 constraints (B, C, E + F)
-    plus fragile no-stacking are still enforced; axle balance only
-    re-orders the search among feasible positions, so worst-case
-    complexity stays O(n^2).
+    pure first-fit to "best-fit by per-axle load variance". The truck's
+    `axle_count` (≥ 2) axles are modelled as equispaced supports along the
+    cargo bay length L at positions y_k = L · (k − 0.5) / N for k = 1..N.
+    Each item's weight is split between its two adjacent axles by the
+    standard simply-supported lever rule (linear interpolation on item
+    centroid y), and a candidate position is scored by the variance of the
+    resulting per-axle loads. For N = 2 this collapses to the previous
+    "minimise |y_CoG − L/2|" formulation; for N ≥ 3 it correctly captures
+    tridem / multi-axle distribution (e.g. 10-wheeler trucks). All other
+    thesis 3.5.2.1 constraints (B, C, E + F) plus fragile no-stacking are
+    still enforced; axle balance only re-orders the search among feasible
+    positions, so worst-case complexity stays O(n^2).
     """
 
     def __init__(
@@ -150,12 +189,24 @@ class FFDSolver(AbstractSolver):
         weight_cap = truck.payload_kg if truck.payload_kg > 0 else float("inf")
         fragile_ids = {it.item_id for it in sequence if it.fragile}
 
-        # Axle-balance bookkeeping: y-weighted moment of every placed item's
-        # centroid. y_target is the cargo bay midpoint — uniform-beam
-        # approximation for "front and rear axles equally loaded".
-        weighted_y_sum: float = 0.0
+        # Axle-balance bookkeeping: per-axle running load totals. Axles are
+        # modelled as N supports at the cargo-bay endpoints and (N-2)
+        # equispaced interior positions:
+        #   axle_y[k] = L · k / (N - 1)     for k = 0..N-1
+        # Each item's weight is split between its two adjacent axles by the
+        # simply-supported lever rule (the closer axle bears more), which
+        # is the textbook beam reaction for an end-supported truck. The
+        # candidate score is the variance of the resulting per-axle loads
+        # — minimising it equalises axle loading, which is what road-
+        # vehicle axle-weight regulations actually constrain. For N=2 this
+        # collapses to "y-CoG → L/2"; for N=3 (tridem 10-wheelers) the
+        # middle axle gets its proper share.
+        axle_count: int = max(2, int(getattr(truck, "axle_count", 2) or 2))
+        axle_y: List[float] = [
+            truck.L * k / (axle_count - 1) for k in range(axle_count)
+        ]
+        axle_loads: List[float] = [0.0] * axle_count
         total_weight: float = 0.0
-        y_target: float = truck.L / 2.0
 
         for item in sequence:
             if placed_weight + item.weight_kg > weight_cap:
@@ -185,20 +236,31 @@ class FFDSolver(AbstractSolver):
                         continue
 
                     if self._axle_balance:
-                        # Score this candidate by the resulting cargo y-CoG.
-                        # When the item is weightless (weight_kg == 0) we
-                        # still need a tiebreaker; fall back to candidate y
-                        # so identical scores remain deterministic.
+                        # Score this candidate by the per-axle load variance
+                        # that *would* result if we accepted this position.
+                        # Weightless items fall back to the centroid-to-target
+                        # gap against the nearest axle for a deterministic
+                        # tiebreaker.
                         item_y_centroid = cy + l_eff / 2.0
-                        new_total = total_weight + item.weight_kg
-                        if new_total > 0:
-                            new_y_cog = (
-                                weighted_y_sum
-                                + item.weight_kg * item_y_centroid
-                            ) / new_total
+                        if item.weight_kg > 0:
+                            trial_loads = _distribute_to_axles(
+                                axle_loads,
+                                axle_y,
+                                item_y_centroid,
+                                item.weight_kg,
+                            )
+                            new_total = total_weight + item.weight_kg
+                            mean_load = new_total / axle_count
+                            score = sum(
+                                (load - mean_load) ** 2 for load in trial_loads
+                            )
                         else:
-                            new_y_cog = item_y_centroid
-                        score = abs(new_y_cog - y_target)
+                            # Tiebreaker only: prefer positions closer to the
+                            # axle that is currently the least loaded.
+                            target_axle_idx = min(
+                                range(axle_count), key=axle_loads.__getitem__
+                            )
+                            score = abs(item_y_centroid - axle_y[target_axle_idx])
                         if score < best_score:
                             best_score = score
                             chosen = (cx, cy, cz, w_eff, l_eff, h_eff, orientation_index)
@@ -234,8 +296,11 @@ class FFDSolver(AbstractSolver):
             )
             placed_weight += item.weight_kg
             # Update axle bookkeeping with the actual chosen position so the
-            # next item's score reflects the new cargo y-CoG.
-            weighted_y_sum += item.weight_kg * (cy + l_eff / 2.0)
+            # next item's score reflects the new per-axle loads.
+            if item.weight_kg > 0:
+                axle_loads = _distribute_to_axles(
+                    axle_loads, axle_y, cy + l_eff / 2.0, item.weight_kg
+                )
             total_weight += item.weight_kg
 
         return placements, unplaced
