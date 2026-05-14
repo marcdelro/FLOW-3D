@@ -12,6 +12,66 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 25 — 2026-05-13 · Compact Items Table, Quantity Editing, and Admin Deactivation Guard
+
+**Goal:** Reduce visual clutter in the cargo manifest by collapsing repeated same-prefix
+items into a single compact row with a quantity display; add an always-visible quantity
+edit button so users can correct quantities without deleting and re-adding items; and
+tighten the admin panel so administrator accounts cannot be accidentally deactivated.
+
+### Added
+
+**Frontend**
+- `frontend/src/components/ManifestForm.tsx`: `pendingQtyEdit` state
+  (`{ firstIdx, indices, prefix, newQty } | null`) and `applyQtyEdit()` function for
+  in-place quantity editing. `applyQtyEdit` handles both decrease (removes trailing
+  group members in descending index order, adjusts `editingIdx`) and increase (generates
+  new siblings with unique `_NN` suffixes by scanning all current item IDs before
+  allocation, inserts after the last group member).
+- `frontend/src/components/ManifestForm.tsx`: `×N` quantity button in the Actions column
+  — always visible for every group regardless of quantity (visible even when N=1 to make
+  the control discoverable). Opens a `NumberInput` popover (min 1, max 99) anchored above
+  the button. Toggling the button closes the popover without applying. Mutual exclusion
+  with the delete popover (`requestDelete` clears `pendingQtyEdit`; qty button clears
+  `pendingDeleteIdx`).
+
+### Changed
+
+**Frontend**
+- `frontend/src/components/ManifestForm.tsx`: Items table tbody now uses an IIFE
+  `(() => { ... })()` to group consecutive items sharing the same `prefixOf(item_id)`
+  prefix into a single row. Display name shows `group.prefix` for multi-item groups and
+  the full `item_id` for singles; the `title` attribute on the cell lists all `item_id`s
+  in the group on hover. Bulk delete: `requestDelete(g.indices[0])` sets
+  `pendingDeleteIdx` to the first group index; `confirmDelete` detects group size and
+  removes all indices in one `filter` pass.
+- `frontend/src/components/ManifestForm.tsx`: Table wrapper `overflow-hidden` →
+  `overflow-visible` while either `pendingDeleteIdx !== null` or
+  `pendingQtyEdit !== null` so both popovers clear the rounded clip boundary.
+- `frontend/src/components/ManifestForm.tsx`: Actions column header widened `w-24` →
+  `w-28` to accommodate the three-button layout (×N qty, pencil edit, trash delete).
+- `frontend/src/App.tsx`: Top-right viewer overlay refactored from a flat flex row into
+  a `flex-col items-end` column — buttons row (Save State + Log Out) sits on top;
+  two notification banners stack below it. **Solve error banner** moved from the sidebar
+  bottom into the overlay as a floating card with a dismiss (×) button and
+  `setError(null)` on click. **Unplaced items banner** added (amber) — appears whenever
+  `selectedPlan.unplaced_items.length > 0` and lists each unplaced `item_id` as a
+  `font-mono` chip so the user sees at a glance which items the solver could not fit.
+
+**Backend**
+- `backend/api/admin_routes.py`: Deactivation guard changed from
+  `target["id"] == admin["id"]` (self-deactivation check) to
+  `target["role"] == "admin"` (role-based check) — any admin account is now protected
+  from deactivation, not just the currently signed-in admin.
+
+**Frontend**
+- `frontend/src/pages/AdminDashboard.tsx`: Deactivate button and confirm popover
+  wrapped in `{u.role !== "admin" && (...)}` so the control is hidden entirely for
+  admin-role rows; comment updated from `{/* Deactivate with confirm popover */}` to
+  `{/* Deactivate — hidden for admin accounts */}`.
+
+---
+
 ## Sprint 24 — 2026-05-14 · Scrollless Results/Explain Sub-Tabs and In-App Help & Feedback
 
 **Goal:** Cut the vertical scrolling out of the Results and Explainability panels

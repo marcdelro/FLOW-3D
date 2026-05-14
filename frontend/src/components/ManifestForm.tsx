@@ -162,6 +162,40 @@ const STOP_BADGE: Record<number, string> = {
 };
 const badgeColor = (id: number) => STOP_BADGE[id] ?? "#888780";
 
+// ── Truck presets (Philippine closed-van sizes, all dimensions in mm) ─────────
+const TRUCK_PRESETS: { label: string; description: string; truck: TruckSpec }[] = [
+  {
+    label: "L300 / Aluminum Van",
+    description: "1.6 × 3.0 × 1.5 m · 800 kg",
+    truck: { W: 1600, L: 3000, H: 1500, payload_kg: 800 },
+  },
+  {
+    label: "10-Footer Closed Van",
+    description: "1.8 × 3.0 × 1.8 m · 1,500 kg",
+    truck: { W: 1800, L: 3000, H: 1800, payload_kg: 1500 },
+  },
+  {
+    label: "14-Footer Closed Van",
+    description: "2.0 × 4.2 × 2.0 m · 3,000 kg",
+    truck: { W: 2000, L: 4200, H: 2000, payload_kg: 3000 },
+  },
+  {
+    label: "20-Footer Closed Van",
+    description: "2.2 × 6.0 × 2.2 m · 5,000 kg",
+    truck: { W: 2200, L: 6000, H: 2200, payload_kg: 5000 },
+  },
+  {
+    label: "6-Wheeler (Elf/Forward)",
+    description: "2.1 × 5.0 × 2.0 m · 4,000 kg",
+    truck: { W: 2100, L: 5000, H: 2000, payload_kg: 4000 },
+  },
+  {
+    label: "10-Wheeler Truck",
+    description: "2.3 × 7.5 × 2.3 m · 10,000 kg",
+    truck: { W: 2300, L: 7500, H: 2300, payload_kg: 10000 },
+  },
+];
+
 // ── Defaults ──────────────────────────────────────────────────────────────────
 const DEFAULT_TRUCK: TruckSpec = { W: 0, L: 0, H: 0, payload_kg: 0 };
 
@@ -607,7 +641,8 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
   const labelCls = `block text-base font-semibold ${lightMode ? "text-slate-700" : "text-gray-300"} mb-1.5`;
 
   // ── Core state ──
-  const [truck, setTruck]   = useState<TruckSpec>(DEFAULT_TRUCK);
+  const [truck, setTruck]         = useState<TruckSpec>(DEFAULT_TRUCK);
+  const [truckPreset, setTruckPreset] = useState<string>("");
   const [stops, setStops]   = useState<DeliveryStop[]>(DEFAULT_STOPS);
   const [items, setItems]   = useState<FurnitureItem[]>(DEFAULT_ITEMS);
   const [draft, setDraft]   = useState<FurnitureItem>(blankItem());
@@ -633,6 +668,56 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
 
   // ── Delete confirmation ──
   const [pendingDeleteIdx, setPendingDeleteIdx] = useState<number | null>(null);
+
+  // ── Quantity edit popover ──
+  const [pendingQtyEdit, setPendingQtyEdit] = useState<{
+    firstIdx: number; indices: number[]; prefix: string; newQty: number;
+  } | null>(null);
+
+  function applyQtyEdit() {
+    if (!pendingQtyEdit) return;
+    const { firstIdx, indices, prefix, newQty } = pendingQtyEdit;
+    const clampedQty = Math.max(1, Math.min(99, newQty));
+    const template = items[firstIdx];
+    let newItems = [...items];
+
+    if (clampedQty < indices.length) {
+      // Remove from the end of the group
+      const toRemove = indices.slice(clampedQty).sort((a, b) => b - a);
+      for (const idx of toRemove) {
+        if (user) appendSessionLog(user.username, "item_deleted", newItems[idx].item_id);
+        newItems = newItems.filter((_, j) => j !== idx);
+      }
+      if (editingIdx !== null && toRemove.includes(editingIdx)) setEditingIdx(null);
+    } else if (clampedQty > indices.length) {
+      // Add more siblings after the last one in the group
+      const usedSuffixes = new Set<number>();
+      for (const it of newItems) {
+        const mm = it.item_id.toLowerCase().match(new RegExp(`^${prefix.toLowerCase()}_(\\d+)$`));
+        if (mm) usedSuffixes.add(Number(mm[1]));
+      }
+      const toAdd = clampedQty - indices.length;
+      const generated: FurnitureItem[] = [];
+      let n = 1;
+      while (generated.length < toAdd) {
+        while (usedSuffixes.has(n)) n++;
+        usedSuffixes.add(n);
+        generated.push({ ...template, item_id: `${prefix}_${pad2(n)}` });
+        n++;
+      }
+      const insertAfter = Math.max(...indices);
+      newItems = [
+        ...newItems.slice(0, insertAfter + 1),
+        ...generated,
+        ...newItems.slice(insertAfter + 1),
+      ];
+      if (user) appendSessionLog(user.username, "item_added", generated.map(g => g.item_id).join(", "));
+    }
+
+    setItems(newItems);
+    pushHistory(newItems);
+    setPendingQtyEdit(null);
+  }
 
   const editFormRef = useRef<HTMLDivElement | null>(null);
 
@@ -670,6 +755,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
 
   // ── Delete confirmation helpers ──
   function requestDelete(idx: number) {
+    setPendingQtyEdit(null);
     setPendingDeleteIdx(idx);
   }
 
@@ -685,6 +771,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
 
   function cancelDelete() {
     setPendingDeleteIdx(null);
+    setPendingQtyEdit(null);
   }
 
   // Stable ref so keyboard handler always calls the latest closures.
@@ -927,53 +1014,13 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
 
       {/* ── Import bar ──────────────────────────────────────────────────────── */}
       <div className={`px-5 py-4 border-b-2 ${border} ${bg2} space-y-3`}>
-        {/* Action buttons row */}
-        <div className="flex items-center gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.json,application/json,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            className="hidden"
-            onChange={onFilePicked}
-          />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className={`flex items-center gap-2 text-base font-semibold px-4 py-2.5 rounded-lg border-2 transition-colors ${
-              lightMode
-                ? "border-slate-300 bg-white text-slate-800 hover:bg-slate-100 hover:border-slate-400"
-                : "border-gray-600 bg-gray-900 text-gray-200 hover:bg-gray-800 hover:border-gray-500"
-            }`}
-            title="Import a .xlsx, .xls, or .json manifest"
-          >
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            Import Manifest
-          </button>
-          <button
-            type="button"
-            onClick={downloadManifestTemplate}
-            className={`flex items-center gap-2 text-base font-semibold px-4 py-2.5 rounded-lg border-2 transition-colors ${
-              lightMode
-                ? "border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-slate-400"
-                : "border-gray-600 bg-gray-900 text-gray-200 hover:bg-gray-800 hover:border-gray-500"
-            }`}
-            title="Download a starter .xlsx template — fill it in and re-import"
-          >
-            <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            <span>
-              Download Template
-              <span className={`block text-[11px] font-normal leading-none mt-0.5 ${lightMode ? "text-slate-500" : "text-gray-400"}`}>.xlsx format</span>
-            </span>
-          </button>
-        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx,.xls,.json,application/json,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          className="hidden"
+          onChange={onFilePicked}
+        />
 
         {/* Drop zone */}
         <button
@@ -1015,6 +1062,30 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
             .xlsx · .xls · .json — max 10 MB
           </div>
         </button>
+
+        {/* Download template */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={downloadManifestTemplate}
+            className={`w-full flex items-center justify-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-lg border-2 transition-colors ${
+              lightMode
+                ? "border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-slate-400"
+                : "border-gray-600 bg-gray-900 text-gray-200 hover:bg-gray-800 hover:border-gray-500"
+            }`}
+            title="Download a starter .xlsx template — fill it in and drop it above"
+          >
+            <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            <span>
+              Download Template
+              <span className={`block text-[11px] font-normal leading-none mt-0.5 ${lightMode ? "text-slate-500" : "text-gray-400"}`}>.xlsx format</span>
+            </span>
+          </button>
+        </div>
       </div>
       {importMessage && (
         <div className={`px-5 py-3 text-base border-b-2 ${border} ${
@@ -1075,6 +1146,34 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
         muted={muted}
         lightMode={lightMode}
       >
+        {/* Preset selector */}
+        <div className="mb-4">
+          <label className={`block text-sm font-semibold mb-1.5 ${muted}`}>Truck Preset</label>
+          <select
+            value={truckPreset}
+            onChange={(e) => {
+              const preset = TRUCK_PRESETS.find((p) => p.label === e.target.value);
+              if (preset) {
+                setTruck(preset.truck);
+                setTruckPreset(preset.label);
+                if (user) appendSessionLog(user.username, "truck_param_changed", `preset=${preset.label}`);
+              }
+            }}
+            className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
+              lightMode
+                ? "border-slate-300 bg-white text-slate-900"
+                : "border-gray-600 bg-gray-800 text-gray-100"
+            }`}
+          >
+            <option value="" disabled>Select a preset to auto-fill dimensions…</option>
+            {TRUCK_PRESETS.map((p) => (
+              <option key={p.label} value={p.label}>
+                {p.label} — {p.description}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Unit toggle */}
         <div className="flex items-center justify-between mb-4">
           <span className={`text-sm ${muted}`}>Display unit</span>
@@ -1251,7 +1350,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
         </div>
 
         {items.length > 0 && (
-          <div className={`rounded-xl border-2 ${border} mb-3 ${pendingDeleteIdx !== null ? "overflow-visible" : "overflow-hidden"}`}>
+          <div className={`rounded-xl border-2 ${border} mb-3 ${(pendingDeleteIdx !== null || pendingQtyEdit !== null) ? "overflow-visible" : "overflow-hidden"}`}>
             <table className="w-full table-fixed">
               <thead>
                 <tr className={`${bg2} border-b-2 ${border}`}>
@@ -1260,24 +1359,43 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
                     Size ({unit})
                   </th>
                   <th className={`text-center px-2 py-3 font-bold text-sm w-12 ${lightMode ? "text-slate-700" : "text-gray-300"}`}>Stop</th>
-                  <th className="w-20" />
+                  <th className="w-28" />
                 </tr>
               </thead>
               <tbody>
-                {items.map((item, i) => (
+                {(() => {
+                  // Build display groups: items sharing the same prefix are collapsed
+                  // into one row showing "Cabinet ×3". Underlying array is unchanged.
+                  type G = { prefix: string; indices: number[] };
+                  const groups: G[] = [];
+                  for (let i = 0; i < items.length; i++) {
+                    const p = prefixOf(items[i].item_id) ?? items[i].item_id;
+                    const last = groups[groups.length - 1];
+                    if (last && last.prefix === p) last.indices.push(i);
+                    else groups.push({ prefix: p, indices: [i] });
+                  }
+                  return groups.map((g) => {
+                    const i = g.indices[0];
+                    const item = items[i];
+                    const qty = g.indices.length;
+                    const isPending = g.indices.includes(pendingDeleteIdx ?? -1);
+                    const isActive = g.indices.includes(editingIdx ?? -1);
+                    return (
                   <tr
-                    key={item.item_id}
+                    key={g.prefix + i}
                     onClick={() => startEdit(i)}
                     className={`relative border-t ${border} cursor-pointer transition-colors ${
-                      pendingDeleteIdx === i
+                      isPending
                         ? lightMode ? "bg-red-50" : "bg-red-950/30"
-                        : editingIdx === i
+                        : isActive
                           ? lightMode ? "bg-blue-50" : "bg-blue-950/30"
                           : lightMode ? "hover:bg-slate-50" : "hover:bg-gray-800/30"
                     }`}
                   >
-                    <td className="px-3 py-2.5" title={item.item_id}>
-                      <div className={`break-all text-sm font-medium ${text}`}>{item.item_id}</div>
+                    <td className="px-3 py-2.5" title={qty > 1 ? g.indices.map(idx => items[idx].item_id).join(", ") : item.item_id}>
+                      <div className={`break-all text-sm font-medium ${text}`}>
+                        {qty > 1 ? g.prefix : item.item_id}
+                      </div>
                       {(item.side_up || item.boxed || item.fragile) && (
                         <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                           {item.side_up && (
@@ -1331,6 +1449,70 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
                     </td>
                     <td className="pr-3 py-3 text-right overflow-visible">
                       <div className="flex items-center justify-end gap-1.5">
+                        {/* Quantity button — always visible, opens edit popover */}
+                        <div className="relative">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (pendingQtyEdit?.firstIdx === i) {
+                                setPendingQtyEdit(null);
+                              } else {
+                                setPendingDeleteIdx(null);
+                                setPendingQtyEdit({ firstIdx: i, indices: g.indices, prefix: g.prefix, newQty: qty });
+                              }
+                            }}
+                            title="Edit quantity"
+                            aria-label={`Edit quantity of ${qty > 1 ? g.prefix : item.item_id}`}
+                            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors text-xs font-bold ${
+                              pendingQtyEdit?.firstIdx === i
+                                ? lightMode ? "text-blue-700 bg-blue-50 border border-blue-300" : "text-blue-300 bg-blue-950/40 border border-blue-700"
+                                : lightMode ? "text-slate-600 hover:text-blue-700 hover:bg-blue-50 border border-slate-300 hover:border-blue-300"
+                                          : "text-gray-400 hover:text-blue-300 hover:bg-blue-950/40 border border-gray-700 hover:border-blue-800"
+                            }`}
+                          >
+                            ×{qty}
+                          </button>
+                          {pendingQtyEdit?.firstIdx === i && (
+                            <div
+                              className={`absolute bottom-full right-0 mb-2 w-40 rounded-xl shadow-xl border-2 p-3 z-20 ${
+                                lightMode ? "bg-white border-gray-200" : "bg-gray-800 border-gray-700"
+                              }`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className={`text-xs font-semibold mb-2 ${lightMode ? "text-slate-500" : "text-gray-400"}`}>
+                                Quantity
+                              </div>
+                              <NumberInput
+                                className={`w-full rounded-lg border-2 px-3 py-1.5 text-sm font-mono text-center ${
+                                  lightMode ? "border-slate-300 bg-white text-slate-900" : "border-gray-600 bg-gray-900 text-gray-100"
+                                }`}
+                                min={1}
+                                max={99}
+                                value={pendingQtyEdit.newQty}
+                                onChange={(n) => setPendingQtyEdit(prev => prev ? { ...prev, newQty: n } : prev)}
+                              />
+                              <div className="flex gap-1.5 mt-2">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); applyQtyEdit(); }}
+                                  className="flex-1 py-1 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                                >
+                                  Apply
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setPendingQtyEdit(null); }}
+                                  className={`flex-1 py-1 text-xs font-semibold rounded-lg border-2 transition-colors ${
+                                    lightMode ? "border-slate-300 text-slate-700 hover:bg-slate-100" : "border-gray-600 text-gray-300 hover:bg-gray-700"
+                                  }`}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                              <div className={`absolute bottom-[-6px] right-3 w-3 h-3 rotate-45 ${
+                                lightMode ? "bg-white border-r-2 border-b-2 border-gray-200" : "bg-gray-800 border-r-2 border-b-2 border-gray-700"
+                              }`} />
+                            </div>
+                          )}
+                        </div>
                         <button
                           onClick={(e) => { e.stopPropagation(); startEdit(i); }}
                           title="Change this item"
@@ -1350,17 +1532,17 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              pendingDeleteIdx === i ? cancelDelete() : requestDelete(i);
+                              isPending ? cancelDelete() : requestDelete(i);
                             }}
-                            disabled={editingIdx === i}
-                            title={pendingDeleteIdx === i ? "Cancel delete" : "Delete this item"}
+                            disabled={isActive}
+                            title={isPending ? "Cancel delete" : qty > 1 ? `Delete all ${qty} items` : "Delete this item"}
                             aria-label={`Delete ${item.item_id}`}
                             className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
-                              editingIdx === i
+                              isActive
                                 ? (lightMode
                                     ? "opacity-30 cursor-not-allowed text-slate-600 border border-slate-300"
                                     : "opacity-30 cursor-not-allowed text-gray-400 border border-gray-700")
-                                : pendingDeleteIdx === i
+                                : isPending
                                   ? lightMode
                                     ? "text-red-600 bg-red-50 border border-red-300"
                                     : "text-red-400 bg-red-950/40 border border-red-800"
@@ -1377,7 +1559,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
                               <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
                             </svg>
                           </button>
-                          {pendingDeleteIdx === i && (
+                          {isPending && (
                             <div
                               className={`absolute bottom-full right-0 mb-2 w-44 rounded-xl shadow-xl border-2 p-3 z-20 ${
                                 lightMode ? "bg-white border-gray-200" : "bg-gray-800 border-gray-700"
@@ -1385,7 +1567,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
                               onClick={(e) => e.stopPropagation()}
                             >
                               <div className={`text-xs font-semibold truncate mb-1.5 ${lightMode ? "text-slate-500" : "text-gray-400"}`}>
-                                {item.item_id}
+                                {qty > 1 ? `${g.prefix} ×${qty}` : item.item_id}
                               </div>
                               <div className={`flex items-center gap-1.5 mb-3 ${lightMode ? "text-slate-900" : "text-gray-100"}`}>
                                 <svg className="w-4 h-4 shrink-0 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1395,11 +1577,30 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
                                   <path d="M14 11v6"/>
                                   <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
                                 </svg>
-                                <span className="text-sm font-bold">Remove this item?</span>
+                                <span className="text-sm font-bold">
+                                  {qty > 1 ? `Remove all ${qty} items?` : "Remove this item?"}
+                                </span>
                               </div>
                               <div className="flex flex-col gap-1.5">
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); confirmDelete(i); }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (qty > 1) {
+                                      // Delete all siblings in descending index order
+                                      const sorted = [...g.indices].sort((a, b) => b - a);
+                                      let newItems = items;
+                                      for (const idx of sorted) {
+                                        if (user) appendSessionLog(user.username, "item_deleted", newItems[idx].item_id);
+                                        newItems = newItems.filter((_, j) => j !== idx);
+                                      }
+                                      setItems(newItems);
+                                      pushHistory(newItems);
+                                      setPendingDeleteIdx(null);
+                                      if (editingIdx !== null && g.indices.includes(editingIdx)) setEditingIdx(null);
+                                    } else {
+                                      confirmDelete(i);
+                                    }
+                                  }}
                                   className="w-full py-1.5 text-sm font-semibold rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
                                 >
                                   Delete
@@ -1426,7 +1627,9 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
                       </div>
                     </td>
                   </tr>
-                ))}
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           </div>

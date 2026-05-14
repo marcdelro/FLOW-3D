@@ -170,8 +170,8 @@ def delete_user(
     target = get_user_by_id(user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found.")
-    if target["id"] == admin["id"]:
-        raise HTTPException(status_code=400, detail="Cannot deactivate your own account.")
+    if target["role"] == "admin":
+        raise HTTPException(status_code=400, detail="Admin accounts cannot be deactivated.")
 
     deactivate_user(user_id)
     write_audit_log(
