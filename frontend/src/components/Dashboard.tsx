@@ -5,17 +5,20 @@ const STRATEGY_LABEL: Record<SolveStrategy, string> = {
   optimal:      "Optimal",
   axle_balance: "Axle Balance",
   stability:    "Stability",
+  baseline:     "Baseline (Naive)",
 };
 
 const STRATEGY_BADGE_DARK: Record<SolveStrategy, string> = {
   optimal:      "bg-violet-950 text-violet-200 border border-violet-800",
   axle_balance: "bg-teal-950 text-teal-200 border border-teal-800",
   stability:    "bg-amber-950 text-amber-200 border border-amber-800",
+  baseline:     "bg-slate-800 text-slate-300 border border-slate-600",
 };
 const STRATEGY_BADGE_LIGHT: Record<SolveStrategy, string> = {
   optimal:      "bg-violet-100 text-violet-800 border border-violet-300",
   axle_balance: "bg-teal-100 text-teal-800 border border-teal-300",
   stability:    "bg-amber-100 text-amber-800 border border-amber-300",
+  baseline:     "bg-slate-100 text-slate-700 border border-slate-300",
 };
 
 function downloadPlan(plan: PackingPlan) {
@@ -228,7 +231,7 @@ export function Dashboard({ plan, lightMode = false }: DashboardProps) {
           </div>
 
           {/* Stat cards */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             <StatCard value={String(plan.t_exec_ms)} unit="ms" label="Exec Time" lightMode={lightMode} />
             <div className={`rounded-xl p-3 text-center border flex flex-col items-center justify-center gap-1.5 ${
               lightMode ? "bg-slate-50 border-slate-200" : "bg-gray-900 border-gray-800"
@@ -239,9 +242,13 @@ export function Dashboard({ plan, lightMode = false }: DashboardProps) {
                     ? lightMode
                       ? "bg-violet-100 text-violet-800 border border-violet-300"
                       : "bg-violet-950 text-violet-200 border border-violet-800"
-                    : lightMode
-                      ? "bg-teal-100 text-teal-800 border border-teal-300"
-                      : "bg-teal-950 text-teal-200 border border-teal-800"
+                    : plan.solver_mode === "BASELINE"
+                      ? lightMode
+                        ? "bg-slate-100 text-slate-700 border border-slate-300"
+                        : "bg-slate-800 text-slate-300 border border-slate-600"
+                      : lightMode
+                        ? "bg-teal-100 text-teal-800 border border-teal-300"
+                        : "bg-teal-950 text-teal-200 border border-teal-800"
                 }`}
               >
                 {plan.solver_mode}
@@ -249,6 +256,12 @@ export function Dashboard({ plan, lightMode = false }: DashboardProps) {
               <span className={`text-xs font-medium ${lightMode ? "text-slate-600" : "text-gray-400"}`}>Solver</span>
             </div>
             <StatCard value={`${packed.length}`} unit={`/ ${total}`} label="Packed" lightMode={lightMode} />
+            <StatCard
+              value={`${Math.round((plan.success_rate ?? (total > 0 ? packed.length / total : 1)) * 100)}`}
+              unit="%"
+              label="Success Rate"
+              lightMode={lightMode}
+            />
           </div>
 
           {/* Export */}

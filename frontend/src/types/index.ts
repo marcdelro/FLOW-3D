@@ -28,8 +28,11 @@ export interface Placement {
   model_variant?: number;
 }
 
-/** DSS plan-selection strategy — see backend/core/optimizer.py. */
-export type SolveStrategy = "optimal" | "axle_balance" | "stability";
+/** DSS plan-selection strategy — see backend/core/optimizer.py.
+ *  "baseline" is the thesis comparison baseline (naive first-fit, no LIFO,
+ *  no orientation, no support) — surfaced as a 4th plan card next to the
+ *  three real strategies so users can see the gap they buy. */
+export type SolveStrategy = "optimal" | "axle_balance" | "stability" | "baseline";
 
 export interface PackingPlan {
   placements: Placement[];
@@ -37,8 +40,11 @@ export interface PackingPlan {
   v_util: number;
   /** T_exec in milliseconds */
   t_exec_ms: number;
-  solver_mode: "ILP" | "FFD";
+  solver_mode: "ILP" | "FFD" | "BASELINE";
   unplaced_items: string[];
+  /** Share of input items the plan actually packed, in [0, 1]. Populated
+   *  uniformly by AbstractSolver.solve() — independent of solver mode. */
+  success_rate: number;
   /** DSS strategy that produced this plan */
   strategy: SolveStrategy;
   /** Human-readable justification for choosing this plan */

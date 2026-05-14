@@ -124,6 +124,42 @@ def test_axle_balance_plan_passes_all_validators(live_solver):
     assert validator.validate_weight(plan, _HEAVY_FORWARD_BIASED, truck)
 
 
+def _axle_load_variance(plan: PackingPlan, items, truck) -> float:
+    """Population variance of per-axle loads — lower means better balance."""
+    loads = ConstraintValidator().compute_axle_loads(plan, items, truck)
+    mean = sum(loads) / len(loads) if loads else 0.0
+    return sum((x - mean) ** 2 for x in loads) / len(loads) if loads else 0.0
+
+
+def test_axle_balance_strategy_minimises_per_axle_variance(live_solver):
+    """Axle Balance plan must produce strictly lower per-axle load variance
+    than the Stability and Optimal plans on the same forward-biased manifest.
+
+    Anchored on compute_axle_loads() so the same simply-supported lever rule
+    used by the optimiser scoring is the one the test inspects post-solve.
+    This is the empirical answer to "how do we know axle balance is actually
+    balancing the axles?".
+    """
+    truck = _truck()
+    engine = OptimizationEngine()
+    plan_axle      = engine.optimize(_HEAVY_FORWARD_BIASED, truck, strategy="axle_balance")
+    plan_stability = engine.optimize(_HEAVY_FORWARD_BIASED, truck, strategy="stability")
+    plan_optimal   = engine.optimize(_HEAVY_FORWARD_BIASED, truck, strategy="optimal")
+
+    var_axle      = _axle_load_variance(plan_axle,      _HEAVY_FORWARD_BIASED, truck)
+    var_stability = _axle_load_variance(plan_stability, _HEAVY_FORWARD_BIASED, truck)
+    var_optimal   = _axle_load_variance(plan_optimal,   _HEAVY_FORWARD_BIASED, truck)
+
+    assert var_axle < var_stability, (
+        f"Axle Balance variance ({var_axle:.0f} kg²) not strictly less than "
+        f"Stability variance ({var_stability:.0f} kg²)"
+    )
+    assert var_axle <= var_optimal, (
+        f"Axle Balance variance ({var_axle:.0f} kg²) should not exceed "
+        f"Optimal variance ({var_optimal:.0f} kg²)"
+    )
+
+
 def test_axle_balance_uses_truck_axle_count(live_solver):
     """A 3-axle truck must score candidates differently from a 2-axle truck.
 

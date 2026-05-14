@@ -40,6 +40,14 @@ class AbstractSolver(ABC):
         from thesis section 3.5.2.1 (B, C, E, and Rigid Orientation).
         """
         plan = self._solve(items, truck)
+        # Populate success_rate uniformly so every solver mode reports the
+        # same metric — share of input items the plan actually packed. The
+        # unplaced_items list is the authoritative source; we do not trust
+        # the placements list alone because a plan could in principle hold
+        # both a placement and an unplaced entry for the same item_id.
+        n_items = len(items)
+        if n_items > 0:
+            plan.success_rate = (n_items - len(plan.unplaced_items)) / n_items
         failed = self._validator.first_failing_check(plan, truck, items)
         if failed is not None:
             raise PlanValidationError(plan, truck, failed)

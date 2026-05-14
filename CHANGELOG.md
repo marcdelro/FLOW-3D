@@ -12,6 +12,35 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 27 — 2026-05-15 · Baseline Solver, Success Rate Metric, and Per-Axle Load Visualisation
+
+**Goal:** Make the axle-balance strategy *visibly* and *verifiably* correct (per-axle load schematic + post-solve `compute_axle_loads()` + variance test), expose a `success_rate` metric on every plan, and add a naive-first-fit `BaselineSolver` as the thesis comparison baseline so users can see what the route-aware solvers actually contribute.
+
+### Added
+
+**Backend**
+- `backend/api/models.py`: `PackingPlan.success_rate: float ∈ [0, 1]` (default `1.0`) — share of input items the plan actually packed `(n − len(unplaced_items)) / n`. Populated uniformly by `AbstractSolver.solve()` so every solver mode reports the same metric.
+- `backend/api/models.py`: `SolveStrategy` literal gains `"baseline"`; `PackingPlan.solver_mode` literal gains `"BASELINE"`.
+- `backend/solver/baseline_solver.py`: New `BaselineSolver` — naive first-fit in input order with no LIFO presort, no orientation enumeration (always `orientation_index = 0`), no vertical support / fragile guard. Enforces only boundary, non-overlap and payload (geometric / regulatory invariants). Override of `solve()` skips `ConstraintValidator.validate_all()` so the deliberately LIFO-violating plan is not rejected. Used as the thesis comparison baseline so the gap in `V_util` / `success_rate` against the route-aware strategies quantifies what those solvers actually contribute.
+- `backend/core/optimizer.py`: `OptimizationEngine` dispatches `strategy="baseline"` to `BaselineSolver`; `STRATEGY_RATIONALES["baseline"]` describes the comparison-only intent.
+- `backend/core/validator.py`: `ConstraintValidator.compute_axle_loads(plan, items, truck) -> list[float]` mirrors the simply-supported lever rule used in `FFDSolver._distribute_to_axles()` so per-axle loads can be verified post-solve and visualised in the UI.
+- `backend/tests/test_baseline_solver.py`: Six tests covering dispatch wiring, geometric invariants, `success_rate` consistency, `orientation_index == 0`, and `baseline.v_util ≤ optimal.v_util` on a multi-stop manifest.
+- `backend/tests/test_axle_balance.py::test_axle_balance_strategy_minimises_per_axle_variance`: Asserts the Axle Balance plan produces strictly lower per-axle load variance than Stability (and ≤ Optimal) on a forward-biased manifest — empirical proof that axle balance is actually balancing the axles.
+
+**Frontend**
+- `frontend/src/components/Explainability.tsx`: New `AxleLoadCard` SVG schematic in the Metrics sub-tab. Renders the cargo bay as a side-view rectangle with N axle triangles at `y_k = L · k / (N − 1)`, draws a per-axle load bar inside the bay, and reports total / mean / variance below. Mirrors `ConstraintValidator.compute_axle_loads()` so what the UI shows is what the solver scored against.
+- `frontend/src/api/client.ts`, `frontend/src/data/planBuilder.ts`: Solve pipeline now fetches four plans (`optimal`, `axle_balance`, `stability`, `baseline`); mock pipeline gains `buildBaselinePlan()` that mirrors the backend baseline algorithm.
+
+### Changed
+
+**Frontend**
+- `frontend/src/types/index.ts`: `SolveStrategy` adds `"baseline"`; `PackingPlan.solver_mode` adds `"BASELINE"`; `PackingPlan.success_rate: number` added.
+- `frontend/src/components/PlanSelector.tsx`: Renders a 4th plan card "Baseline (Naive)" with a slate solver-mode badge and an added `Success` stat column (`Math.round(success_rate × 100) + "%"`).
+- `frontend/src/components/Dashboard.tsx`: Stat grid expands to four cards — adds a `Success Rate` card and handles the `BASELINE` solver-mode badge styling.
+- `frontend/src/components/Explainability.tsx`: Dispatch / Metrics tabs surface the baseline strategy (rationale, badge, success-rate stat, strategy-mapping table row).
+
+---
+
 ## Sprint 26 — 2026-05-14 · Multi-Axle Balance, Orientation-Stable Rendering, and RQ3 t-Test Documentation
 
 **Goal:** Generalise the axle-balance FFD heuristic to honour the truck's real axle count, kill the visual "dimensions change between plans" regression caused by the 3D viewer non-uniformly scaling models into rotated AABBs, declutter the top-right overlay (duplicate Save State + preview-toast overlap), and add a one-sample *t*-test to the RQ3 chapter that turns the FFD bounded-execution-time claim into an inferential result.

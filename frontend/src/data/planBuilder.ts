@@ -41,7 +41,18 @@ const RATIONALES: Record<SolveStrategy, string> = {
     "settle at the bottom of the load. Choose this plan for fragile " +
     "cargo, rough roads, or long highway transit where a low center of " +
     "gravity reduces shifting damage.",
+  baseline:
+    "Naive first-fit baseline — places items in input order at the " +
+    "first geometrically feasible position, ignoring LIFO, vertical " +
+    "support, fragile no-stacking and orientation. Shown for comparison " +
+    "only: the gap in V_util and success rate between this plan and " +
+    "the Optimal / Axle Balance / Stability plans quantifies what the " +
+    "route-aware solvers actually contribute.",
 };
+
+function successRate(totalItems: number, unplaced: string[]): number {
+  return totalItems > 0 ? (totalItems - unplaced.length) / totalItems : 1.0;
+}
 
 function calcUtil(placements: Placement[], truck: TruckSpec): number {
   const truckVol = truck.W * truck.L * truck.H;
@@ -153,6 +164,7 @@ function buildOptimalPlan(
     t_exec_ms: execMs,
     solver_mode: solverMode,
     unplaced_items: unplaced,
+    success_rate: successRate(items.length, unplaced),
     strategy: "optimal",
     rationale: RATIONALES.optimal,
   };
@@ -232,6 +244,7 @@ function buildAxleBalancePlan(
     t_exec_ms: execMs,
     solver_mode: "FFD",
     unplaced_items: unplaced,
+    success_rate: successRate(items.length, unplaced),
     strategy: "axle_balance",
     rationale: RATIONALES.axle_balance,
   };
@@ -283,12 +296,96 @@ function buildStabilityPlan(
     t_exec_ms: execMs,
     solver_mode: "FFD",
     unplaced_items: unplaced,
+    success_rate: successRate(items.length, unplaced),
     strategy: "stability",
     rationale: RATIONALES.stability,
   };
 }
 
-/** Build three alternative packing plans from the user's SolveRequest. */
+/**
+ * BASELINE — naive first-fit in INPUT order with no LIFO presort, no
+ * orientation, no support, no fragile guard. The mock variant mirrors
+ * `backend/solver/baseline_solver.py`: items are placed at the first
+ * geometrically feasible (cx, cy, cz) anchor and the candidate frontier
+ * grows by extruding the right/front/top of each placement.
+ */
+function buildBaselinePlan(
+  items: FurnitureItem[],
+  truck: TruckSpec,
+  execMs: number,
+): PackingPlan {
+  const placements: Placement[] = [];
+  const unplaced: string[] = [];
+  const candidates: Array<[number, number, number]> = [[0, 0, 0]];
+  let placedWeight = 0;
+  const cap = truck.payload_kg > 0 ? truck.payload_kg : Number.POSITIVE_INFINITY;
+
+  function collides(x: number, y: number, z: number, w: number, l: number, h: number): boolean {
+    for (const p of placements) {
+      if (!p.is_packed) continue;
+      const sep =
+        x + w <= p.x ||
+        p.x + p.w <= x ||
+        y + l <= p.y ||
+        p.y + p.l <= y ||
+        z + h <= p.z ||
+        p.z + p.h <= z;
+      if (!sep) return true;
+    }
+    return false;
+  }
+
+  for (const item of items) {
+    if (placedWeight + item.weight_kg > cap) {
+      unplaced.push(item.item_id);
+      placements.push(unplacedEntry(item));
+      continue;
+    }
+    const { w, l, h } = item;
+    // Sort by (z, y, x) — floor first, NOT by deep-y first; the baseline
+    // must not accidentally inherit LIFO's behaviour.
+    const sorted = [...candidates].sort(
+      (a, b) => a[2] - b[2] || a[1] - b[1] || a[0] - b[0],
+    );
+    let chosen: [number, number, number] | null = null;
+    for (const [cx, cy, cz] of sorted) {
+      if (cx + w > truck.W || cy + l > truck.L || cz + h > truck.H) continue;
+      if (collides(cx, cy, cz, w, l, h)) continue;
+      chosen = [cx, cy, cz];
+      break;
+    }
+    if (!chosen) {
+      unplaced.push(item.item_id);
+      placements.push(unplacedEntry(item));
+      continue;
+    }
+    const [cx, cy, cz] = chosen;
+    placements.push({
+      item_id: item.item_id,
+      x: cx, y: cy, z: cz,
+      w, l, h,
+      orientation_index: ORIENT_NATURAL,
+      stop_id: item.stop_id,
+      is_packed: true,
+      model_variant: item.model_variant,
+    });
+    candidates.push([cx + w, cy, cz], [cx, cy + l, cz], [cx, cy, cz + h]);
+    placedWeight += item.weight_kg;
+  }
+
+  return {
+    placements,
+    v_util: calcUtil(placements, truck),
+    t_exec_ms: execMs,
+    solver_mode: "BASELINE",
+    unplaced_items: unplaced,
+    success_rate: successRate(items.length, unplaced),
+    strategy: "baseline",
+    rationale: RATIONALES.baseline,
+  };
+}
+
+/** Build four alternative packing plans from the user's SolveRequest. */
 export function buildPlansFromRequest(req: SolveRequest): PackingPlan[] {
   const t0 = performance.now();
   const optimal = buildOptimalPlan(req.items, req.truck, 0);
@@ -296,6 +393,7 @@ export function buildPlansFromRequest(req: SolveRequest): PackingPlan[] {
 
   const axleBalance = buildAxleBalancePlan(req.items, req.truck, 18);
   const stability   = buildStabilityPlan(req.items, req.truck, 21);
+  const baseline    = buildBaselinePlan(req.items, req.truck, 5);
 
-  return [optimal, axleBalance, stability];
+  return [optimal, axleBalance, stability, baseline];
 }

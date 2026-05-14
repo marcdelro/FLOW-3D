@@ -1,17 +1,19 @@
 import type { PackingPlan, SolveStrategy } from "../types";
 
-const PLAN_LABELS = ["A", "B", "C"] as const;
+const PLAN_LABELS = ["A", "B", "C", "D"] as const;
 
 const STRATEGY_NAMES: Record<SolveStrategy, string> = {
   optimal:      "Optimal",
   axle_balance: "Axle Balance",
   stability:    "Stability",
+  baseline:     "Baseline (Naive)",
 };
 
 const STRATEGY_BLURB: Record<SolveStrategy, string> = {
   optimal:      "Maximizes volumetric utilization.",
-  axle_balance: "Distributes mass across both axles.",
+  axle_balance: "Distributes mass across each axle.",
   stability:    "Heavy items stay near the floor.",
+  baseline:     "Naive first-fit — comparison only.",
 };
 
 interface PlanSelectorProps {
@@ -95,9 +97,13 @@ export function PlanSelector({ plans, selectedIdx, onSelect, lightMode = false }
                       ? lightMode
                         ? "bg-violet-100 text-violet-800 border border-violet-300"
                         : "bg-violet-950 text-violet-200 border border-violet-800"
-                      : lightMode
-                        ? "bg-teal-100 text-teal-800 border border-teal-300"
-                        : "bg-teal-950 text-teal-200 border border-teal-800"
+                      : plan.solver_mode === "BASELINE"
+                        ? lightMode
+                          ? "bg-slate-100 text-slate-700 border border-slate-300"
+                          : "bg-slate-800 text-slate-300 border border-slate-600"
+                        : lightMode
+                          ? "bg-teal-100 text-teal-800 border border-teal-300"
+                          : "bg-teal-950 text-teal-200 border border-teal-800"
                   }`}
                 >
                   {plan.solver_mode}
@@ -128,11 +134,16 @@ export function PlanSelector({ plans, selectedIdx, onSelect, lightMode = false }
                 </div>
               </div>
 
-              {/* Stat row: packed / time */}
-              <div className={`grid grid-cols-2 gap-2 pt-1.5 border-t ${lightMode ? "border-slate-200" : "border-gray-800"}`}>
+              {/* Stat row: packed / success rate / time */}
+              <div className={`grid grid-cols-3 gap-2 pt-1.5 border-t ${lightMode ? "border-slate-200" : "border-gray-800"}`}>
                 <Stat
                   label="Packed"
                   value={`${packed.length} / ${total}`}
+                  lightMode={lightMode}
+                />
+                <Stat
+                  label="Success"
+                  value={`${Math.round((plan.success_rate ?? (total > 0 ? packed.length / total : 1)) * 100)}%`}
                   lightMode={lightMode}
                 />
                 <Stat

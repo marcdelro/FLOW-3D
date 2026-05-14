@@ -105,9 +105,11 @@ export function Explainability({ plan, items, truck, lightMode = false }: Explai
 
   let dispatchReason: string;
   if (strategy === "axle_balance") {
-    dispatchReason = `The Axle Balance strategy is FFD-only by design — it runs the Route-Sequential FFD heuristic with an axle-aware position picker. Among LIFO-feasible candidate positions, the solver picks the one that brings the cargo's longitudinal centre-of-mass closest to truck.L / 2 so front and rear axles share load evenly. The SOLVER_THRESHOLD does not apply here. With n = ${n} item${n === 1 ? "" : "s"}, FFD completes in milliseconds.`;
+    dispatchReason = `The Axle Balance strategy is FFD-only by design — it runs the Route-Sequential FFD heuristic with an axle-aware position picker. Among LIFO-feasible candidate positions, the solver picks the one that minimises the variance of per-axle loads across truck.axle_count axles modelled as end-supported beam reactions, so each axle bears a share of the cargo as close to the mean as possible. The SOLVER_THRESHOLD does not apply here. With n = ${n} item${n === 1 ? "" : "s"}, FFD completes in milliseconds.`;
   } else if (strategy === "stability") {
     dispatchReason = `The Stability strategy is FFD-only by design — it always runs FFD with a weight-descending presort so heavy items are placed first and settle low in the load. The SOLVER_THRESHOLD does not apply here; the goal is a low center of gravity for transit safety, not maximum V_util. With n = ${n} item${n === 1 ? "" : "s"}, FFD completes in milliseconds.`;
+  } else if (strategy === "baseline") {
+    dispatchReason = `The Baseline strategy is the thesis comparison baseline — naive first-fit in input order with no LIFO presort, no orientation enumeration, no vertical support, and no fragile guard. It is shown so you can quantify what the Optimal / Axle Balance / Stability plans actually buy: the gap in V_util and Success Rate against this plan is the real solvers' contribution. SOLVER_THRESHOLD does not apply.`;
   } else if (usedILP) {
     dispatchReason = `Optimal strategy with n = ${n} item${n === 1 ? "" : "s"}, which is at or below the SOLVER_THRESHOLD of ${SOLVER_THRESHOLD}. The hybrid engine routed this to the exact ILP solver (Gurobi Branch-and-Bound), which provably maximizes V_util but runs in O(2ⁿ).`;
   } else {
@@ -124,9 +126,13 @@ export function Explainability({ plan, items, truck, lightMode = false }: Explai
     ? lightMode
       ? "bg-violet-100 text-violet-800 border border-violet-300"
       : "bg-violet-950 text-violet-200 border border-violet-800"
-    : lightMode
-      ? "bg-teal-100 text-teal-800 border border-teal-300"
-      : "bg-teal-950 text-teal-200 border border-teal-800";
+    : plan.solver_mode === "BASELINE"
+      ? lightMode
+        ? "bg-slate-100 text-slate-700 border border-slate-300"
+        : "bg-slate-800 text-slate-300 border border-slate-600"
+      : lightMode
+        ? "bg-teal-100 text-teal-800 border border-teal-300"
+        : "bg-teal-950 text-teal-200 border border-teal-800";
 
   const payloadColor = payloadPct >= 90 ? "#dc2626" : payloadPct >= 70 ? "#d97706" : "#16a34a";
 
@@ -156,9 +162,10 @@ export function Explainability({ plan, items, truck, lightMode = false }: Explai
             </div>
             <div className="space-y-1 text-xs font-mono">
               {([
-                ["optimal",      "Optimal",      `ILP if n ≤ ${SOLVER_THRESHOLD}, else FFD`],
-                ["axle_balance", "Axle Balance", "FFD with axle-aware best-fit — always"],
-                ["stability",    "Stability",    "FFD (weight-desc) — always"],
+                ["optimal",      "Optimal",        `ILP if n ≤ ${SOLVER_THRESHOLD}, else FFD`],
+                ["axle_balance", "Axle Balance",   "FFD with axle-aware best-fit — always"],
+                ["stability",    "Stability",      "FFD (weight-desc) — always"],
+                ["baseline",     "Baseline (Naive)", "First-fit, no LIFO, no orientation"],
               ] as const).map(([key, label, mapping]) => {
                 const active = strategy === key;
                 return (
@@ -211,7 +218,11 @@ export function Explainability({ plan, items, truck, lightMode = false }: Explai
               <div className={`mt-3 pt-3 border-t text-xs leading-relaxed ${
                 lightMode ? "border-slate-200 text-slate-600" : "border-gray-800 text-gray-400"
               }`}>
-                SOLVER_THRESHOLD does not apply — {strategy === "axle_balance" ? "Axle Balance" : "Stability"} runs FFD at every n.
+                SOLVER_THRESHOLD does not apply — {
+                  strategy === "axle_balance" ? "Axle Balance" :
+                  strategy === "stability"    ? "Stability"    :
+                                                "Baseline"
+                } runs at every n.
               </div>
             )}
           </div>
@@ -220,12 +231,18 @@ export function Explainability({ plan, items, truck, lightMode = false }: Explai
 
       {subTab === "metrics" && (
         <div className="px-5 py-4 space-y-3">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             <div className={`rounded-xl border p-3 text-center ${cardSoft}`}>
               <div className={`text-2xl font-bold leading-none font-mono ${textStrong}`}>
                 {utilPct}<span className="text-base">%</span>
               </div>
               <div className={`text-xs mt-1.5 font-medium ${textMuted}`}>V_util</div>
+            </div>
+            <div className={`rounded-xl border p-3 text-center ${cardSoft}`}>
+              <div className={`text-2xl font-bold leading-none font-mono ${textStrong}`}>
+                {Math.round((plan.success_rate ?? (total > 0 ? packed.length / total : 1)) * 100)}<span className="text-base">%</span>
+              </div>
+              <div className={`text-xs mt-1.5 font-medium ${textMuted}`}>Success Rate</div>
             </div>
             <div className={`rounded-xl border p-3 text-center ${cardSoft}`}>
               <div className={`text-2xl font-bold leading-none font-mono ${textStrong}`}>
@@ -241,6 +258,17 @@ export function Explainability({ plan, items, truck, lightMode = false }: Explai
             </div>
           </div>
 
+          <AxleLoadCard
+            plan={plan}
+            items={items}
+            truck={truck}
+            cardClass={card}
+            textStrong={textStrong}
+            textBody={textBody}
+            textMuted={textMuted}
+            lightMode={lightMode}
+          />
+
           <div className={`rounded-xl border-2 p-3.5 ${card}`}>
             <div className={`text-xs font-bold uppercase tracking-wide mb-2 ${textMuted}`}>What these numbers mean</div>
             <dl className="space-y-2 text-sm">
@@ -249,12 +277,20 @@ export function Explainability({ plan, items, truck, lightMode = false }: Explai
                 <dd className={`text-right ${textBody}`}>Packed volume divided by total cargo bay (0–100%).</dd>
               </div>
               <div className="flex justify-between gap-3">
+                <dt className={`font-semibold ${textStrong}`}>Success Rate</dt>
+                <dd className={`text-right ${textBody}`}>(items packed) / (total items submitted). 100% means every manifest item fit.</dd>
+              </div>
+              <div className="flex justify-between gap-3">
                 <dt className={`font-semibold ${textStrong}`}>T_exec</dt>
                 <dd className={`text-right ${textBody}`}>Wall-clock time the solver spent producing this plan.</dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className={`font-semibold ${textStrong}`}>Packed</dt>
                 <dd className={`text-right ${textBody}`}>Items the solver could fit / total items in the manifest.</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className={`font-semibold ${textStrong}`}>Axle Loads</dt>
+                <dd className={`text-right ${textBody}`}>Per-axle weight estimate from each placed item's longitudinal centroid via the simply-supported lever rule. The variance row is what the Axle Balance strategy minimises — lower is better.</dd>
               </div>
             </dl>
           </div>
@@ -360,6 +396,212 @@ export function Explainability({ plan, items, truck, lightMode = false }: Explai
               </p>
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Per-axle load schematic ─────────────────────────────────────────────────
+//
+// Mirrors `ConstraintValidator.compute_axle_loads()` in
+// `backend/core/validator.py`. Axles sit at y_k = L · k / (N − 1) for
+// k = 0..N-1; each item's weight is split between its two adjacent axles
+// by the simply-supported lever rule. The variance row is what the Axle
+// Balance strategy minimises, so this card is the visual answer to
+// "how do we know axle balance is actually balancing the axles?".
+
+interface AxleLoadCardProps {
+  plan: PackingPlan;
+  items: FurnitureItem[];
+  truck: TruckSpec;
+  cardClass: string;
+  textStrong: string;
+  textBody: string;
+  textMuted: string;
+  lightMode: boolean;
+}
+
+function computeAxleLoads(
+  plan: PackingPlan,
+  items: FurnitureItem[],
+  truck: TruckSpec,
+): { axleY: number[]; loads: number[] } {
+  const axleCount = Math.max(2, truck.axle_count ?? 2);
+  const axleY: number[] = [];
+  for (let k = 0; k < axleCount; k++) {
+    axleY.push((truck.L * k) / (axleCount - 1));
+  }
+  const loads = new Array<number>(axleCount).fill(0);
+  const weights = new Map(items.map((it) => [it.item_id, it.weight_kg]));
+
+  for (const p of plan.placements) {
+    if (!p.is_packed) continue;
+    const w = weights.get(p.item_id) ?? 0;
+    if (w <= 0) continue;
+    const itemY = p.y + p.l / 2;
+    if (itemY <= axleY[0]) {
+      loads[0] += w;
+      continue;
+    }
+    if (itemY >= axleY[axleY.length - 1]) {
+      loads[loads.length - 1] += w;
+      continue;
+    }
+    for (let k = 0; k < axleCount - 1; k++) {
+      if (axleY[k] <= itemY && itemY <= axleY[k + 1]) {
+        const span = axleY[k + 1] - axleY[k];
+        const shareNext = span > 0 ? (itemY - axleY[k]) / span : 0.5;
+        loads[k] += w * (1 - shareNext);
+        loads[k + 1] += w * shareNext;
+        break;
+      }
+    }
+  }
+  return { axleY, loads };
+}
+
+function AxleLoadCard({
+  plan, items, truck, cardClass, textStrong, textBody, textMuted, lightMode,
+}: AxleLoadCardProps) {
+  const { axleY, loads } = computeAxleLoads(plan, items, truck);
+  const total = loads.reduce((s, x) => s + x, 0);
+  const mean  = loads.length > 0 ? total / loads.length : 0;
+  const variance = loads.length > 0
+    ? loads.reduce((s, x) => s + (x - mean) ** 2, 0) / loads.length
+    : 0;
+  const maxLoad = Math.max(1, ...loads);
+  const axleCount = loads.length;
+
+  // SVG side-view dimensions — wide rectangle for the cargo bay, axle
+  // triangles below. 380×100 fits the metrics column at all viewport sizes.
+  const W_SVG = 380;
+  const H_SVG = 110;
+  const PAD_X = 20;
+  const BAY_TOP = 20;
+  const BAY_H = 40;
+  const bayLeft  = PAD_X;
+  const bayRight = W_SVG - PAD_X;
+  const bayW = bayRight - bayLeft;
+
+  const axleX = (y_mm: number) => bayLeft + (y_mm / Math.max(1, truck.L)) * bayW;
+
+  const bayFill   = lightMode ? "#E2E8F0" : "#1F2937";
+  const bayStroke = lightMode ? "#94A3B8" : "#4B5563";
+  const axleFill  = lightMode ? "#0F172A" : "#E5E7EB";
+  const labelFill = lightMode ? "#334155" : "#D1D5DB";
+
+  return (
+    <div className={`rounded-xl border-2 p-3.5 ${cardClass}`}>
+      <div className="flex items-center justify-between mb-2">
+        <div className={`text-xs font-bold uppercase tracking-wide ${textMuted}`}>
+          Per-Axle Load Distribution
+        </div>
+        <div className={`text-xs font-mono ${textMuted}`}>
+          {axleCount} axle{axleCount === 1 ? "" : "s"}
+        </div>
+      </div>
+
+      <svg
+        viewBox={`0 0 ${W_SVG} ${H_SVG}`}
+        className="w-full"
+        role="img"
+        aria-label="Truck side view with per-axle load values"
+      >
+        {/* Cargo bay rectangle */}
+        <rect
+          x={bayLeft}
+          y={BAY_TOP}
+          width={bayW}
+          height={BAY_H}
+          fill={bayFill}
+          stroke={bayStroke}
+          strokeWidth={1.5}
+          rx={2}
+        />
+        {/* y=0 (rear) and y=L (door) endpoint labels */}
+        <text x={bayLeft - 2}  y={BAY_TOP + BAY_H + 12} fontSize={9} fill={labelFill} textAnchor="end">y=0</text>
+        <text x={bayRight + 2} y={BAY_TOP + BAY_H + 12} fontSize={9} fill={labelFill} textAnchor="start">y=L</text>
+
+        {/* Axle markers */}
+        {axleY.map((y, k) => {
+          const x = axleX(y);
+          const load = loads[k];
+          const loadPct = (load / maxLoad) * 100;
+          const barH = (load / Math.max(1, maxLoad)) * (BAY_H - 4);
+          const barColor =
+            loadPct > 110 - 100 / axleCount ? "#dc2626" :
+            loadPct < 100 / axleCount * 0.5  ? "#d97706" :
+                                               "#16a34a";
+          return (
+            <g key={k}>
+              {/* Bar inside the bay showing this axle's share */}
+              <rect
+                x={x - 8}
+                y={BAY_TOP + BAY_H - barH - 2}
+                width={16}
+                height={Math.max(2, barH)}
+                fill={barColor}
+                opacity={0.85}
+                rx={1.5}
+              />
+              {/* Triangle axle below the bay */}
+              <polygon
+                points={`${x - 6},${BAY_TOP + BAY_H + 2} ${x + 6},${BAY_TOP + BAY_H + 2} ${x},${BAY_TOP + BAY_H + 14}`}
+                fill={axleFill}
+              />
+              <circle cx={x} cy={BAY_TOP + BAY_H + 18} r={4} fill={axleFill} />
+              {/* Load label */}
+              <text
+                x={x}
+                y={H_SVG - 4}
+                fontSize={10}
+                fontFamily="ui-monospace, monospace"
+                fill={labelFill}
+                textAnchor="middle"
+                fontWeight="bold"
+              >
+                {Math.round(load)} kg
+              </text>
+              <text
+                x={x}
+                y={BAY_TOP - 4}
+                fontSize={9}
+                fill={labelFill}
+                textAnchor="middle"
+              >
+                axle {k + 1}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+
+      <div className={`mt-2 pt-2 border-t grid grid-cols-3 gap-2 text-xs ${
+        lightMode ? "border-slate-200" : "border-gray-800"
+      }`}>
+        <div>
+          <div className={textMuted}>Total</div>
+          <div className={`font-mono font-bold ${textStrong}`}>
+            {Math.round(total)} kg
+          </div>
+        </div>
+        <div>
+          <div className={textMuted}>Mean / axle</div>
+          <div className={`font-mono font-bold ${textStrong}`}>
+            {Math.round(mean)} kg
+          </div>
+        </div>
+        <div>
+          <div className={textMuted}>Variance σ²</div>
+          <div className={`font-mono font-bold ${textStrong}`}>
+            {variance < 1 ? variance.toFixed(2) : Math.round(variance).toLocaleString()} kg²
+          </div>
+        </div>
+      </div>
+      {plan.strategy !== "axle_balance" && (
+        <div className={`mt-2 text-xs leading-relaxed ${textBody}`}>
+          Switch to the <span className="font-semibold">Axle Balance</span> plan to compare — that strategy explicitly minimises the variance row above.
         </div>
       )}
     </div>

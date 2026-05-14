@@ -2,10 +2,13 @@ import { buildPlansFromRequest } from "../data/planBuilder";
 import type { PackingPlan, SolveRequest, SolveStrategy } from "../types";
 
 /**
- * The three DSS strategies presented to the user as Plan A / B / C.
- * Order is meaningful — A is shown first and selected by default.
+ * The four DSS strategies presented to the user as Plan A / B / C / D.
+ * Order is meaningful — A is shown first and selected by default. The
+ * "baseline" plan is the thesis comparison baseline (naive first-fit, no
+ * LIFO, no orientation) and is always rendered last so users compare the
+ * three real strategies against it.
  */
-const STRATEGIES: SolveStrategy[] = ["optimal", "axle_balance", "stability"];
+const STRATEGIES: SolveStrategy[] = ["optimal", "axle_balance", "stability", "baseline"];
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";

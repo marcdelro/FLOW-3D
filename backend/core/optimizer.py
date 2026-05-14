@@ -31,6 +31,7 @@ from typing import Dict, List
 
 from api.models import FurnitureItem, PackingPlan, SolveStrategy, TruckSpec
 from settings import SOLVER_THRESHOLD
+from solver.baseline_solver import BaselineSolver
 from solver.ffd_solver import FFDSolver
 from solver.ilp_solver import ILPSolver
 
@@ -62,6 +63,14 @@ STRATEGY_RATIONALES: Dict[SolveStrategy, str] = {
         "cargo, rough roads, or long highway transit where a low center of "
         "gravity reduces shifting damage."
     ),
+    "baseline": (
+        "Naive first-fit baseline — places items in input order at the "
+        "first geometrically feasible position, ignoring LIFO, vertical "
+        "support, fragile no-stacking and orientation. Shown for comparison "
+        "only: the gap in V_util and success rate between this plan and "
+        "the Optimal / Axle Balance / Stability plans quantifies what the "
+        "route-aware solvers actually contribute."
+    ),
 }
 
 
@@ -79,6 +88,7 @@ class OptimizationEngine:
             presort="weight", axle_balance=True
         )
         self._ffd_weight: FFDSolver = FFDSolver(presort="weight")
+        self._baseline: BaselineSolver = BaselineSolver()
 
     def get_active_algorithm(self, n: int) -> str:
         """Return 'ILP' if Gurobi is available and n <= threshold, else 'FFD' (thesis 3.5.2.3)."""
@@ -96,6 +106,8 @@ class OptimizationEngine:
             plan = self._ffd_weight.solve(items, truck)
         elif strategy == "axle_balance":
             plan = self._ffd_axle.solve(items, truck)
+        elif strategy == "baseline":
+            plan = self._baseline.solve(items, truck)
         else:  # "optimal"
             mode = self.get_active_algorithm(len(items))
             if mode == "ILP":

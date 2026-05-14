@@ -182,6 +182,56 @@ class ConstraintValidator:
                     return False
         return True
 
+    def compute_axle_loads(
+        self,
+        plan: PackingPlan,
+        items: List[FurnitureItem],
+        truck: TruckSpec,
+    ) -> List[float]:
+        """Return per-axle load (kg) for verification of axle_balance plans.
+
+        Mirrors the simply-supported lever rule used by
+        `FFDSolver._distribute_to_axles()` so the verification path is
+        consistent with the optimiser's scoring function. Axles are taken
+        as N = truck.axle_count supports equispaced over [0, L] at
+        positions y_k = L · k / (N - 1) for k = 0..N-1.
+
+        Each placed item's centre-of-mass y-coordinate (`p.y + p.l / 2`)
+        is used to split its weight between the two adjacent axles. Items
+        outside the axle span are credited fully to the nearest axle.
+
+        Used by the Explainability panel to render the per-axle bar chart
+        and by `test_axle_balance.py` to assert that the axle_balance
+        strategy produces strictly lower load variance than the other
+        strategies on an asymmetric manifest.
+        """
+        axle_count = max(2, int(getattr(truck, "axle_count", 2) or 2))
+        axle_y = [truck.L * k / (axle_count - 1) for k in range(axle_count)]
+        loads = [0.0] * axle_count
+
+        weights = {it.item_id: it.weight_kg for it in items}
+        for p in plan.placements:
+            if not p.is_packed:
+                continue
+            w = weights.get(p.item_id, 0.0)
+            if w <= 0:
+                continue
+            item_y = p.y + p.l / 2.0
+            if item_y <= axle_y[0]:
+                loads[0] += w
+                continue
+            if item_y >= axle_y[-1]:
+                loads[-1] += w
+                continue
+            for k in range(axle_count - 1):
+                if axle_y[k] <= item_y <= axle_y[k + 1]:
+                    span = axle_y[k + 1] - axle_y[k]
+                    share_next = (item_y - axle_y[k]) / span if span > 0 else 0.5
+                    loads[k] += w * (1.0 - share_next)
+                    loads[k + 1] += w * share_next
+                    break
+        return loads
+
     def validate_lifo(self, plan: PackingPlan) -> bool:
         """Verify the Sequential Loading Constraint.
 

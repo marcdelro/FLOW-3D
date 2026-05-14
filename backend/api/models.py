@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 #                   evenly (LTO axle-weight regulation friendly).
 #   stability     — FFD with weight-desc presort; heavy items sit at z=0 to
 #                   lower the vertical centre of gravity.
-SolveStrategy = Literal["optimal", "axle_balance", "stability"]
+SolveStrategy = Literal["optimal", "axle_balance", "stability", "baseline"]
 
 
 class FurnitureItem(BaseModel):
@@ -103,8 +103,19 @@ class PackingPlan(BaseModel):
     placements: List[Placement]
     v_util: float = Field(..., ge=0.0, le=1.0, description="V_util in [0, 1]")
     t_exec_ms: int = Field(..., description="T_exec in milliseconds")
-    solver_mode: Literal["ILP", "FFD"]
+    solver_mode: Literal["ILP", "FFD", "BASELINE"]
     unplaced_items: List[str] = Field(default_factory=list)
+    success_rate: float = Field(
+        1.0,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Share of input items successfully packed: "
+            "(n_items - len(unplaced_items)) / n_items. Populated by "
+            "AbstractSolver.solve() so every plan reports the same metric "
+            "regardless of solver mode."
+        ),
+    )
     strategy: SolveStrategy = Field(
         "optimal",
         description="DSS strategy that produced this plan",
