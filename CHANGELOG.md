@@ -12,7 +12,7 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
-## Sprint 22 — 2026-05-13 · Compact Items Table, Quantity Editing, and Admin Deactivation Guard
+## Sprint 25 — 2026-05-13 · Compact Items Table, Quantity Editing, and Admin Deactivation Guard
 
 **Goal:** Reduce visual clutter in the cargo manifest by collapsing repeated same-prefix
 items into a single compact row with a quantity display; add an always-visible quantity
@@ -69,6 +69,197 @@ tighten the admin panel so administrator accounts cannot be accidentally deactiv
   wrapped in `{u.role !== "admin" && (...)}` so the control is hidden entirely for
   admin-role rows; comment updated from `{/* Deactivate with confirm popover */}` to
   `{/* Deactivate — hidden for admin accounts */}`.
+
+---
+
+## Sprint 24 — 2026-05-14 · Scrollless Results/Explain Sub-Tabs and In-App Help & Feedback
+
+**Goal:** Cut the vertical scrolling out of the Results and Explainability panels
+by splitting each into a sticky sub-tab strip, and add a floating Help button in
+the simulator that bundles a detailed user guide with a "Send Feedback" contact
+form so users can report bugs and request features without leaving the app.
+
+### Added
+
+**Frontend**
+- `frontend/src/components/HelpModal.tsx`: New theme-aware support modal opened
+  from the simulator's top-right toolbar. Two primary tabs — **User Guide** and
+  **Send Feedback**. The Guide has a left-rail navigation with seven sections:
+  Quick Start (workflow overview + solver pipeline), Manifest Tab (truck spec,
+  stops, items, side-up / boxed / fragile flags, undo/redo, import/export), Results
+  Tab (Plan Selector + Overview / Sequence / Issues sub-tabs), Explain Tab
+  (Dispatch / Metrics / Constraints sub-tabs), 3D Viewer (mouse + touch controls,
+  camera toolbar with PAN D-pad / Zoom / VIEW presets, animate-mode LIFO playback,
+  stop colors, fragile decals, fallback-geometry chip), Keyboard Shortcuts (Ctrl+Z,
+  Ctrl+Y, Ctrl+Shift+Z, Esc), and Tips &amp; FAQ ("why is my item unplaced",
+  "why FFD over ILP", "how to share a plan", operational LTO/LTFRB reminder).
+  Send Feedback reuses `landing/ContactForm` so messages reach the thesis team
+  via `mailto:yuktingyukti143@gmail.com` from inside the simulator.
+- `frontend/src/App.tsx`: New floating **Help** button (question-mark icon, blue
+  accent) added to the top-right overlay beside Save State / Log Out; opens
+  `HelpModal` via a new `showHelpModal` state slot.
+
+### Changed
+
+**Frontend**
+- `frontend/src/components/Dashboard.tsx`: Refactored from a stacked-section
+  layout (Why This Plan + Performance + LIFO Load Sequence + Unplaced Items, all
+  scrolled vertically) to a sticky 3-tab strip — **Overview** (rationale chip +
+  `V_util` bar + `T_exec` / solver / packed stat cards + Export-JSON button all
+  on one screen), **Sequence** (compact rear-to-door direction guide on top,
+  per-stop cards below), **Issues** (only rendered when `plan.unplaced_items` is
+  non-empty; tab itself is hidden otherwise). Tab strip uses `sticky top-0` so
+  it stays visible while scrolling within a single tab; `SectionHeader` component
+  removed (no longer needed). Stat-card sizing tightened (`text-2xl` → `text-xl`,
+  `p-4` → `p-3`) so the Overview tab fits the sidebar without scroll for typical
+  plans.
+- `frontend/src/components/Explainability.tsx`: Refactored from three stacked
+  sections (Solver Dispatch + Performance Snapshot + Constraints in Effect) to
+  a sticky 3-tab strip — **Dispatch** (decision banner with solver mode + the
+  Strategy → Solver mapping table with the `ACTIVE` chip and `n` vs
+  `SOLVER_THRESHOLD` bar for the Optimal strategy), **Metrics** (`V_util`,
+  `T_exec`, Packed cards plus a "What these numbers mean" legend), **Constraints**
+  (Route-Sequenced LIFO, Fragile No-Stacking with fragile-item chips, Truck
+  Payload bar with binding-constraint commentary, and the unplaced explainer
+  card). Tab strip uses `sticky top-0` and matches the Dashboard sub-tab
+  styling for visual continuity.
+- `frontend/src/landing/FAQ.tsx`: Trimmed the "Is FLOW-3D free?" answer to drop
+  the trailing sentence about production-account pricing announcements, keeping
+  the answer focused on the current pilot status.
+
+---
+
+## Sprint 23 — 2026-05-14 · Zod + React Hook Form Validation Migration
+
+**Goal:** Replace all ad-hoc `useState`-based form validation across the frontend
+with a unified Zod + React Hook Form layer — centralised schema library, reusable
+accessible field wrapper, and per-field on-touch error display — and fix nav text
+visibility on the light pastel hero.
+
+### Added
+
+**Frontend**
+- `frontend/src/lib/formSchemas.ts`: New centralised Zod schema library —
+  `loginSchema`, `registerSchema`, `changePasswordSchema`, `contactSchema`,
+  `addUserSchema`, and `editUserSchema`. `personNameSchema` accepts Unicode letters,
+  hyphens, apostrophes, and periods (matches Philippine name conventions).
+  `registerSchema` and `changePasswordSchema` use Zod `.refine()` for cross-field
+  password-match validation attached to the `confirm` / `confirmPassword` path so
+  the error surfaces under the correct field. `editUserSchema.password` accepts a
+  blank string (keep existing) or enforces ≥ 6 characters via a single `.refine()`
+  to avoid a second error message.
+- `frontend/src/components/forms/FormField.tsx`: New shared `FormField` label + error
+  wrapper — renders accessible `role="alert"` error paragraphs with an inline SVG
+  warning icon; `aria-invalid` / `aria-describedby` wiring standardised across all
+  call sites. Exports `inputClass(invalid, extra?)` for dark-theme inputs and
+  `adminInputClass(invalid, lightMode)` for the theme-aware admin dashboard inputs.
+
+### Changed
+
+**Frontend**
+- `frontend/src/pages/Login.tsx`: Replaced manual `useState` for field values,
+  dirty tracking, and error state with `useForm<LoginInput>({ resolver:
+  zodResolver(loginSchema), mode: "onTouched" })`; server errors kept in a separate
+  `serverError` state with a 5 s auto-dismiss timer so they do not interfere with
+  field-level validation; `register("username", { onChange: clearServerError })` and
+  `register("password", { onChange: clearServerError })` clear the server error banner
+  on re-type.
+- `frontend/src/pages/Register.tsx`: Replaced the `validate()` guard function and
+  four `useState` slots with `useForm<RegisterInput>`; cross-field password match
+  is enforced by Zod `.refine()` so "Passwords do not match" surfaces under the
+  Confirm Password field on blur without additional state.
+- `frontend/src/pages/ChangePassword.tsx`: Replaced `newPassword` / `confirmPassword`
+  length and match `useState` checks with `useForm<ChangePasswordInput>`; show/hide
+  toggle preserved via a single `showPw` state shared across both inputs.
+- `frontend/src/landing/ContactForm.tsx`: Replaced five-field manual validation
+  (`required` + email regex) with `useForm<ContactInput>({ resolver:
+  zodResolver(contactSchema), mode: "onTouched" })`; message field now enforces
+  10–2000 character range; submit still fires `window.location.href = mailto:...`
+  with prefilled subject and body — no backend SMTP required.
+- `frontend/src/pages/AdminDashboard.tsx`: Add-user and edit-user modals fully
+  migrated from raw `addUsername / addPassword / addError / addSaving` and
+  `editUsername / editPassword / editRole / editError / editSaving` `useState` slots
+  to `addForm = useForm<AddUserInput>()` and `editForm = useForm<EditUserInput>()`.
+  Role segmented toggle controlled via `editForm.setValue("role", r, { shouldDirty:
+  true })` + `editForm.watch("role")` since no native `<input>` is registered for it.
+  `openAdd()` calls `addForm.reset({ username: "", password: "" })`; `openEdit(u)`
+  calls `editForm.reset({ username: u.username, password: "", role: u.role })` so
+  stale values from a previous modal open never bleed through. Submit handlers
+  accept `(values: AddUserInput)` / `(values: EditUserInput)` directly from
+  `handleSubmit`.
+- `frontend/src/landing/Nav.tsx`: Fix nav text visibility on the light pastel hero —
+  `atTop = !scrolled` boolean serves two complete style sets: when unscrolled
+  (`atTop = true`) the bar uses `bg-white/30 backdrop-blur border-slate-900/[0.07]`
+  with `text-slate-700 / text-slate-900` links and a `!bg-slate-900 !text-white`
+  Sign In button; when scrolled, the existing dark `bg-[#0b0d12]/70 backdrop-blur-xl`
+  glass with `text-gray-300 / text-white` and the default blue Sign In button are
+  restored. Mobile hamburger and avatar pill adapt accordingly.
+- `frontend/package.json`: Added production dependencies `react-hook-form ^7.75.0`,
+  `@hookform/resolvers ^5.2.2`, and `zod ^4.4.3`.
+
+---
+
+## Sprint 22 — 2026-05-14 · Legal Modals, Contact Form, and Hero Redesign with Truck Illustration
+
+**Goal:** Add interactive Privacy Policy (R.A. 10173 compliant) and Terms of Service
+modals to the footer, replace dead-anchor contact link with a working contact form that
+sends to the thesis team, remove the Project footer column, and redesign the landing
+hero with a light pastel background, warm glow cursor, and a decorative SVG truck
+illustration that shows LIFO-ordered furniture inside the cargo box.
+
+### Added
+
+**Frontend**
+- `frontend/src/landing/Modal.tsx`: New reusable overlay modal — Escape key + backdrop
+  click to dismiss; `document.body.overflow` scroll-lock while open; accessible
+  `role="dialog"` `aria-modal` with configurable `size="md" | "lg"`.
+- `frontend/src/landing/PrivacyPolicy.tsx`: Full R.A. 10173 (Data Privacy Act of 2012,
+  Philippines) compliant disclosure — seven sections covering account data (username /
+  email / hashed password), manifest data, contact email correspondence, cookies /
+  local storage (session token + UI preference flags), aggregated anonymised analytics,
+  lawful basis (consent + performance of service + legitimate academic interest), all six
+  NPC data-subject rights (access, correct, object, erasure, portability, NPC complaint),
+  retention, sharing/disclosure, cookie behaviour, and DPO contact at yuktingyukti143@gmail.com.
+- `frontend/src/landing/TermsOfService.tsx`: 13-section Terms of Service — eligibility
+  (18+), accurate input obligation, acceptable-use prohibitions (reverse-engineering,
+  illegal goods transport, DoS, misrepresentation of advisory output), advisory-output
+  safety clauses (LTO/LTFRB/DOTr compliance, physical load verification), IP ownership
+  (thesis team + FEU Institute of Technology), service availability ("as is"), Philippine
+  law liability cap, suspension/termination, governing law (Republic of the Philippines /
+  Metro Manila courts), change notification policy, and contact.
+- `frontend/src/landing/ContactForm.tsx`: First Name / Last Name / Email / Message form
+  with client-side validation (all fields required, email format check); submit opens
+  the user's mail client via `mailto:yuktingyukti143@gmail.com` with subject
+  `"FLOW-3D Contact — <Name>"` and body pre-filled; confirmation screen shown after the
+  mailto link fires.
+- `frontend/src/landing/TruckIllustration.tsx`: Decorative SVG truck with a cut-away
+  cargo box — refrigerator (stop 3, rear of truck), sofa (stop 2), chair (stop 1, near
+  door), and floor lamp arranged in LIFO delivery order; stop-badge circles on each item;
+  spinning wheel spokes (animated when `animated={true}`); dashed route arrow with
+  colored stop waypoints above the cab; soft pulsing glow halo; responsive via
+  `compact` prop for mobile layout.
+
+### Changed
+
+**Frontend**
+- `frontend/src/landing/Footer.tsx`: Removed "Project" column (About the thesis / Panel
+  / Contact). Renamed "Privacy" → "Privacy Policy" and "Terms" → "Terms of Service".
+  All three legal/contact entries are now `<button>` elements that open the respective
+  modal via `useState<ModalKey>` instead of dead `href="#"` anchors. Contact moved into
+  the Product column. Grid changed from `md:grid-cols-5` to `md:grid-cols-4`.
+- `frontend/src/landing/Hero.tsx`: Replaced dark `#0b0d12` background with a
+  `linear-gradient(135deg, #fef3ec → #fde7d8 → #e7f0ff → #dbe9ff → #c7defc)` soft
+  peach → cream → sky → indigo pastel gradient; retuned pointer-aware spotlight to a
+  warm amber + sky radial gradient with `mix-blend-mode: multiply` so the glow reads
+  against the light surface (cursor tracking via `--mx`/`--my` CSS vars updated through
+  `requestAnimationFrame` unchanged); added a third violet pulsing orb; updated grid
+  hairlines from `rgba(255,255,255,0.45)` to `rgba(30,41,59,0.6)` for readability on
+  the light background; headline text changed from `text-white` to `text-slate-900`;
+  accent keywords updated from `text-sky-300/pink-300/amber-300` to
+  `text-sky-600/rose-600/amber-600`; split layout into `lg:col-span-7` copy +
+  `lg:col-span-5` `<TruckIllustration>` columns; responsive mobile illustration block
+  below the copy on smaller screens; CTA buttons re-skinned for the light surface
+  (`!bg-slate-900 !text-white` primary, `!bg-white/70 !text-slate-900` secondary).
 
 ---
 

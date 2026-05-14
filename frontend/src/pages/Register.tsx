@@ -1,34 +1,31 @@
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, useNavigate } from "react-router-dom";
+
+import { FormField, inputClass } from "../components/forms/FormField";
+import { registerSchema, type RegisterInput } from "../lib/formSchemas";
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
 const API_URL  = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 export function Register() {
   const navigate = useNavigate();
+  const [showPw, setShowPw] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
 
-  const [username,  setUsername]  = useState("");
-  const [password,  setPassword]  = useState("");
-  const [confirm,   setConfirm]   = useState("");
-  const [showPw,    setShowPw]    = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error,     setError]     = useState<string | null>(null);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<RegisterInput>({
+    resolver: zodResolver(registerSchema),
+    mode: "onTouched",
+    defaultValues: { username: "", password: "", confirm: "" },
+  });
 
-  function validate(): string | null {
-    if (!username.trim())     return "Username is required.";
-    if (username.length < 3)  return "Username must be at least 3 characters.";
-    if (!password)            return "Password is required.";
-    if (password.length < 6)  return "Password must be at least 6 characters.";
-    if (password !== confirm)  return "Passwords do not match.";
-    return null;
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const msg = validate();
-    if (msg) { setError(msg); return; }
-    setError(null);
-    setSubmitting(true);
+  async function onSubmit(values: RegisterInput) {
+    setServerError(null);
     try {
       if (USE_MOCK) {
         await new Promise<void>((r) => setTimeout(r, 700));
@@ -38,7 +35,7 @@ export function Register() {
       const res = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: username.trim(), password }),
+        body: JSON.stringify({ username: values.username.trim(), password: values.password }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({})) as { detail?: string };
@@ -46,9 +43,7 @@ export function Register() {
       }
       navigate("/login", { state: { registered: true }, replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
-    } finally {
-      setSubmitting(false);
+      setServerError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     }
   }
 
@@ -78,46 +73,55 @@ export function Register() {
             <p className="mt-1.5 text-sm text-gray-400 text-center">Join FLOW-3D to manage loading plans</p>
           </div>
 
-          <form onSubmit={handleSubmit} noValidate className="space-y-5">
-            {/* Error */}
-            {error && (
-              <div className="rounded-xl border border-red-500/40 bg-red-950/40 text-red-300 text-sm px-4 py-3 flex items-center gap-2.5">
+          <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
+            {serverError && (
+              <div role="alert" className="rounded-xl border border-red-500/40 bg-red-950/40 text-red-300 text-sm px-4 py-3 flex items-center gap-2.5">
                 <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="10" />
                   <line x1="12" y1="8" x2="12" y2="12" />
                   <line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
-                {error}
+                {serverError}
               </div>
             )}
 
-            {/* Username */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-300 mb-1.5">Username</label>
+            <FormField
+              label="Username"
+              htmlFor="reg-username"
+              error={errors.username?.message}
+              hint="At least 3 characters. Letters, digits, dot, dash, or underscore."
+            >
               <input
+                id="reg-username"
                 type="text"
                 autoComplete="username"
                 autoFocus
-                value={username}
-                onChange={(e) => { setUsername(e.target.value); setError(null); }}
-                disabled={submitting}
+                disabled={isSubmitting}
                 placeholder="Choose a username"
-                className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition disabled:opacity-50"
+                aria-invalid={!!errors.username}
+                aria-describedby={errors.username ? "reg-username-error" : undefined}
+                className={inputClass(!!errors.username)}
+                {...register("username", { onChange: () => setServerError(null) })}
               />
-            </div>
+            </FormField>
 
-            {/* Password */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-300 mb-1.5">Password</label>
+            <FormField
+              label="Password"
+              htmlFor="reg-password"
+              error={errors.password?.message}
+              hint="At least 6 characters."
+            >
               <div className="relative">
                 <input
+                  id="reg-password"
                   type={showPw ? "text" : "password"}
                   autoComplete="new-password"
-                  value={password}
-                  onChange={(e) => { setPassword(e.target.value); setError(null); }}
-                  disabled={submitting}
+                  disabled={isSubmitting}
                   placeholder="Min. 6 characters"
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 pr-12 text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition disabled:opacity-50"
+                  aria-invalid={!!errors.password}
+                  aria-describedby={errors.password ? "reg-password-error" : undefined}
+                  className={inputClass(!!errors.password, "pr-12")}
+                  {...register("password", { onChange: () => setServerError(null) })}
                 />
                 <button
                   type="button"
@@ -138,28 +142,28 @@ export function Register() {
                   )}
                 </button>
               </div>
-            </div>
+            </FormField>
 
-            {/* Confirm password */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-300 mb-1.5">Confirm password</label>
+            <FormField label="Confirm password" htmlFor="reg-confirm" error={errors.confirm?.message}>
               <input
+                id="reg-confirm"
                 type={showPw ? "text" : "password"}
                 autoComplete="new-password"
-                value={confirm}
-                onChange={(e) => { setConfirm(e.target.value); setError(null); }}
-                disabled={submitting}
+                disabled={isSubmitting}
                 placeholder="Re-enter your password"
-                className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition disabled:opacity-50"
+                aria-invalid={!!errors.confirm}
+                aria-describedby={errors.confirm ? "reg-confirm-error" : undefined}
+                className={inputClass(!!errors.confirm)}
+                {...register("confirm", { onChange: () => setServerError(null) })}
               />
-            </div>
+            </FormField>
 
             <button
               type="submit"
-              disabled={submitting || !username.trim() || !password || !confirm}
+              disabled={isSubmitting}
               className="w-full rounded-xl px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
             >
-              {submitting ? (
+              {isSubmitting ? (
                 <>
                   <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
