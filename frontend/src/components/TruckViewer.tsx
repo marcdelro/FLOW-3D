@@ -143,7 +143,7 @@ function fitModelToBox(
   const tH = h_mm / MM_PER_UNIT;
   const tL = l_mm / MM_PER_UNIT;
 
-  const resolved: "y" | "z" | "x" =
+  const resolved: "y" | "z" | "-z" | "x" =
     axisUp === "auto"
       ? (h_mm >= w_mm && h_mm >= l_mm && size.z > size.y * 1.2 ? "z" : "y")
       : axisUp;
@@ -152,6 +152,11 @@ function fitModelToBox(
 
   if (resolved === "z") {
     obj.rotation.x = -Math.PI / 2;
+    sx = tW / size.x;
+    sz = tH / size.z;
+    sy = tL / size.y;
+  } else if (resolved === "-z") {
+    obj.rotation.x = Math.PI / 2;
     sx = tW / size.x;
     sz = tH / size.z;
     sy = tL / size.y;

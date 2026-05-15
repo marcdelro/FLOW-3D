@@ -124,7 +124,7 @@ export const FURNITURE_DEFAULTS: Record<
   armoire:       { w: 1200, l: 650,  h: 1900, weight_kg: 100, side_up: true  },
 };
 
-export type AxisUp = "y" | "z" | "x" | "auto";
+export type AxisUp = "y" | "z" | "-z" | "x" | "auto";
 
 /**
  * Per-prefix catalog — each key maps to an exclusive, non-overlapping subset of
@@ -142,7 +142,6 @@ const CATALOG: Record<string, string[]> = {
   ],
   Bunk_Bed: [
     "16b4dfae678239a42d470147ee1bb468",
-    "1101146651cd32a1bd09c0f277d16187",
   ],
 
   // ── Bookshelves ────────────────────────────────────────────────────────────
@@ -209,7 +208,7 @@ const CATALOG: Record<string, string[]> = {
     "104221f8a5b6676aa1dda33d5a7c8c38",
   ],
   Dining_Table: [
-    "11b54e1530c17829ec4bb690ca24962",
+    "12df0535bb43633abdd9b7a602ec35ec",
   ],
   Coffee_Table: [
     "12193ca7bef40d40a84aed1cd93567b2",
@@ -243,9 +242,9 @@ const CATALOG: Record<string, string[]> = {
 const CATALOG_LABELS: Record<string, string> = {
   // Bed
   "11b722334fe272e2b7802e8eb74a6704": "Frame A",
-  "189064a8df83ddc77a89a0a7fbbe0a6f": "Frame B",
+  "189064a8df83ddc77a89a0a7fbbe0a6f": "Bamboo Bed",
   "12a73cdd42517d8f65331068961955c9": "Child's Bed",
-  "1101146651cd32a1bd09c0f277d16187": "Loft Poster",
+  "1101146651cd32a1bd09c0f277d16187": "Poster Bed",
   // Bunk Bed
   "16b4dfae678239a42d470147ee1bb468": "Loft Bunk",
   // Chair
@@ -278,10 +277,9 @@ const CATALOG_LABELS: Record<string, string> = {
   "12f4d8c20ef311d988dcbe86402c7c15": "Sectional",
   // Table / Dining Table / Coffee Table / End Table / Side Table
   "104221f8a5b6676aa1dda33d5a7c8c38": "Rectangular",
-  "11b54e1530c17829ec4bb690ca24962":  "Round",
+  "12df0535bb43633abdd9b7a602ec35ec": "Rectangular",
   "12193ca7bef40d40a84aed1cd93567b2": "Standard",
   "1223b9275d2a2edacd4833986a6efe96": "Compact",
-  "12df0535bb43633abdd9b7a602ec35ec": "Console",
   // Wardrobe / Cabinet / Dresser / Sideboard / Armoire
   "12c3a4561242a6fe840045f49392aafa": "Double Door",
   "13f565d814bd5647adcda92177beb1f7": "Classic",
@@ -295,13 +293,13 @@ const CATALOG_AXIS_UP: Record<string, AxisUp> = {
   // flat-surface items use Z-up ShapeNetSem convention
   Bed: "z", Bunk_Bed: "z",
   Sofa: "z", Couch: "z", Loveseat: "z", Sectional: "z",
-  Table: "z", Dining_Table: "z", Coffee_Table: "z", End_Table: "z", Side_Table: "z",
+  Table: "z", Dining_Table: "z", Coffee_Table: "z", End_Table: "-z", Side_Table: "z",
   Desk: "z", Writing_Desk: "z",
   // upright items — use auto heuristic (fires Z-up only when h >= w and h >= l)
   Bookshelf: "auto", Bookcase: "auto", Shelf: "auto", Shelving: "auto",
   Chair: "auto",
   Refrigerator: "auto", Fridge: "auto",
-  Wardrobe: "auto", Cabinet: "auto", Dresser: "auto", Sideboard: "auto", Armoire: "auto",
+  Wardrobe: "auto", Cabinet: "auto", Dresser: "auto", Sideboard: "z", Armoire: "auto",
 };
 
 /**
