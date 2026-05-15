@@ -12,6 +12,17 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 35 — 2026-05-15 · TruckViewer Preview Placeholder-Warning Fix
+
+**Goal:** Stop the fallback-geometry warning chip from firing on items whose OBJ models are still streaming in during the live preview, so the chip only surfaces genuine model-resolution failures.
+
+### Fixed
+
+**Frontend**
+- `frontend/src/components/TruckViewer.tsx`: Replace the 2-state model cache (`THREE.Group | null`) with a 3-state discriminated value (`"loading" | "failed" | THREE.Group`). The warning chip previously counted every item whose cache entry was `null`, conflating "OBJ fetch still in flight" with "OBJ fetch failed" — so freshly-added preview items (e.g. `chair_01`, `cabinet_01`, `fridge_01`) tripped the placeholder-geometry warning until their models loaded. The chip now only counts items whose load has settled as `"failed"`; in-flight items still render as a coloured box but no longer raise the warning, which is why the chip disappeared after Solve when the cache was already warm. Cleanup logic and the cache-hit check in the scene effect were updated to match the new state values, with a `cached instanceof THREE.Group` narrowing for the model-clone path.
+
+---
+
 ## Sprint 34 — 2026-05-15 · Manifest Reset, Bulk-Clear, and Opt-In Tour Prompt
 
 **Goal:** Give users explicit destructive controls (clear all items / reset the entire manifest) instead of forcing them to delete rows one at a time, and replace the auto-start guided tour with a Yes/No prompt that respects a "Don't show again" preference. Surface the tour launcher inside the Help & Support modal so users who opt out can still find it later.

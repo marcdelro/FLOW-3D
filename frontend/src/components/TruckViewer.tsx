@@ -235,7 +235,12 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
   const cameraPosRef    = useRef(new THREE.Vector3(-600, 600, 1400));
   const cameraTargetRef = useRef<THREE.Vector3 | null>(null);
 
-  const modelCacheRef = useRef<Map<string, THREE.Group | null>>(new Map());
+  /** Per-OBJ-path load state. `"loading"` while a fetch is in flight, `"failed"`
+   *  if the catch handler fired, or the parsed `THREE.Group` on success. The
+   *  warning chip distinguishes `"loading"` from `"failed"` so an item isn't
+   *  flagged as a permanent fallback while its model is still being fetched
+   *  (e.g. during the live preview while the user is still adding items). */
+  const modelCacheRef = useRef<Map<string, "loading" | "failed" | THREE.Group>>(new Map());
   const cameraRef     = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef   = useRef<OrbitControls | null>(null);
 
@@ -309,7 +314,7 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
 
       for (const meta of [metaDefault, metaVariant]) {
         if (meta && !modelCacheRef.current.has(meta.path)) {
-          modelCacheRef.current.set(meta.path, null);
+          modelCacheRef.current.set(meta.path, "loading");
           toLoad.push(meta.path);
         }
       }
@@ -329,7 +334,7 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
     ).then((entries) => {
       if (cancelled) return;
       for (const [path, obj] of entries) {
-        modelCacheRef.current.set(path, obj);
+        modelCacheRef.current.set(path, obj ?? "failed");
       }
       setModelsVersion((v) => v + 1);
     });
@@ -337,7 +342,7 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
     return () => {
       cancelled = true;
       for (const path of toLoad) {
-        if (modelCacheRef.current.get(path) === null) {
+        if (modelCacheRef.current.get(path) === "loading") {
           modelCacheRef.current.delete(path);
         }
       }
@@ -478,14 +483,16 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
       const outlineOpacity = isLatest ? 0.90    : 0.45;
 
       const meta        = resolveModelMeta(p.item_id, p.model_variant);
-      const cachedModel = meta !== null ? modelCacheRef.current.get(meta.path) : undefined;
-      const hasModel    = cachedModel !== null && cachedModel !== undefined;
+      const cached      = meta !== null ? modelCacheRef.current.get(meta.path) : undefined;
+      const isLoading   = cached === "loading";
+      const cachedModel = cached instanceof THREE.Group ? cached : null;
+      const hasModel    = cachedModel !== null;
 
       let useModel = false;
       let clone: THREE.Group | null = null;
 
       if (hasModel) {
-        clone = (cachedModel as THREE.Group).clone(true);
+        clone = cachedModel.clone(true);
         // Fit to ORIGINAL item dims (if available) and apply the orientation
         // rotation, so the model is rotated rather than stretched into the
         // rotated AABB. Falls back to the placement AABB when the original
@@ -530,7 +537,10 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
 
       } else {
         // ── Fallback: coloured box (model not loaded or geometry invalid) ─
-        fallbacks.push(p.item_id);
+        // Only flag as a real fallback once we know the load has actually
+        // failed — items still loading (e.g. just added in the live preview)
+        // render as a box but shouldn't trip the warning chip.
+        if (!isLoading) fallbacks.push(p.item_id);
         const geom = new THREE.BoxGeometry(w, h, l);
         geos.push(geom);
 
