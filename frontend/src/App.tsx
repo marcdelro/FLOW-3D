@@ -482,6 +482,11 @@ function App() {
           </div>
           </div>
 
+        </div>
+
+        {/* ── Below top-right buttons: solve error + unplaced items banners ── */}
+        <div className="absolute top-20 right-4 z-20 flex flex-col gap-2 max-w-sm">
+
           {/* Solve error banner */}
           {error && (() => {
             const friendly = friendlyError(error);

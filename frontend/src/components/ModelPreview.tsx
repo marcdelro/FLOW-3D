@@ -32,7 +32,7 @@ function fitGroupToUnitCube(obj: THREE.Group, axisUp: AxisUp): void {
   // at least as large as the native Y extent we treat the model as Z-up and
   // rotate it onto Three.js's Y-up convention. Without this, chairs,
   // bookshelves, fridges, etc. render lying on their side in the preview.
-  let resolved: "y" | "z" | "x";
+  let resolved: "y" | "z" | "-z" | "x";
   if (axisUp === "auto") {
     const native = new THREE.Box3().setFromObject(obj);
     if (native.isEmpty()) {
@@ -45,8 +45,9 @@ function fitGroupToUnitCube(obj: THREE.Group, axisUp: AxisUp): void {
     resolved = axisUp;
   }
 
-  if (resolved === "z")      obj.rotation.x = -Math.PI / 2;
-  else if (resolved === "x") obj.rotation.z =  Math.PI / 2;
+  if (resolved === "z")       obj.rotation.x = -Math.PI / 2;
+  else if (resolved === "-z") obj.rotation.x =  Math.PI / 2;
+  else if (resolved === "x")  obj.rotation.z =  Math.PI / 2;
   obj.updateMatrixWorld(true);
 
   const box  = new THREE.Box3().setFromObject(obj);

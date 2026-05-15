@@ -79,9 +79,10 @@ export function Login() {
 
         {/* Card */}
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur px-8 py-10 relative">
-          {/* X close button */}
+          {/* X close button — always goes to landing page */}
           <button
-            onClick={() => navigate(from && from !== "/login" ? from : "/")}
+            type="button"
+            onClick={() => navigate("/")}
             aria-label="Close"
             className="absolute top-4 right-4 text-gray-600 hover:text-gray-300 transition p-1 rounded-lg hover:bg-white/[0.06]"
           >
@@ -198,7 +199,7 @@ export function Login() {
           Demo &nbsp;·&nbsp;{" "}
           <span className="font-mono">admin / admin123</span>
           {" "}&nbsp;or&nbsp;{" "}
-          <span className="font-mono">user / user123</span>
+          <span className="font-mono">tester / tester123</span>
         </p>
       </div>
     </main>
