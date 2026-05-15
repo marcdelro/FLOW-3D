@@ -31,6 +31,80 @@ export function TourRestartButton() {
   );
 }
 
+// ── First-visit Yes / No prompt ────────────────────────────────────────────────
+/**
+ * Shown on the user's first visit to /app — replaces the previous auto-start
+ * behaviour that immediately took over the screen with a spotlight. The user
+ * picks Yes (take the tour) or No (skip), with an optional "Don't show this
+ * again" checkbox so power-users aren't pestered on every load. The footer
+ * mentions that the tour is always available from the Help button so users
+ * who dismiss the prompt can still find it later.
+ */
+export function TourPromptModal() {
+  const { showPrompt, acceptPrompt, declinePrompt } = useTour();
+  const [dontShowAgain, setDontShowAgain] = useState(false);
+
+  if (!showPrompt) return null;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="tour-prompt-title"
+      className="fixed inset-0 z-[10000] flex items-center justify-center px-4"
+    >
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#0f1117] shadow-2xl p-6">
+        <div className="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center mb-4">
+          <svg className="w-6 h-6 text-blue-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+        </div>
+
+        <h2 id="tour-prompt-title" className="text-xl font-bold text-white mb-2">
+          Take a quick tour?
+        </h2>
+        <p className="text-sm text-gray-400 leading-relaxed mb-4">
+          We&apos;ll walk you through FLOW-3D in seven steps — manifest entry,
+          delivery stops, items, solving, and the 3D viewer. About 60 seconds.
+        </p>
+
+        <label className="flex items-center gap-2 mb-5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={dontShowAgain}
+            onChange={(e) => setDontShowAgain(e.target.checked)}
+            className="w-4 h-4 rounded border-gray-600 bg-gray-900 text-blue-600 focus:ring-2 focus:ring-blue-500"
+          />
+          <span className="text-sm text-gray-300">Don&apos;t show this again</span>
+        </label>
+
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={() => acceptPrompt(dontShowAgain)}
+            className="w-full rounded-xl px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition"
+            autoFocus
+          >
+            Yes, take the tour
+          </button>
+          <button
+            onClick={() => declinePrompt(dontShowAgain)}
+            className="w-full rounded-xl px-4 py-2.5 border border-white/15 hover:bg-white/[0.04] text-gray-300 font-semibold text-sm transition"
+          >
+            No, skip for now
+          </button>
+        </div>
+
+        <p className="mt-4 text-xs text-gray-500 leading-relaxed">
+          You can launch the tour anytime from the <span className="font-semibold text-gray-300">Help</span> button (top right) under <span className="font-semibold text-gray-300">Quick Start</span>.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ── Spotlight overlay ──────────────────────────────────────────────────────────
 interface SpotRect {
   top: number;

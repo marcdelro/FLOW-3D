@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import { ContactForm } from "../landing/ContactForm";
+import { useTour } from "../tour/TourContext";
 
 type HelpTab = "guide" | "feedback";
 
@@ -114,7 +115,7 @@ export function HelpModal({ open, onClose }: { open: boolean; onClose: () => voi
 
             {/* Section body */}
             <div className="overflow-y-auto px-6 py-5 text-sm leading-relaxed text-gray-300">
-              {section === "quickstart" && <QuickStartContent />}
+              {section === "quickstart" && <QuickStartContent onClose={onClose} />}
               {section === "manifest"   && <ManifestContent />}
               {section === "results"    && <ResultsContent />}
               {section === "explain"    && <ExplainContent />}
@@ -200,6 +201,51 @@ function SectionLink({
 
 // ── Guide content blocks ─────────────────────────────────────────────────
 
+/**
+ * "Take the guided tour" CTA shown at the top of Quick Start. Calls the
+ * tour context's `start()` to begin the spotlight tour immediately, and
+ * closes the Help modal so the spotlight has the screen to itself.
+ *
+ * Also surfaces here so users who dismissed the first-visit prompt with
+ * "Don't show this again" know where to find the tour later.
+ */
+function TourLauncher({ onClose }: { onClose: () => void }) {
+  const { start, active } = useTour();
+  return (
+    <div className="my-4 rounded-xl border border-blue-500/30 bg-blue-600/10 p-4 flex items-start gap-3">
+      <div className="shrink-0 w-9 h-9 rounded-lg bg-blue-600/30 border border-blue-500/40 flex items-center justify-center">
+        <svg className="w-4 h-4 text-blue-300" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+          <path d="M8 5v14l11-7z" />
+        </svg>
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-semibold text-white mb-0.5">
+          Take the guided tour
+        </div>
+        <div className="text-xs text-gray-400 leading-relaxed mb-2.5">
+          A 7-step spotlight walkthrough of the full workflow — about 60
+          seconds. Use this anytime you want a refresher.
+        </div>
+        <button
+          onClick={() => {
+            onClose();
+            // Defer one tick so the Help modal's body-overflow lock releases
+            // before the tour spotlight measures element positions.
+            setTimeout(start, 50);
+          }}
+          disabled={active}
+          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/40 disabled:cursor-not-allowed text-white text-xs font-semibold transition"
+        >
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          {active ? "Tour running…" : "Start tour"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function H3({ children }: { children: ReactNode }) {
   return <h3 className="text-base font-bold text-white mt-5 mb-2 first:mt-0">{children}</h3>;
 }
@@ -232,7 +278,7 @@ function Callout({ children, kind = "info" }: { children: ReactNode; kind?: "inf
   return <div className={`rounded-lg border px-3.5 py-2.5 text-sm mb-3 ${cls}`}>{children}</div>;
 }
 
-function QuickStartContent() {
+function QuickStartContent({ onClose }: { onClose: () => void }) {
   return (
     <>
       <H3>Welcome to FLOW-3D</H3>
@@ -240,6 +286,7 @@ function QuickStartContent() {
         FLOW-3D generates LIFO-compliant 3D truck-loading plans for Philippine
         furniture logistics. The workflow is three steps and the sidebar reflects them.
       </P>
+      <TourLauncher onClose={onClose} />
       <UL>
         <li><Highlight>Step 1 — Manifest.</Highlight> Enter truck dimensions, delivery stops, and cargo items. You can also import an Excel or JSON file.</li>
         <li><Highlight>Step 2 — Results.</Highlight> Pick one of three plans (Optimal, Axle Balance, Stability) and review packed items, utilization, and the LIFO load sequence.</li>

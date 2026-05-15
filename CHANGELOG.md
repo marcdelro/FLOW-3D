@@ -12,6 +12,27 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 34 — 2026-05-15 · Manifest Reset, Bulk-Clear, and Opt-In Tour Prompt
+
+**Goal:** Give users explicit destructive controls (clear all items / reset the entire manifest) instead of forcing them to delete rows one at a time, and replace the auto-start guided tour with a Yes/No prompt that respects a "Don't show again" preference. Surface the tour launcher inside the Help & Support modal so users who opt out can still find it later.
+
+### Added
+
+**Frontend**
+- `frontend/src/components/ManifestForm.tsx`: New **Remove all items** trash-can button in the Cargo Items section header, sitting next to Undo / Redo. Disabled when the items list is empty; `window.confirm()` confirms before clearing; preserves stops and truck settings. Logs `items_cleared` to the session audit trail.
+- `frontend/src/components/ManifestForm.tsx`: New **Reset manifest** link beside "Download .xlsx template" in the import bar. `window.confirm()` confirms before wiping truck dimensions back to defaults, clearing every stop and item, the active draft, truck preset, error state, and all popover state. Logs `manifest_reset`.
+- `frontend/src/tour/TourContext.tsx`: New `showPrompt` context state + new localStorage key `flow3d_tour_prompt_dismissed` (independent from `flow3d_tour_done`). First-visit prompt now auto-appears only when neither flag is set; declining without ticking the checkbox lets the prompt re-appear on the next visit. New actions `acceptPrompt(dontShowAgain)` and `declinePrompt(dontShowAgain)` replace the previous unconditional auto-start.
+- `frontend/src/tour/TourOverlay.tsx`: New `<TourPromptModal />` — a Yes/No dialog with a "Don't show this again" checkbox shown on first `/app` visit. Tells users where to relaunch the tour from (Help button → Quick Start). Native modal chrome matches the existing logout-confirmation pattern.
+- `frontend/src/components/HelpModal.tsx`: New `<TourLauncher />` callout at the top of the Quick Start section — blue accent card with a "Start tour" button that calls `useTour().start()` and dismisses the Help modal (50 ms defer so the body-overflow lock releases before the spotlight measures element positions). Button disables and reads "Tour running…" when a tour is already active. Imports `useTour` from `../tour/TourContext`.
+
+### Changed
+
+**Frontend**
+- `frontend/src/tour/TourContext.tsx`: First-visit behaviour changed — the spotlight tour no longer auto-starts. Only `showPrompt` auto-opens; the actual tour starts only after the user explicitly accepts the prompt, clicks the "?" Restart button, or hits **Start tour** in the Help modal.
+- `frontend/src/main.tsx`: Mounts `<TourPromptModal />` alongside the existing `<TourOverlay />`, `<TourRestartButton />`, and `<TourCompletedToast />` so the prompt renders on every `/app` sub-route.
+
+---
+
 ## Sprint 33 — 2026-05-15 · Session-Restore Fidelity and Logout Confirmation
 
 **Goal:** Close two related auth/UX bugs surfaced when testing the Tester account end-to-end: (a) Save State was silently rewritten on every logout, and the restored session re-hydrated parent `App.tsx` state but never reached the `ManifestForm` so the user's truck / stops / items appeared blank after re-login; (b) clicking Log Out gave no chance to confirm, so a single mis-click could discard the current manifest before Save State had been pressed.

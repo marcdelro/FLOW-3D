@@ -1029,7 +1029,52 @@ export function ManifestForm({
   const truckDimStep = unit === "m" || unit === "in" ? 0.01 : 1;
   const truckDimMin  = unit === "m" || unit === "in" ? 0.001 : 1;
 
-  // ── Undo/redo buttons for Cargo Items section header ──
+  // ── Clear-all / Reset destructive actions ──
+  // Two-step confirmation kept lightweight via window.confirm — these are
+  // rare destructive flows and a custom modal would duplicate the logout
+  // pattern in App.tsx without adding affordances.
+
+  function clearAllItems() {
+    if (items.length === 0) return;
+    if (!window.confirm(`Remove all ${items.length} item${items.length === 1 ? "" : "s"} from the manifest? Stops and truck settings will be kept.`)) {
+      return;
+    }
+    setItems([]);
+    pushHistory([]);
+    setEditingIdx(null);
+    setShowAdd(false);
+    setPendingDeleteIdx(null);
+    setPendingQtyEdit(null);
+    setDraft(blankItem());
+    setDraftQty(1);
+    if (user) appendSessionLog(user.username, "items_cleared", `removed=${items.length}`);
+  }
+
+  function resetAll() {
+    const itemCount  = items.length;
+    const stopCount  = stops.length;
+    if (itemCount === 0 && stopCount === 0 && truck.W === 0 && truck.L === 0 && truck.H === 0) {
+      return; // nothing to reset
+    }
+    if (!window.confirm("Reset the entire manifest? Truck dimensions, all stops, and all items will be cleared. This cannot be undone.")) {
+      return;
+    }
+    setTruck(DEFAULT_TRUCK);
+    setTruckPreset("");
+    setStops(DEFAULT_STOPS);
+    setItems([]);
+    pushHistory([]);
+    setEditingIdx(null);
+    setShowAdd(false);
+    setPendingDeleteIdx(null);
+    setPendingQtyEdit(null);
+    setDraft(blankItem());
+    setDraftQty(1);
+    setItemError(null);
+    if (user) appendSessionLog(user.username, "manifest_reset", `items=${itemCount}, stops=${stopCount}`);
+  }
+
+  // ── Undo / redo / clear-all buttons for Cargo Items section header ──
   const undoRedoAction = (
     <div className="flex items-center gap-1">
       <button
@@ -1064,6 +1109,26 @@ export function ManifestForm({
         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="23 4 23 10 17 10" />
           <path d="M20.49 15a9 9 0 1 1-.49-3.68" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        onClick={clearAllItems}
+        disabled={items.length === 0}
+        title={items.length === 0 ? "No items to remove" : `Remove all ${items.length} items`}
+        aria-label="Remove all items"
+        className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-default ${
+          lightMode
+            ? "text-slate-600 hover:text-red-700 hover:bg-red-50 border border-slate-300 hover:border-red-300"
+            : "text-gray-400 hover:text-red-300 hover:bg-red-950/40 border border-gray-700 hover:border-red-800"
+        }`}
+      >
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="3 6 5 6 21 6" />
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+          <path d="M10 11v6" />
+          <path d="M14 11v6" />
+          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
         </svg>
       </button>
     </div>
@@ -1143,22 +1208,40 @@ export function ManifestForm({
           </div>
         </button>
 
-        {/* Download template — now a slim text link instead of a full button */}
-        <button
-          type="button"
-          onClick={downloadManifestTemplate}
-          className={`flex items-center gap-1.5 text-xs font-medium underline-offset-2 hover:underline transition-colors ${
-            lightMode ? "text-slate-600 hover:text-blue-700" : "text-gray-400 hover:text-blue-300"
-          }`}
-          title="Download a starter .xlsx template"
-        >
-          <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          Download .xlsx template
-        </button>
+        {/* Slim action links — Download template + Reset manifest */}
+        <div className="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={downloadManifestTemplate}
+            className={`flex items-center gap-1.5 text-xs font-medium underline-offset-2 hover:underline transition-colors ${
+              lightMode ? "text-slate-600 hover:text-blue-700" : "text-gray-400 hover:text-blue-300"
+            }`}
+            title="Download a starter .xlsx template"
+          >
+            <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download .xlsx template
+          </button>
+
+          <button
+            type="button"
+            onClick={resetAll}
+            className={`flex items-center gap-1.5 text-xs font-medium underline-offset-2 hover:underline transition-colors ${
+              lightMode ? "text-slate-500 hover:text-red-700" : "text-gray-500 hover:text-red-300"
+            }`}
+            title="Clear truck dimensions, all stops, and all items"
+          >
+            <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="1 4 1 10 7 10" />
+              <path d="M3.51 15a9 9 0 1 0 .49-3.68" />
+              <line x1="3" y1="3" x2="21" y2="21" />
+            </svg>
+            Reset manifest
+          </button>
+        </div>
       </div>
       {importMessage && (
         <div className={`px-4 py-2 text-sm border-b ${border} ${

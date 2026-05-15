@@ -11,7 +11,7 @@ import { Login } from "./pages/Login";
 import { ChangePassword } from "./pages/ChangePassword";
 import { AdminDashboard } from "./pages/AdminDashboard";
 import { TourProvider } from "./tour/TourContext.tsx";
-import { TourOverlay, TourRestartButton, TourCompletedToast } from "./tour/TourOverlay.tsx";
+import { TourOverlay, TourPromptModal, TourRestartButton, TourCompletedToast } from "./tour/TourOverlay.tsx";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -34,6 +34,7 @@ createRoot(document.getElementById("root")!).render(
             } />
             <Route path="*"               element={<Landing />} />
           </Routes>
+          <TourPromptModal />
           <TourOverlay />
           <TourRestartButton />
           <TourCompletedToast />
