@@ -12,6 +12,26 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 33 — 2026-05-15 · Session-Restore Fidelity and Logout Confirmation
+
+**Goal:** Close two related auth/UX bugs surfaced when testing the Tester account end-to-end: (a) Save State was silently rewritten on every logout, and the restored session re-hydrated parent `App.tsx` state but never reached the `ManifestForm` so the user's truck / stops / items appeared blank after re-login; (b) clicking Log Out gave no chance to confirm, so a single mis-click could discard the current manifest before Save State had been pressed.
+
+### Fixed
+
+**Frontend**
+- `frontend/src/App.tsx`: Removed the auto-save in `handleLogout` (previously `if (SESSION_KEY && solveItems.length) saveSession()`). Save State is now the only path that writes localStorage, matching the documented behaviour.
+- `frontend/src/App.tsx`: `saveSession()` now snapshots the **live preview state** (`previewItems`, `previewTruck`, `previewStops`) rather than only the frozen `solveItems` / `truckSpec` from the last completed solve. Clicking Save State after entering a manifest but before clicking Solve now actually persists the manifest, which it did not before. Stops are now part of the `SavedSession.stops` field instead of always being written as `[]`.
+- `frontend/src/App.tsx`: Session-restore effect now seeds `previewItems` / `previewTruck` / `previewStops` and bumps a new `seedKey` so the `ManifestForm` remounts with `initialItems` / `initialTruck` / `initialStops` props populated from the saved session. The previous behaviour set parent state correctly but the form's own `useState` initialisers always read `DEFAULT_TRUCK` / `DEFAULT_STOPS` / `DEFAULT_ITEMS`, leaving the inputs blank on re-login. Restore now lands on the **Manifest** tab when no plans were saved (was always **Results**).
+- `frontend/src/components/ManifestForm.tsx`: Added optional `initialItems` / `initialTruck` / `initialStops` props; `useState` initialisers read them (`initialTruck ?? DEFAULT_TRUCK`, etc.) so a parent re-seed actually appears in the form. `onPreviewChange` signature gains a third `stops: DeliveryStop[]` argument so the parent can include stops in the Save State snapshot. `itemHistory` is seeded from `initialItems` so Ctrl+Z after a restore cannot roll the manifest back to empty.
+
+### Added
+
+**Frontend**
+- `frontend/src/App.tsx`: Two-step Log Out flow. Clicking Log Out now opens a confirmation modal when `hasUnsavedWork` is true (any items / stops / plans present), offering three options — **Save & log out** (the default action: calls `saveSession()` then `confirmLogout()` after a 50 ms tick so localStorage commits first), **Log out without saving** (red outline button — proceeds without writing), and **Cancel**. If the user has no unsaved work the button logs out straight through with no modal. Modal uses `role="alertdialog"` + `aria-modal` for screen readers.
+- `frontend/src/App.tsx`: `beforeunload` listener fires the browser's native "Leave site?" prompt whenever `hasUnsavedWork` is true and the user closes the tab or refreshes, catching the same accidental-loss class as the logout modal but at the browser level.
+
+---
+
 ## Sprint 32 — 2026-05-15 · 3D Model Catalog Corrections and Viewer Bug Fixes
 
 **Goal:** Correct misassigned and mislabelled furniture models in the 3D catalog, fix two model orientation bugs that caused the end table and sideboard to render upside-down or sideways, and move the solve-error and unplaced-items banners out of the top-right button row so they no longer obscure the Help and Save State controls.

@@ -12,7 +12,7 @@ import { ManifestForm } from "./components/ManifestForm";
 import { PlanSelector } from "./components/PlanSelector";
 import { SolveLoadingPanel } from "./components/SolveLoadingPanel";
 import { TruckViewer } from "./components/TruckViewer";
-import type { FurnitureItem, PackingPlan, SavedSession, SolveRequest, TruckSpec } from "./types";
+import type { DeliveryStop, FurnitureItem, PackingPlan, SavedSession, SolveRequest, TruckSpec } from "./types";
 
 type Tab = "manifest" | "results" | "explain";
 
@@ -103,15 +103,27 @@ function App() {
   // Live preview state — mirrors the in-progress ManifestForm contents so the
   // 3D viewer can render items as soon as they're added, without running the
   // ILP/FFD solver. Distinct from solveItems/truckSpec, which freeze the
-  // manifest used by the last completed solve.
+  // manifest used by the last completed solve. Also drives Save State so the
+  // user persists what they are actually editing, not just what was last solved.
   const [previewItems, setPreviewItems] = useState<FurnitureItem[]>([]);
   const [previewTruck, setPreviewTruck] = useState<TruckSpec>({
     W: 0, L: 0, H: 0, payload_kg: 0,
   });
+  const [previewStops, setPreviewStops] = useState<DeliveryStop[]>([]);
 
-  function handlePreviewChange(items: FurnitureItem[], truck: TruckSpec) {
+  // Seed values for ManifestForm — bumped whenever the session restore needs
+  // the form to re-initialise. ManifestForm reads these on mount and on every
+  // `seedKey` change (via key={seedKey}) so a restored manifest actually
+  // appears in the input fields.
+  const [seedItems, setSeedItems] = useState<FurnitureItem[] | null>(null);
+  const [seedTruck, setSeedTruck] = useState<TruckSpec | null>(null);
+  const [seedStops, setSeedStops] = useState<DeliveryStop[] | null>(null);
+  const [seedKey,   setSeedKey]   = useState(0);
+
+  function handlePreviewChange(items: FurnitureItem[], truck: TruckSpec, stops: DeliveryStop[]) {
     setPreviewItems(items);
     setPreviewTruck(truck);
+    setPreviewStops(stops);
   }
 
   const previewPlan = useMemo<PackingPlan | null>(() => {
@@ -122,14 +134,18 @@ function App() {
 
   const { user, logout }                = useAuth();
   const navigate                        = useNavigate();
-  const [showSaveModal, setShowSaveModal] = useState(false);
-  const [showHelpModal, setShowHelpModal] = useState(false);
-  const [savedFlash,    setSavedFlash]    = useState(false);
+  const [showSaveModal, setShowSaveModal]     = useState(false);
+  const [showHelpModal, setShowHelpModal]     = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [savedFlash,    setSavedFlash]        = useState(false);
   const prevUserRef = useRef<string | null>(null);
 
   const SESSION_KEY = user ? `flow3d_state_${user.username}` : null;
 
   // Restore saved session when a user signs in and no plan is loaded yet.
+  // Pushes manifest contents (truck / stops / items) back into the
+  // ManifestForm via the seed* props so the form actually shows what the
+  // user had last time, not blank defaults.
   useEffect(() => {
     if (!SESSION_KEY || plans.length > 0) return;
     const raw = localStorage.getItem(SESSION_KEY);
@@ -138,10 +154,20 @@ function App() {
       const saved = JSON.parse(raw) as SavedSession;
       setTruckSpec(saved.truck);
       setSolveItems(saved.items);
-      setPlans(saved.plans);
-      setSelectedIdx(saved.selectedIdx);
-      setTab("results");
-      if (user) appendSessionLog(user.username, "session_restored", `items=${saved.items.length}, plans=${saved.plans.length}`);
+      setPlans(saved.plans ?? []);
+      setSelectedIdx(saved.selectedIdx ?? 0);
+      // Seed the live preview so the 3D viewer and the form share state.
+      setPreviewItems(saved.items);
+      setPreviewTruck(saved.truck);
+      setPreviewStops(saved.stops ?? []);
+      // Re-seed ManifestForm — bumping seedKey forces the form to remount
+      // with the saved values as its initial state.
+      setSeedItems(saved.items);
+      setSeedTruck(saved.truck);
+      setSeedStops(saved.stops ?? []);
+      setSeedKey((k) => k + 1);
+      setTab(saved.plans && saved.plans.length > 0 ? "results" : "manifest");
+      if (user) appendSessionLog(user.username, "session_restored", `items=${saved.items.length}, stops=${(saved.stops ?? []).length}, plans=${(saved.plans ?? []).length}`);
     } catch {
       localStorage.removeItem(SESSION_KEY);
     }
@@ -157,12 +183,26 @@ function App() {
     prevUserRef.current = curr;
   }, [user]);
 
+  // hasUnsavedWork — used by the logout confirmation and beforeunload guards
+  // to warn the user if they are about to discard non-empty manifest input.
+  const hasUnsavedWork =
+    previewItems.length > 0 || previewStops.length > 0 ||
+    solveItems.length > 0 || plans.length > 0;
+
   function saveSession() {
-    if (!SESSION_KEY || !solveItems.length) return;
+    if (!SESSION_KEY) return;
+    // Prefer the live preview state (what the user is currently editing in
+    // the manifest) over the frozen solveItems/truckSpec from the last solve.
+    // Falling back keeps things working if Save State is clicked from the
+    // Results tab with the preview cleared.
+    const itemsToSave = previewItems.length > 0 ? previewItems : solveItems;
+    const truckToSave = previewItems.length > 0 ? previewTruck : truckSpec;
+    const stopsToSave = previewStops;
+    if (itemsToSave.length === 0 && stopsToSave.length === 0 && plans.length === 0) return;
     const session: SavedSession = {
-      items: solveItems,
-      truck: truckSpec,
-      stops: [],
+      items: itemsToSave,
+      truck: truckToSave,
+      stops: stopsToSave,
       plans,
       selectedIdx,
       savedAt: new Date().toISOString(),
@@ -170,17 +210,42 @@ function App() {
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 2500);
-    if (user) appendSessionLog(user.username, "session_saved", `items=${solveItems.length}, plans=${plans.length}`);
+    if (user) appendSessionLog(user.username, "session_saved", `items=${itemsToSave.length}, stops=${stopsToSave.length}, plans=${plans.length}`);
   }
 
-  function handleLogout() {
-    if (user) appendSessionLog(user.username, "session_end", null);
-    if (SESSION_KEY && solveItems.length) {
-      saveSession();
+  // Two-step logout: clicking the Log Out button opens a confirmation modal.
+  // Only confirmLogout() actually tears down the session, and it does NOT
+  // auto-save — the user must hit Save State first if they want their
+  // manifest persisted. Avoids the previous footgun where logging out
+  // silently overwrote a saved session.
+  function requestLogout() {
+    if (hasUnsavedWork) {
+      setShowLogoutModal(true);
+    } else {
+      confirmLogout();
     }
+  }
+
+  function confirmLogout() {
+    if (user) appendSessionLog(user.username, "session_end", null);
+    setShowLogoutModal(false);
     logout();
     navigate("/", { replace: true });
   }
+
+  // beforeunload — browser-level warning when the user closes the tab or
+  // refreshes with unsaved manifest input. The browser shows its native
+  // "Leave site?" prompt; we don't get to customise the copy in modern
+  // browsers, but the prompt itself is the affordance.
+  useEffect(() => {
+    if (!hasUnsavedWork) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsavedWork]);
 
   const selectedPlan = plans[selectedIdx] ?? null;
 
@@ -348,10 +413,14 @@ function App() {
         <div className="flex-1 overflow-y-auto">
           <div className={tab === "manifest" ? "" : "hidden"}>
             <ManifestForm
+              key={seedKey}
               onSolve={handleSolve}
               loading={loading}
               lightMode={lightMode}
               onPreviewChange={handlePreviewChange}
+              initialItems={seedItems ?? undefined}
+              initialTruck={seedTruck ?? undefined}
+              initialStops={seedStops ?? undefined}
             />
           </div>
           {tab === "results" &&
@@ -465,7 +534,7 @@ function App() {
             {/* Log Out */}
             {user && (
               <button
-                onClick={handleLogout}
+                onClick={requestLogout}
                 title="Sign out"
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
                   lightMode
@@ -670,6 +739,76 @@ function App() {
 
       {/* ── Help & Feedback modal ── */}
       <HelpModal open={showHelpModal} onClose={() => setShowHelpModal(false)} />
+
+      {/* ── Log Out confirmation modal ── */}
+      {showLogoutModal && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4"
+          onClick={() => setShowLogoutModal(false)}
+        >
+          <div
+            className={`rounded-2xl border-2 p-6 w-full max-w-sm shadow-2xl ${
+              lightMode ? "bg-white border-slate-200" : "bg-gray-900 border-gray-700"
+            }`}
+            onClick={(e) => e.stopPropagation()}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="logout-modal-title"
+          >
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${
+              lightMode ? "bg-amber-50 border-2 border-amber-200" : "bg-amber-950/40 border-2 border-amber-800"
+            }`}>
+              <svg className={`w-6 h-6 ${lightMode ? "text-amber-600" : "text-amber-400"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            </div>
+
+            <h2 id="logout-modal-title" className={`text-xl font-bold mb-2 ${lightMode ? "text-slate-900" : "text-gray-100"}`}>
+              Log out without saving?
+            </h2>
+            <p className={`text-sm mb-5 leading-relaxed ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
+              You have unsaved manifest input or solve results. Logging out
+              now will keep your last saved session as-is — your current
+              edits will not be persisted unless you click <span className="font-semibold">Save State</span> first.
+            </p>
+
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  setShowLogoutModal(false);
+                  saveSession();
+                  // Defer the actual logout one tick so the saveSession's
+                  // localStorage write commits before the auth context tears down.
+                  setTimeout(confirmLogout, 50);
+                }}
+                className="w-full rounded-xl px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition"
+              >
+                Save &amp; log out
+              </button>
+              <button
+                onClick={confirmLogout}
+                className={`w-full rounded-xl px-4 py-2.5 border-2 font-semibold text-sm transition ${
+                  lightMode
+                    ? "border-red-300 text-red-700 hover:bg-red-50"
+                    : "border-red-800 text-red-300 hover:bg-red-950/40"
+                }`}
+              >
+                Log out without saving
+              </button>
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                className={`text-sm text-center mt-1 transition ${
+                  lightMode ? "text-slate-500 hover:text-slate-700" : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Save State modal — sign-in prompt for guest users ── */}
       {showSaveModal && (

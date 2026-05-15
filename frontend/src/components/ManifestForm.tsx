@@ -624,11 +624,25 @@ interface ManifestFormProps {
   onSolve: (req: SolveRequest) => void;
   loading: boolean;
   lightMode?: boolean;
-  /** Fires whenever items or truck state changes — drives the live truck preview. */
-  onPreviewChange?: (items: FurnitureItem[], truck: TruckSpec) => void;
+  /** Fires whenever items, truck, or stops state changes — drives the live
+   *  truck preview AND lets the parent snapshot the manifest into Save State. */
+  onPreviewChange?: (items: FurnitureItem[], truck: TruckSpec, stops: DeliveryStop[]) => void;
+  /** Optional seed values from a restored session. Read on mount; the parent
+   *  remounts the form by bumping `key` to apply a new seed. */
+  initialItems?: FurnitureItem[];
+  initialTruck?: TruckSpec;
+  initialStops?: DeliveryStop[];
 }
 
-export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewChange }: ManifestFormProps) {
+export function ManifestForm({
+  onSolve,
+  loading,
+  lightMode = false,
+  onPreviewChange,
+  initialItems,
+  initialTruck,
+  initialStops,
+}: ManifestFormProps) {
   const { user } = useAuth();
 
   // ── Theme helpers ──
@@ -644,11 +658,11 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
     (lightMode ? "shadow-sm placeholder-slate-400" : "placeholder-gray-500");
   const labelCls = `block text-base font-semibold ${lightMode ? "text-slate-700" : "text-gray-300"} mb-1.5`;
 
-  // ── Core state ──
-  const [truck, setTruck]         = useState<TruckSpec>(DEFAULT_TRUCK);
+  // ── Core state ── (seeded from props when a restored session is available)
+  const [truck, setTruck]         = useState<TruckSpec>(initialTruck ?? DEFAULT_TRUCK);
   const [truckPreset, setTruckPreset] = useState<string>("");
-  const [stops, setStops]   = useState<DeliveryStop[]>(DEFAULT_STOPS);
-  const [items, setItems]   = useState<FurnitureItem[]>(DEFAULT_ITEMS);
+  const [stops, setStops]   = useState<DeliveryStop[]>(initialStops ?? DEFAULT_STOPS);
+  const [items, setItems]   = useState<FurnitureItem[]>(initialItems ?? DEFAULT_ITEMS);
   const [draft, setDraft]   = useState<FurnitureItem>(blankItem());
   const [draftQty, setDraftQty]     = useState<number>(1);
   const [showAdd, setShowAdd]       = useState(false);
@@ -661,13 +675,14 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
   // ── Active panel tab ──
   const [activeTab, setActiveTab] = useState<"truck" | "stops" | "items">("truck");
 
-  // ── Live preview notification — fires on every items/truck change ──
+  // ── Live preview notification — fires on every items/truck/stops change ──
   useEffect(() => {
-    onPreviewChange?.(items, truck);
-  }, [items, truck, onPreviewChange]);
+    onPreviewChange?.(items, truck, stops);
+  }, [items, truck, stops, onPreviewChange]);
 
-  // ── Undo / redo ──
-  const itemHistory = useRef<FurnitureItem[][]>([[...DEFAULT_ITEMS]]);
+  // ── Undo / redo ── (history seeds from the restored items so undo cannot
+  // snap back to an empty manifest after Save State / re-login.)
+  const itemHistory = useRef<FurnitureItem[][]>([[...(initialItems ?? DEFAULT_ITEMS)]]);
   const [historyIdx, setHistoryIdx] = useState(0);
 
   // ── Delete confirmation ──
