@@ -10,6 +10,7 @@ import { Explainability } from "./components/Explainability";
 import { HelpModal } from "./components/HelpModal";
 import { ManifestForm } from "./components/ManifestForm";
 import { PlanSelector } from "./components/PlanSelector";
+import { SolveLoadingPanel } from "./components/SolveLoadingPanel";
 import { TruckViewer } from "./components/TruckViewer";
 import type { FurnitureItem, PackingPlan, SavedSession, SolveRequest, TruckSpec } from "./types";
 
@@ -611,18 +612,10 @@ function App() {
             </div>
           </div>
         ) : loading ? (
-          <div className="flex flex-col items-center justify-center h-full gap-6 px-8">
-            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <div className="text-center max-w-md">
-              <p className={`text-2xl font-bold ${lightMode ? "text-slate-900" : "text-gray-100"}`}>
-                Solving packing plans…
-              </p>
-              <p className={`text-lg mt-3 leading-relaxed ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
-                Generating 3 alternative LIFO-compliant plans.
-                This usually takes only a few seconds.
-              </p>
-            </div>
-          </div>
+          <SolveLoadingPanel
+            lightMode={lightMode}
+            itemCount={solveItems.length || previewItems.length}
+          />
         ) : (
           <div className="flex flex-col items-center justify-center h-full gap-6 text-center px-8">
             <div className={`w-28 h-28 rounded-3xl border-2 flex items-center justify-center ${

@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { FurnitureItem, PackingPlan, TruckSpec } from "../types";
+import { formatExecTime } from "../lib/format";
+import { SuccessRateBar } from "./SuccessRateBar";
 
 /**
  * SOLVER_THRESHOLD mirrors backend/settings.py.
@@ -231,32 +233,70 @@ export function Explainability({ plan, items, truck, lightMode = false }: Explai
 
       {subTab === "metrics" && (
         <div className="px-5 py-4 space-y-3">
-          <div className="grid grid-cols-4 gap-2">
-            <div className={`rounded-xl border p-3 text-center ${cardSoft}`}>
-              <div className={`text-2xl font-bold leading-none font-mono ${textStrong}`}>
-                {utilPct}<span className="text-base">%</span>
-              </div>
-              <div className={`text-xs mt-1.5 font-medium ${textMuted}`}>V_util</div>
-            </div>
-            <div className={`rounded-xl border p-3 text-center ${cardSoft}`}>
-              <div className={`text-2xl font-bold leading-none font-mono ${textStrong}`}>
-                {Math.round((plan.success_rate ?? (total > 0 ? packed.length / total : 1)) * 100)}<span className="text-base">%</span>
-              </div>
-              <div className={`text-xs mt-1.5 font-medium ${textMuted}`}>Success Rate</div>
-            </div>
-            <div className={`rounded-xl border p-3 text-center ${cardSoft}`}>
-              <div className={`text-2xl font-bold leading-none font-mono ${textStrong}`}>
-                {plan.t_exec_ms}<span className="text-base ml-1">ms</span>
-              </div>
-              <div className={`text-xs mt-1.5 font-medium ${textMuted}`}>T_exec</div>
-            </div>
-            <div className={`rounded-xl border p-3 text-center ${cardSoft}`}>
-              <div className={`text-2xl font-bold leading-none font-mono ${textStrong}`}>
-                {packed.length}<span className={`text-base ml-1 ${textMuted}`}>/{total}</span>
-              </div>
-              <div className={`text-xs mt-1.5 font-medium ${textMuted}`}>Packed</div>
-            </div>
-          </div>
+          {(() => {
+            const successRatio = plan.success_rate ?? (total > 0 ? packed.length / total : 1);
+            const successPct = Math.round(successRatio * 100);
+            const execFmt = formatExecTime(plan.t_exec_ms);
+            return (
+              <>
+                <div className="grid grid-cols-4 gap-2">
+                  <div
+                    className={`rounded-xl border p-3 text-center ${cardSoft}`}
+                    title="Volumetric Utilization — fraction of the truck's interior volume occupied by packed items."
+                  >
+                    <div className={`text-2xl font-bold leading-none font-mono ${textStrong}`}>
+                      {utilPct}<span className="text-base">%</span>
+                    </div>
+                    <div className={`text-xs mt-1.5 font-medium ${textMuted}`}>V_util</div>
+                  </div>
+                  <div
+                    className={`rounded-xl border p-3 text-center ${cardSoft}`}
+                    title="Success Rate — share of the manifest items that were actually packed."
+                  >
+                    <div className={`text-2xl font-bold leading-none font-mono ${textStrong}`}>
+                      {successPct}<span className="text-base">%</span>
+                    </div>
+                    <div className={`text-xs mt-1.5 font-medium ${textMuted}`}>Success Rate</div>
+                  </div>
+                  <div
+                    className={`rounded-xl border p-3 text-center ${cardSoft}`}
+                    title={`T_exec — solver wall-clock time (${plan.t_exec_ms} ms).`}
+                  >
+                    <div className={`text-2xl font-bold leading-none font-mono ${textStrong}`}>
+                      {execFmt.value}<span className="text-base ml-1">{execFmt.unit}</span>
+                    </div>
+                    <div className={`text-xs mt-1.5 font-medium ${textMuted}`}>T_exec</div>
+                  </div>
+                  <div
+                    className={`rounded-xl border p-3 text-center ${cardSoft}`}
+                    title="Items packed out of the input manifest."
+                  >
+                    <div className={`text-2xl font-bold leading-none font-mono ${textStrong}`}>
+                      {packed.length}<span className={`text-base ml-1 ${textMuted}`}>/{total}</span>
+                    </div>
+                    <div className={`text-xs mt-1.5 font-medium ${textMuted}`}>Packed</div>
+                  </div>
+                </div>
+
+                {/* Success-rate progress bar — shows fulfilment at a glance */}
+                <div className={`rounded-xl border p-3 ${cardSoft}`}>
+                  <div className="flex items-baseline justify-between mb-2">
+                    <span className={`text-xs font-semibold ${textBody}`}>
+                      Manifest fulfilment
+                    </span>
+                    <span className={`text-xs font-mono ${textMuted}`}>
+                      {packed.length} of {total} packed · {successPct}%
+                    </span>
+                  </div>
+                  <SuccessRateBar
+                    value={successRatio}
+                    lightMode={lightMode}
+                    height={8}
+                  />
+                </div>
+              </>
+            );
+          })()}
 
           <AxleLoadCard
             plan={plan}

@@ -12,6 +12,27 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 30 — 2026-05-15 · Solve Loading Panel, Success-Rate Visualisation, and Plan-Card Visual Hierarchy
+
+**Goal:** Make the user-facing solve experience self-explanatory: surface what the engine is doing during a long ILP run, distinguish `V_util` from `success_rate` visually instead of forcing users to read two numbers, render `T_exec` in human units, and refresh the four plan cards so a glance picks the recommended option.
+
+### Added
+
+**Frontend**
+- `frontend/src/lib/format.ts`: New `formatExecTime(ms)` / `formatExecTimeStr(ms)` / `formatPct(ratio)` helpers. `formatExecTime` returns `{value, unit}` so metric tiles can style the unit smaller than the number, and maps `0–999 ms → "ms"`, `1–59.9 s → "s"`, `≥ 60 s → "m / s"`. Consumed by Dashboard, Explainability, and PlanSelector so the raw `30021 ms` reading no longer leaks into the UI.
+- `frontend/src/components/SuccessRateBar.tsx`: New accessible (`role="progressbar"`, `aria-valuenow/min/max`) horizontal bar visualising `plan.success_rate`. Colour bands are thesis-graded — emerald ≥ 0.90 (excellent), blue ≥ 0.70 (good), amber ≥ 0.40 (partial), red < 0.40 (poor) — so manifest fulfilment is legible without parsing a percentage. Rendered in Dashboard, Explainability, and every PlanSelector card.
+- `frontend/src/components/SolveLoadingPanel.tsx`: New 5-stage loading screen rendered in the main viewer while the solve pipeline runs. Stages — Validating manifest → Dispatching to solver → Running Optimal (ILP) → Running Axle Balance / Stability (FFD) → Verifying with ConstraintValidator — each carry an explanation of what the engine is doing so a long 30 s ILP wait feels intentional. Progress bar uses an asymptotic curve `1 − exp(−1.8 · elapsed / expectedMs)` that approaches 95 % without falsely claiming completion; `expectedMs` scales with manifest size (≤ 10 items ≈ 1.5 s, 20 items ≈ 30 s anchor matching `GUROBI_TIME_LIMIT`) and the bar snaps to 100 % when the parent flips `loading = false`.
+
+### Changed
+
+**Frontend**
+- `frontend/src/components/PlanSelector.tsx`: Visual hierarchy refresh. The previous A / B / C / D letter badges are replaced with strategy-themed icon tiles (cubes for Optimal, scale for Axle Balance, anchor for Stability, dots for Baseline) coloured per strategy (violet / sky / amber / slate). A **"Best fit"** emerald ribbon now decorates the non-baseline plan with the highest `V_util` — Baseline is excluded by design because it can "win" `V_util` by violating LIFO / support, which is the very gap the thesis comparison is meant to expose. The `V_util` and **Manifest Fulfilment** bars share an identical `BarRow` layout so the eye can compare both metrics across plans without reorienting. Solver-mode badge tightened to an 11 px uppercase pill.
+- `frontend/src/components/Dashboard.tsx`: Exec Time tile routed through `formatExecTime`; new "Manifest fulfilment" card mirrors the existing `V_util` card with the new `SuccessRateBar`.
+- `frontend/src/components/Explainability.tsx`: Metrics tab — Exec Time tile routed through `formatExecTime`; new "Manifest fulfilment" card sits beneath the 4-tile grid; tooltip `title=` attributes on `V_util` / `Success Rate` / `T_exec` / `Packed` tiles explain what each measures (`V_util` ≠ `success_rate`).
+- `frontend/src/App.tsx`: The bare spinner + "Solving packing plans…" placeholder shown during a solve is replaced with `<SolveLoadingPanel itemCount={…} lightMode={…} />`.
+
+---
+
 ## Sprint 29 — 2026-05-15 · ILP TimeLimit Incumbent Recovery and Friendly Solve-Error UI
 
 **Goal:** Close two regressions surfaced by the 20-sofa multi-stop test on the deployed WLS Gurobi licence — the `optimal` strategy was returning an empty plan whenever Gurobi hit `GUROBI_TIME_LIMIT` (because `_extract_plan()` only honoured `GRB.OPTIMAL` and discarded any in-hand incumbent), and the resulting "Solver poll timed out" message was being rendered in a flex-row toast that pushed the text off the viewport edge.
