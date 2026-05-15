@@ -298,6 +298,7 @@ function App() {
             return (
               <button
                 key={t.key}
+                data-tour={t.key === "manifest" ? "manifest-tab" : t.key === "results" ? "plan-selector" : undefined}
                 onClick={() => !disabled && setTab(t.key)}
                 disabled={disabled}
                 className={`flex items-center gap-2 px-3 py-4 text-left transition-all border-b-4 ${
@@ -396,7 +397,7 @@ function App() {
       </aside>
 
       {/* ── Main viewer ─────────────────────────────────────────────────────── */}
-      <main className="relative overflow-hidden">
+      <main data-tour="truck-viewer" className="relative overflow-hidden">
 
         {/* ── Top-right overlay: button bar on top, status banners stacked below ── */}
         <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2 w-[min(28rem,calc(100vw-2rem))]">

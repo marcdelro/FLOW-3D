@@ -12,6 +12,22 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 31 — 2026-05-15 · First-Visit Guided Onboarding Tour
+
+**Goal:** Add a Mobile Legends-style spotlight tour that walks new users through the full FLOW-3D workflow on their first visit to the simulator, locks the UI while active so they cannot skip steps accidentally, and disappears permanently once completed.
+
+### Added
+
+**Frontend**
+- `frontend/src/tour/steps.ts`: 7 `TourStep` definitions (`{ target, title, body }`) with CSS selector targets covering the full workflow arc: `manifest-tab` → `truck-spec` → `stops-tab` → `cargo-items` → `solve-button` → `plan-selector` → `truck-viewer`.
+- `frontend/src/tour/TourContext.tsx`: `TourProvider` and `useTour()` hook. Uses `useLocation()` from React Router so `isAppRoute` is reactive — tour auto-starts on first `/app` visit (checks `localStorage["flow3d_tour_done"]`), deactivates immediately when the user navigates away. `tourDone` state derived from localStorage controls both auto-start and restart-button visibility. React 18 StrictMode-safe: removed `useRef` auto-start guard that persisted across the state reset between double-mounts and silently blocked the second `setActive(true)` call.
+- `frontend/src/tour/TourOverlay.tsx`: `TourOverlay` component — spotlight via `box-shadow: 0 0 0 9999px rgba(0,0,0,0.68)` with `0.22s ease` transitions; smart `computeTooltipPos()` that detects sidebar elements (center-x < 45 % of viewport) and floats the tooltip to the right into the main area, keeping it fully visible even when the target is at the bottom of the sidebar; `scrollIntoView({ behavior: "smooth", block: "nearest" })` before measuring so the solve button scrolls into view; full-screen lockout backdrop with no `onClick` so only the **Skip tour** / **✕** / **Back** / **Next** / **Done** buttons can exit. `TourRestartButton` (fixed `?` button, bottom-left) hidden once `tourDone` is true. `TourCompletedToast` with `animate-fade-in`.
+- `frontend/tailwind.config.js`: `fade-in` keyframe (`opacity 0→1`, `translateY 8px→0`, `0.25s ease`) for `TourCompletedToast`.
+- `frontend/src/main.tsx`: Wrapped routes in `TourProvider`; mounted `TourOverlay`, `TourRestartButton`, and `TourCompletedToast` outside `<Routes>` so they render on all `/app` sub-paths.
+- `frontend/src/App.tsx`: Added `data-tour="manifest-tab"` on the Manifest step tab, `data-tour="plan-selector"` on the Results step tab, and `data-tour="truck-viewer"` on `<main>`.
+- `frontend/src/components/ManifestForm.tsx`: Added `data-tour="truck-spec"` on the Truck panel tab, `data-tour="stops-tab"` on the Stops panel tab, `data-tour="cargo-items"` on the Items panel tab, and `data-tour="solve-button"` on the Solve Packing Plan button wrapper.
+
+
 ## Sprint 30 — 2026-05-15 · Solve Loading Panel, Success-Rate Visualisation, and Plan-Card Visual Hierarchy
 
 **Goal:** Make the user-facing solve experience self-explanatory: surface what the engine is doing during a long ILP run, distinguish `V_util` from `success_rate` visually instead of forcing users to read two numbers, render `T_exec` in human units, and refresh the four plan cards so a glance picks the recommended option.
