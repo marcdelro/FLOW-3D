@@ -12,6 +12,22 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 28 — 2026-05-15 · Per-Stop Item Grouping and Edit-Mode Quantity Resize
+
+**Goal:** Fix two cargo-manifest UX bugs that surfaced during the 20-sofa multi-stop benchmark: same-prefix items at different stops collapsed into a single misleading row that showed only the first stop's badge, and editing an existing item silently locked the quantity field to 1 so users could not resize a group without deleting and re-adding it.
+
+### Fixed
+
+**Frontend**
+- `frontend/src/components/ManifestForm.tsx`: Items table now groups rows by `(prefix, stop_id)` instead of `prefix` alone. Adjacent items sharing a furniture prefix but bound for different `stop_id`s surface as their own rows with the correct stop badge, ending the display bug where adding "Sofa ×7 @ Stop 1", "Sofa ×7 @ Stop 2", "Sofa ×6 @ Stop 3" rendered as a single "Sofa ×20" row anchored to Stop 1.
+
+### Changed
+
+**Frontend**
+- `frontend/src/components/ManifestForm.tsx`: Editing an item via the table now operates on its whole `(prefix, stop_id)` group. New `findGroupIndices()` walker locates the contiguous group; `startEdit()` seeds `draftQty` with the group size; the Quantity input renders in edit mode (was previously gated behind `!isEditing`); and saving applies the draft fields to every sibling and resizes the group up or down to the new quantity. Item IDs regenerate with unique `_NN` suffixes drawn from the global pool so prefix / stop / quantity changes never collide. Confirm-button label reads `Save (×N)` when N > 1 to make the resize obvious.
+
+---
+
 ## Sprint 27 — 2026-05-15 · Baseline Solver, Success Rate Metric, and Per-Axle Load Visualisation
 
 **Goal:** Make the axle-balance strategy *visibly* and *verifiably* correct (per-axle load schematic + post-solve `compute_axle_loads()` + variance test), expose a `success_rate` metric on every plan, and add a naive-first-fit `BaselineSolver` as the thesis comparison baseline so users can see what the route-aware solvers actually contribute.
