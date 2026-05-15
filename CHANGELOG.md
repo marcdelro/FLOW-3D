@@ -12,6 +12,29 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 32 — 2026-05-15 · 3D Model Catalog Corrections and Viewer Bug Fixes
+
+**Goal:** Correct misassigned and mislabelled furniture models in the 3D catalog, fix two model orientation bugs that caused the end table and sideboard to render upside-down or sideways, and move the solve-error and unplaced-items banners out of the top-right button row so they no longer obscure the Help and Save State controls.
+
+### Fixed
+
+**Frontend**
+- `frontend/src/data/modelCatalog.ts`: Replace `Dining_Table` model with the plain rectangular table (`12df0535`) — retires the "srt smarties" outdoor/cafeteria model (`11b54e15`) that was visually indistinguishable from a school canteen bench.
+- `frontend/src/data/modelCatalog.ts`: Remove the "american girl poster bed" (`1101146651`) from `Bunk_Bed` — it is a single-level poster bed (kept in `Bed` as "Poster Bed"), not a two-tier bunk frame; the only bunk bed model is now `16b4dfae` ("Loft Bunk").
+- `frontend/src/data/modelCatalog.ts`: Add `"-z"` to `AxisUp` type and assign `End_Table: "-z"` — this model has its tabletop at Z-min instead of Z-max, causing the standard `rotation.x = −π/2` (Z-up) transform to render it upside-down; `"-z"` applies `rotation.x = +π/2` to flip it right-side-up.
+- `frontend/src/data/modelCatalog.ts`: Change `Sideboard` axisUp from `"auto"` to `"z"` — the `"auto"` heuristic resolved to `"y"` (no rotation) because sideboard height (800 mm) is less than width (1500 mm), leaving the model lying on its back; explicit `"z"` applies the correct ShapeNetSem Z-up rotation.
+- `frontend/src/components/TruckViewer.tsx`: Handle `"-z"` resolved axis in `fitModelToBox` — applies `rotation.x = Math.PI / 2` and the same scale mapping as `"z"` so inverted-geometry models fit their placement boxes correctly.
+- `frontend/src/components/ModelPreview.tsx`: Handle `"-z"` in `fitGroupToUnitCube` — mirrors the TruckViewer fix so the manifest form's hover preview also renders inverted models right-side-up.
+- `frontend/src/App.tsx`: Move solve-error and unplaced-items banners out of the `flex items-center gap-2` top-right buttons row into a separate `absolute top-20 right-4 z-20 flex flex-col gap-2` container — previously the banners sat inside the same horizontal flex row as Help / Save State / Log Out, squashing the buttons; now they stack vertically just below the button row without interfering with camera controls.
+- `frontend/src/pages/Login.tsx`: Fix X close button always navigating to `"/"` with `type="button"` — previously used `navigate(from && from !== "/login" ? from : "/")` which sent the user back to `/admin` after logout, triggering an infinite redirect loop; also updates the demo credentials hint from `user/user123` to `tester/tester123`.
+
+### Changed
+
+**Frontend**
+- `frontend/src/data/modelCatalog.ts`: Rename catalog labels — "Frame B" → "Bamboo Bed" (reflects the actual bamboo-frame poster design), "Loft Poster" → "Poster Bed" (the model is a four-post single bed, not a loft structure).
+
+---
+
 ## Sprint 31 — 2026-05-15 · First-Visit Guided Onboarding Tour
 
 **Goal:** Add a Mobile Legends-style spotlight tour that walks new users through the full FLOW-3D workflow on their first visit to the simulator, locks the UI while active so they cannot skip steps accidentally, and disappears permanently once completed.
