@@ -738,13 +738,26 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
   return (
     <div className="relative w-full h-full">
 
-      {/* ── View-mode buttons ── */}
-      <div className="absolute top-4 left-4 z-10 flex gap-2">
+      {/* ── View-mode segmented control ── */}
+      <div className={`absolute top-4 left-4 z-10 inline-flex p-1 rounded-2xl border-2 shadow-md ${
+        lightMode ? "bg-white border-slate-200" : "bg-gray-900 border-gray-700"
+      }`}
+        role="tablist"
+        aria-label="Viewer mode"
+      >
         {(["3d", "exploded", "labels", "animate"] as const).map((m) => {
-          const label = m === "3d" ? "3D" : m === "exploded" ? "Exploded" : m === "labels" ? "Labels" : "▶ Animate";
+          const active = mode === m;
           return (
             <button
               key={m}
+              role="tab"
+              aria-selected={active}
+              title={
+                m === "3d"        ? "Standard 3D view"
+                : m === "exploded" ? "Exploded view — separates items along axes"
+                : m === "labels"   ? "Toggle item-ID billboards"
+                :                    "Animated loading sequence"
+              }
               onClick={() => {
                 if (m === "animate" && mode !== "animate") {
                   setAnimStep(0);
@@ -754,67 +767,87 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
                 }
                 setMode(m);
               }}
-              className={`px-4 py-2.5 text-base font-semibold rounded-xl border-2 transition-colors ${
-                mode === m
-                  ? "bg-blue-600 border-blue-700 text-white shadow-md"
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-xl transition-colors ${
+                active
+                  ? "bg-blue-600 text-white shadow"
                   : lightMode
-                    ? "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400"
-                    : "bg-gray-900 border-gray-600 text-gray-200 hover:bg-gray-800 hover:border-gray-500"
+                    ? "text-slate-700 hover:bg-slate-100"
+                    : "text-gray-300 hover:bg-gray-800"
               }`}
             >
-              {label}
+              <ViewModeIcon mode={m} />
+              <span>
+                {m === "3d" ? "3D" : m === "exploded" ? "Exploded" : m === "labels" ? "Labels" : "Animate"}
+              </span>
             </button>
           );
         })}
       </div>
 
-      {/* ── Animate: currently-placing badge (top-center) ── */}
       {/* Fallback warning — items rendered as placeholder boxes because the
-          3D model could not be resolved or loaded. Hidden when none. */}
+          3D model could not be resolved or loaded. Sits under the view-mode
+          control on the left edge so it no longer competes with App.tsx's
+          top-right error/unplaced banners. Hidden when none. */}
       {fallbackItemIds.length > 0 && (
         <div
-          className={`absolute top-4 right-4 z-10 border-2 rounded-xl px-3 py-2 max-w-xs shadow-md flex items-start gap-2 ${
-            lightMode ? "bg-amber-50 border-amber-400" : "bg-amber-950/70 border-amber-700"
+          className={`absolute top-20 left-4 z-10 max-w-xs rounded-xl border shadow-md backdrop-blur-sm flex items-start gap-2 px-3 py-2 ${
+            lightMode ? "bg-amber-50/95 border-amber-300" : "bg-amber-950/85 border-amber-800"
           }`}
           title={fallbackItemIds.join(", ")}
         >
-          <svg className={`w-5 h-5 shrink-0 mt-0.5 ${lightMode ? "text-amber-600" : "text-amber-400"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg className={`w-4 h-4 shrink-0 mt-0.5 ${lightMode ? "text-amber-600" : "text-amber-400"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
             <line x1="12" y1="9" x2="12" y2="13" />
             <line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
-          <div>
-            <div className={`text-sm font-bold ${lightMode ? "text-amber-900" : "text-amber-200"}`}>
+          <div className="min-w-0">
+            <div className={`text-xs font-bold ${lightMode ? "text-amber-900" : "text-amber-200"}`}>
               {fallbackItemIds.length} item{fallbackItemIds.length === 1 ? "" : "s"} using placeholder geometry
             </div>
-            <div className={`text-xs mt-0.5 ${lightMode ? "text-amber-800" : "text-amber-300"}`}>
-              3D model failed to resolve — coloured box shown instead. Hover for IDs.
+            <div className={`text-[11px] mt-0.5 leading-snug ${lightMode ? "text-amber-800" : "text-amber-300"}`}>
+              3D model failed to resolve — coloured box shown. Hover for IDs.
             </div>
           </div>
         </div>
       )}
-      {mode === "animate" && showPlacingBadge && latestItem && (
-        <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3 border-2 rounded-xl px-4 py-2.5 pointer-events-none shadow-md ${lightMode ? "bg-white border-slate-300" : "bg-gray-900 border-gray-600"}`}>
-          <span className={`text-base font-medium ${lightMode ? "text-slate-600" : "text-gray-400"}`}>Placing:</span>
-          <span className={`text-base font-bold ${lightMode ? "text-slate-900" : "text-white"}`}>{latestItem.item_id}</span>
+      {/* Animate badges — share one chrome treatment so the slot stays visually
+          stable as the state machine moves from "press play" → "placing X" →
+          "all loaded". Pill style mirrors the view-mode control above. */}
+      {mode === "animate" && (showPlacingBadge && latestItem) && (
+        <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2.5 rounded-2xl border shadow-md backdrop-blur-sm px-3.5 py-2 pointer-events-none ${
+          lightMode ? "bg-white/95 border-slate-200" : "bg-gray-900/95 border-gray-700"
+        }`}>
+          <span className={`text-xs font-semibold uppercase tracking-wider ${lightMode ? "text-slate-500" : "text-gray-400"}`}>
+            Placing
+          </span>
+          <span className={`text-sm font-bold font-mono ${lightMode ? "text-slate-900" : "text-white"}`}>
+            {latestItem.item_id}
+          </span>
           <span
-            className="text-sm font-bold px-2.5 py-1 rounded-lg text-gray-950"
-            style={{
-              backgroundColor: hexCss(colorForStop(latestItem.stop_id)),
-            }}
+            className="text-[11px] font-bold px-2 py-0.5 rounded-full text-gray-950"
+            style={{ backgroundColor: hexCss(colorForStop(latestItem.stop_id)) }}
           >
             Stop {latestItem.stop_id}
           </span>
         </div>
       )}
       {mode === "animate" && animStep === 0 && (
-        <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-10 border-2 rounded-xl px-4 py-2.5 pointer-events-none shadow-md ${lightMode ? "bg-white border-slate-300" : "bg-gray-900 border-gray-600"}`}>
-          <span className={`text-base font-semibold ${lightMode ? "text-slate-700" : "text-gray-300"}`}>Press play to begin loading sequence</span>
+        <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-10 rounded-2xl border shadow-md backdrop-blur-sm px-3.5 py-2 pointer-events-none ${
+          lightMode ? "bg-white/95 border-slate-200" : "bg-gray-900/95 border-gray-700"
+        }`}>
+          <span className={`text-sm font-semibold ${lightMode ? "text-slate-700" : "text-gray-300"}`}>
+            Press <kbd className={`mx-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${lightMode ? "bg-slate-100 text-slate-700" : "bg-gray-800 text-gray-200"}`}>▶</kbd> to begin the loading sequence
+          </span>
         </div>
       )}
       {mode === "animate" && showLoadedBadge && (
-        <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-10 border-2 rounded-xl px-4 py-2.5 pointer-events-none shadow-md ${lightMode ? "bg-green-50 border-green-400" : "bg-green-950/70 border-green-700"}`}>
-          <span className={`text-base font-bold ${lightMode ? "text-green-800" : "text-green-300"}`}>
+        <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 rounded-2xl border shadow-md backdrop-blur-sm px-3.5 py-2 pointer-events-none ${
+          lightMode ? "bg-emerald-50/95 border-emerald-300" : "bg-emerald-950/85 border-emerald-700"
+        }`}>
+          <svg className={`w-4 h-4 ${lightMode ? "text-emerald-600" : "text-emerald-400"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          <span className={`text-sm font-bold ${lightMode ? "text-emerald-800" : "text-emerald-200"}`}>
             All {animSorted.length} items loaded
           </span>
         </div>
@@ -899,27 +932,34 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
         </div>
       )}
 
-      {/* ── Stop legend (bottom-right) — bigger and clearer ── */}
-      <div className={`absolute ${mode === "animate" ? "bottom-36" : "bottom-4"} right-4 z-10 border-2 rounded-2xl px-4 py-3 space-y-2 min-w-[170px] shadow-md ${lightMode ? "bg-white border-slate-300" : "bg-gray-950 border-gray-700"}`}>
-        <div className={`text-sm font-bold uppercase tracking-wider mb-2 ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
-          Load Order
+      {/* ── Stop legend (bottom-right) — compact ── */}
+      <div className={`absolute ${mode === "animate" ? "bottom-36" : "bottom-4"} right-4 z-10 rounded-xl border shadow-md backdrop-blur-sm ${
+        lightMode ? "bg-white/95 border-slate-200" : "bg-gray-950/90 border-gray-700"
+      }`}>
+        <div className={`px-3 py-1.5 border-b text-[10px] font-bold uppercase tracking-wider ${
+          lightMode ? "border-slate-200 text-slate-500" : "border-gray-700 text-gray-400"
+        }`}>
+          Load order
         </div>
-        {uniqueStops
-          .slice()
-          .reverse()
-          .map((sid, i, arr) => (
-            <div key={sid} className="flex items-center gap-2.5">
+        <div className="px-3 py-2 space-y-1.5">
+          {uniqueStops.slice().reverse().map((sid, i, arr) => (
+            <div key={sid} className="flex items-center gap-2">
               <span
-                className="w-5 h-5 rounded-md shrink-0 shadow-sm"
+                className="w-3.5 h-3.5 rounded shrink-0 ring-1 ring-black/10"
                 style={{ backgroundColor: hexCss(colorForStop(sid)) }}
               />
-              <span className={`text-base font-semibold ${lightMode ? "text-slate-800" : "text-gray-100"}`}>Stop {sid}</span>
-              {i === 0 && <span className={`text-sm ${lightMode ? "text-slate-500" : "text-gray-500"}`}>(rear)</span>}
+              <span className={`text-xs font-semibold ${lightMode ? "text-slate-800" : "text-gray-100"}`}>
+                Stop {sid}
+              </span>
+              {i === 0 && (
+                <span className={`text-[10px] ${lightMode ? "text-slate-500" : "text-gray-500"}`}>(rear)</span>
+              )}
               {i === arr.length - 1 && arr.length > 1 && (
-                <span className={`text-sm ${lightMode ? "text-slate-500" : "text-gray-500"}`}>(door)</span>
+                <span className={`text-[10px] ${lightMode ? "text-slate-500" : "text-gray-500"}`}>(door)</span>
               )}
             </div>
           ))}
+        </div>
       </div>
 
 
@@ -1085,6 +1125,53 @@ export function TruckViewer({ plan, truck, items = [], lightMode = false }: Truc
       <div ref={mountRef} className="w-full h-full" />
     </div>
   );
+}
+
+// ── View-mode icon helper ───────────────────────────────────────────────────
+
+/** Compact SVG icon for the segmented view-mode control. */
+function ViewModeIcon({ mode }: { mode: "3d" | "exploded" | "labels" | "animate" }) {
+  const props = {
+    className: "w-4 h-4",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2.2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+  switch (mode) {
+    case "3d":
+      return (
+        <svg {...props}>
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+          <line x1="12" y1="22.08" x2="12" y2="12" />
+        </svg>
+      );
+    case "exploded":
+      return (
+        <svg {...props}>
+          <rect x="3"  y="3"  width="6" height="6" rx="1" />
+          <rect x="15" y="3"  width="6" height="6" rx="1" />
+          <rect x="3"  y="15" width="6" height="6" rx="1" />
+          <rect x="15" y="15" width="6" height="6" rx="1" />
+        </svg>
+      );
+    case "labels":
+      return (
+        <svg {...props}>
+          <path d="M20.59 13.41L13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+          <line x1="7" y1="7" x2="7.01" y2="7" />
+        </svg>
+      );
+    case "animate":
+      return (
+        <svg {...props} fill="currentColor" stroke="none">
+          <path d="M8 5v14l11-7z" />
+        </svg>
+      );
+  }
 }
 
 // ── Playback button helper ──────────────────────────────────────────────────

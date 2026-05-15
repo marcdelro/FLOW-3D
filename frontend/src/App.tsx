@@ -233,14 +233,15 @@ function App() {
       {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
       <aside className={`border-r ${sideBorder} ${sideBg} flex flex-col overflow-hidden`}>
 
-        {/* Header — logo + name + theme toggle */}
-        <div className={`px-5 py-4 border-b ${sideBorder} ${headerBg} shrink-0 flex items-center justify-between`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+        {/* Header — logo + name + theme toggle. Slimmed from py-4/text-2xl to
+            py-3/text-lg so the sidebar gets ~16 px of vertical room back. */}
+        <div className={`px-4 py-3 border-b ${sideBorder} ${headerBg} shrink-0 flex items-center justify-between`}>
+          <div className="flex items-center gap-2.5">
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
               lightMode ? "bg-blue-600" : "bg-blue-700"
             }`}>
               <svg
-                className="w-7 h-7 text-white"
+                className="w-5 h-5 text-white"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -252,11 +253,11 @@ function App() {
                 <path d="M12 3v18M2 7.5l10 4.5 10-4.5" />
               </svg>
             </div>
-            <div>
-              <div className={`text-2xl font-bold tracking-tight ${lightMode ? "text-slate-900" : "text-white"}`}>
+            <div className="leading-tight">
+              <div className={`text-lg font-bold tracking-tight ${lightMode ? "text-slate-900" : "text-white"}`}>
                 FLOW-3D
               </div>
-              <div className={`text-base ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
+              <div className={`text-[11px] uppercase tracking-wider ${lightMode ? "text-slate-500" : "text-gray-500"}`}>
                 Logistics DSS
               </div>
             </div>
@@ -265,7 +266,7 @@ function App() {
             onClick={() => setLightMode((m) => !m)}
             aria-label={lightMode ? "Switch to dark colors" : "Switch to light colors"}
             title={lightMode ? "Switch to dark colors" : "Switch to light colors"}
-            className={`flex items-center gap-2 rounded-full px-4 py-2.5 border-2 text-sm font-semibold transition-all select-none ${
+            className={`flex items-center gap-1.5 rounded-full px-2.5 py-1.5 border text-xs font-semibold transition-all select-none ${
               lightMode
                 ? "bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100"
                 : "bg-gray-900 border-gray-700 text-gray-200 hover:bg-gray-800"
@@ -273,7 +274,7 @@ function App() {
           >
             {lightMode ? (
               <>
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="4" />
                   <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
                 </svg>
@@ -281,7 +282,7 @@ function App() {
               </>
             ) : (
               <>
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
                 </svg>
                 Dark
@@ -290,8 +291,8 @@ function App() {
           </button>
         </div>
 
-        {/* Step tabs — large, numbered, with subtitles */}
-        <div className={`grid grid-cols-3 border-b-2 ${sideBorder} shrink-0`}>
+        {/* Step tabs — compact numbered triplet */}
+        <div className={`grid grid-cols-3 border-b ${sideBorder} shrink-0`} role="tablist">
           {tabsAvailable.map((t) => {
             const active   = tab === t.key;
             const disabled = (t.key === "results" || t.key === "explain") && plans.length === 0;
@@ -299,9 +300,11 @@ function App() {
               <button
                 key={t.key}
                 data-tour={t.key === "manifest" ? "manifest-tab" : t.key === "results" ? "plan-selector" : undefined}
+                role="tab"
+                aria-selected={active}
                 onClick={() => !disabled && setTab(t.key)}
                 disabled={disabled}
-                className={`flex items-center gap-2 px-3 py-4 text-left transition-all border-b-4 ${
+                className={`flex items-center gap-2 px-3 py-2.5 text-left transition-all border-b-2 -mb-px ${
                   active
                     ? lightMode
                       ? "bg-blue-50 border-blue-600"
@@ -315,7 +318,7 @@ function App() {
                         : "bg-gray-950 border-transparent hover:bg-gray-900"
                 }`}
               >
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-base font-bold shrink-0 ${
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
                   active
                     ? "bg-blue-600 text-white"
                     : lightMode
@@ -577,7 +580,16 @@ function App() {
 
         </div>
 
-        {selectedPlan ? (
+        {/* Loading takes priority over every other viewer state — both on a
+            first solve (previewPlan is truthy from the live preview) and on a
+            re-solve (the previous selectedPlan is still mounted). Without
+            this ordering, SolveLoadingPanel is never reachable. */}
+        {loading ? (
+          <SolveLoadingPanel
+            lightMode={lightMode}
+            itemCount={solveItems.length || previewItems.length}
+          />
+        ) : selectedPlan ? (
           <div className="relative w-full h-full">
             <TruckViewer
               plan={selectedPlan}
@@ -612,11 +624,6 @@ function App() {
               </span>
             </div>
           </div>
-        ) : loading ? (
-          <SolveLoadingPanel
-            lightMode={lightMode}
-            itemCount={solveItems.length || previewItems.length}
-          />
         ) : (
           <div className="flex flex-col items-center justify-center h-full gap-6 text-center px-8">
             <div className={`w-28 h-28 rounded-3xl border-2 flex items-center justify-center ${

@@ -232,20 +232,20 @@ function Section({
 }) {
   return (
     <>
-      <div className={`flex items-start justify-between gap-3 px-5 py-4 border-b-2 ${border} ${bg2} sticky top-0 z-10`}>
+      <div className={`flex items-start justify-between gap-3 px-4 py-2.5 border-b ${border} ${bg2} sticky top-0 z-10`}>
         <div>
-          <div className={`text-lg font-bold leading-tight ${lightMode ? "text-slate-900" : "text-gray-100"}`}>
+          <div className={`text-sm font-bold uppercase tracking-wide leading-tight ${lightMode ? "text-slate-800" : "text-gray-100"}`}>
             {title}
           </div>
           {hint && (
-            <div className={`text-sm mt-0.5 leading-snug ${muted}`}>{hint}</div>
+            <div className={`text-xs mt-0.5 leading-snug ${muted}`}>{hint}</div>
           )}
         </div>
         {(action !== undefined || badge !== undefined) && (
           <div className="flex items-center gap-2 shrink-0">
             {action}
             {badge !== undefined && (
-              <span className={`text-base font-bold px-2.5 py-1 rounded-full shrink-0 ${
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full shrink-0 ${
                 lightMode ? "bg-slate-200 text-slate-700" : "bg-gray-800 text-gray-300"
               }`}>
                 {badge}
@@ -254,7 +254,7 @@ function Section({
           </div>
         )}
       </div>
-      <div className="px-5 py-5">{children}</div>
+      <div className="px-4 py-4">{children}</div>
     </>
   );
 }
@@ -330,7 +330,7 @@ function AddItemForm({
   const dimMin  = unit === "m" || unit === "in" ? 0.001 : 1;
 
   return (
-    <div className={`border-2 rounded-2xl p-5 space-y-4 ${lightMode ? "border-slate-300 bg-slate-50" : "border-gray-700 bg-gray-900/40"}`}>
+    <div className={`border rounded-2xl p-4 space-y-3.5 ${lightMode ? "border-slate-300 bg-slate-50" : "border-gray-700 bg-gray-900/40"}`}>
       {/* Furniture type dropdown grouped by category */}
       <div>
         <label className={labelCls}>Furniture Type</label>
@@ -1080,8 +1080,8 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
         </div>
       )}
 
-      {/* ── Import bar ──────────────────────────────────────────────────────── */}
-      <div className={`px-5 py-4 border-b-2 ${border} ${bg2} space-y-3`}>
+      {/* ── Import bar — compact: drop zone + inline Template link ─────────── */}
+      <div className={`px-4 py-3 border-b ${border} ${bg2} space-y-2`}>
         <input
           ref={fileInputRef}
           type="file"
@@ -1090,11 +1090,11 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
           onChange={onFilePicked}
         />
 
-        {/* Drop zone */}
+        {/* Drop zone — slimmer, horizontal layout to save vertical space */}
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className={`w-full flex flex-col items-center justify-center gap-2 py-5 rounded-xl border-2 border-dashed transition-colors duration-150 cursor-pointer ${
+          className={`w-full flex items-center justify-center gap-3 py-3 px-3 rounded-xl border border-dashed transition-colors duration-150 cursor-pointer ${
             isDragging
               ? lightMode
                 ? "border-blue-500 bg-blue-50"
@@ -1106,11 +1106,11 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
           aria-label="Drop manifest file here or click to browse"
         >
           <svg
-            className={`w-8 h-8 ${isDragging ? "text-blue-500" : lightMode ? "text-blue-400" : "text-blue-600"}`}
+            className={`w-5 h-5 shrink-0 ${isDragging ? "text-blue-500" : lightMode ? "text-blue-500" : "text-blue-400"}`}
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            strokeWidth="1.75"
+            strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
           >
@@ -1118,45 +1118,35 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
             <line x1="12" y1="12" x2="12" y2="21" />
             <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
           </svg>
-          <div className="text-center leading-tight">
-            <div className={`text-base font-semibold ${lightMode ? "text-slate-800" : "text-gray-200"}`}>
-              Drop your manifest here
+          <div className="text-left leading-tight">
+            <div className={`text-sm font-semibold ${lightMode ? "text-slate-800" : "text-gray-200"}`}>
+              Drop manifest or click to browse
             </div>
-            <div className={`text-sm mt-0.5 ${lightMode ? "text-slate-500" : "text-gray-400"}`}>
-              or click to browse
+            <div className={`text-[11px] mt-0.5 ${lightMode ? "text-slate-500" : "text-gray-400"}`}>
+              .xlsx · .xls · .json — max 10 MB
             </div>
-          </div>
-          <div className={`text-xs ${lightMode ? "text-slate-400" : "text-gray-500"}`}>
-            .xlsx · .xls · .json — max 10 MB
           </div>
         </button>
 
-        {/* Download template */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={downloadManifestTemplate}
-            className={`w-full flex items-center justify-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-lg border-2 transition-colors ${
-              lightMode
-                ? "border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:border-slate-400"
-                : "border-gray-600 bg-gray-900 text-gray-200 hover:bg-gray-800 hover:border-gray-500"
-            }`}
-            title="Download a starter .xlsx template — fill it in and drop it above"
-          >
-            <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            <span>
-              Download Template
-              <span className={`block text-[11px] font-normal leading-none mt-0.5 ${lightMode ? "text-slate-500" : "text-gray-400"}`}>.xlsx format</span>
-            </span>
-          </button>
-        </div>
+        {/* Download template — now a slim text link instead of a full button */}
+        <button
+          type="button"
+          onClick={downloadManifestTemplate}
+          className={`flex items-center gap-1.5 text-xs font-medium underline-offset-2 hover:underline transition-colors ${
+            lightMode ? "text-slate-600 hover:text-blue-700" : "text-gray-400 hover:text-blue-300"
+          }`}
+          title="Download a starter .xlsx template"
+        >
+          <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          Download .xlsx template
+        </button>
       </div>
       {importMessage && (
-        <div className={`px-5 py-3 text-base border-b-2 ${border} ${
+        <div className={`px-4 py-2 text-sm border-b ${border} ${
           importMessage.kind === "ok"
             ? lightMode ? "bg-green-50 text-green-800 border-green-200" : "bg-green-950 text-green-300"
             : lightMode ? "bg-red-50 text-red-800 border-red-200"       : "bg-red-950 text-red-300"
@@ -1166,7 +1156,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
       )}
 
       {/* ── Panel tab navigation ──────────────────────────────────────────── */}
-      <div className={`flex border-b-2 ${border} ${bg2}`} role="tablist">
+      <div className={`flex border-b ${border} ${bg2}`} role="tablist">
         {([
           { id: "truck" as const, label: "Truck",  badge: null as number | null },
           { id: "stops" as const, label: "Stops",  badge: stops.length },
@@ -1180,7 +1170,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
               aria-selected={isActive}
               data-tour={tab.id === "truck" ? "truck-spec" : tab.id === "stops" ? "stops-tab" : tab.id === "items" ? "cargo-items" : undefined}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 px-3 py-3.5 text-base font-semibold border-b-2 -mb-[2px] transition-colors flex items-center justify-center gap-2 ${
+              className={`flex-1 px-3 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors flex items-center justify-center gap-2 ${
                 isActive
                   ? lightMode
                     ? "border-blue-600 text-blue-700 bg-blue-50"
@@ -1382,7 +1372,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
         </div>
         <button
           onClick={addStop}
-          className={`w-full text-base font-semibold border-2 border-dashed rounded-xl py-3.5 transition-colors flex items-center justify-center gap-2 ${
+          className={`w-full text-sm font-semibold border border-dashed rounded-xl py-2.5 transition-colors flex items-center justify-center gap-2 ${
             lightMode
               ? "border-slate-300 text-slate-700 hover:text-slate-900 hover:border-slate-500 hover:bg-slate-50"
               : "border-gray-700 text-gray-300 hover:text-gray-100 hover:border-gray-500 hover:bg-gray-900"
@@ -1742,7 +1732,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
         ) : stops.length > 0 ? (
           <button
             onClick={() => setShowAdd(true)}
-            className={`w-full text-base font-semibold border-2 border-dashed rounded-xl py-4 transition-colors flex items-center justify-center gap-2 ${
+            className={`w-full text-sm font-semibold border border-dashed rounded-xl py-2.5 transition-colors flex items-center justify-center gap-2 ${
               lightMode
                 ? "border-slate-300 text-slate-700 hover:text-slate-900 hover:border-slate-500 hover:bg-slate-50"
                 : "border-gray-700 text-gray-300 hover:text-gray-100 hover:border-gray-500 hover:bg-gray-900"

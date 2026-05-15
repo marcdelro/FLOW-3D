@@ -27,6 +27,26 @@ until the sprint is closed, then move to a dated sprint block.
 - `frontend/src/App.tsx`: Added `data-tour="manifest-tab"` on the Manifest step tab, `data-tour="plan-selector"` on the Results step tab, and `data-tour="truck-viewer"` on `<main>`.
 - `frontend/src/components/ManifestForm.tsx`: Added `data-tour="truck-spec"` on the Truck panel tab, `data-tour="stops-tab"` on the Stops panel tab, `data-tour="cargo-items"` on the Items panel tab, and `data-tour="solve-button"` on the Solve Packing Plan button wrapper.
 
+---
+
+## Sprint 32 — 2026-05-15 · UI Density Pass and Loading-Panel Reachability Fix
+
+**Goal:** Lower the visual weight across the whole shell so the truck viewer dominates the page, restore the Sprint-30 `SolveLoadingPanel` (which was unreachable due to a ternary ordering bug), and unify chrome treatments inside the 3D viewer overlay so its widgets stop competing with the main app's status banners.
+
+### Fixed
+
+**Frontend**
+- `frontend/src/App.tsx`: Re-ordered the main-viewer ternary so `loading` takes precedence over `selectedPlan` and `previewPlan`. The Sprint-30 `SolveLoadingPanel` was unreachable in practice because the live preview plan (always truthy once items exist) and the previous `selectedPlan` (mounted from any prior solve) both shadowed the `loading ?` branch — the bare-spinner replacement never fired during a real solve. Loading now snaps in immediately on click and snaps out when results arrive.
+
+### Changed
+
+**Frontend**
+- `frontend/src/App.tsx`: Sidebar header density pass — logo tile 48×48 → 36×36, app title `text-2xl` → `text-lg`, "Logistics DSS" subtitle restyled to `text-[11px] uppercase tracking-wider` to match the new section-header treatment in the manifest. Light/Dark toggle pill `border-2 / px-4 py-2.5 / text-sm` → `border / px-2.5 py-1.5 / text-xs`. Step tabs (Manifest / Results / Explain) padding `py-4` → `py-2.5`, numbered chip 36×36 / `text-base` → 24×24 / `text-xs`, active indicator from `border-b-4` to `border-b-2 -mb-px`. `role="tab"` + `aria-selected` added for screen readers. ~30 vertical pixels reclaimed across the header column.
+- `frontend/src/components/TruckViewer.tsx`: View-mode controls (3D / Exploded / Labels / Animate) consolidated from four free-floating `rounded-xl border-2` buttons into a single segmented pill control with mode-specific SVG icons (cube / four-squares / tag / play-triangle) via the new `ViewModeIcon` helper; each tab carries a `title=` tooltip describing its behaviour. Load-order legend tightened — `border-2` → `border`, swatches 20→14 px with a faint `ring-1 ring-black/10`, `backdrop-blur-sm` / `/95` opacity so the 3D scene stays visible behind it, and `min-w-[170px]` removed so the panel sizes to content. Fallback-geometry warning relocated from `top-4 right-4` (where it collided with the Sprint-29 friendly-error stack in App.tsx) to `top-20 left-4` under the view-mode control, restyled to the same compact pill chrome. The three Animate top-center status badges ("Press play…", "Placing X", "All loaded") now share one `rounded-2xl border shadow-md backdrop-blur-sm` chrome and morph through their states instead of three independent floating widgets; "Press play" gained a `<kbd>▶</kbd>` glyph that matches the play button, "All loaded" gained the checkmark icon.
+- `frontend/src/components/ManifestForm.tsx`: Section helper trimmed — header `px-5 py-4 border-b-2` → `px-4 py-2.5 border-b`, title `text-lg font-bold` → `text-sm font-bold uppercase tracking-wide`, badge `text-base` → `text-xs`, body `px-5 py-5` → `px-4 py-4`. Add/Edit item card `border-2 p-5 space-y-4` → `border p-4 space-y-3.5`. Import bar drop-zone reshaped from a tall vertical layout (32 px icon, 5 lines of copy) into a horizontal pill that saves ~40 vertical pixels; the "Download Template" full-width button is now a slim underlined text link. Tab strip `border-b-2` → `border-b` with `py-2.5 text-sm` per tab and a `-mb-px` active indicator. "Add Stop" / "Add Item" dashed buttons `border-2 / py-3.5–py-4 / text-base` → `border / py-2.5 / text-sm`. Net effect: roughly 30–40 vertical pixels saved per section, ~80 px on the import bar, ~20 px on each dashed action.
+- `frontend/src/components/Explainability.tsx`: SubTabStrip restyled — `border-b-2` → `border-b`, tabs from `text-sm font-semibold` to `text-xs font-semibold uppercase tracking-wide`, active indicator from a stacked `border-b-2` to `border-b-2 -mb-px` so it shares the container border instead of doubling it. Added `role="tab"` + `aria-selected`. All three tab panels (Dispatch / Metrics / Constraints) tightened from `px-5 py-4 space-y-3` → `px-4 py-3 space-y-2.5`, and every inner `rounded-xl border-2 p-3.5` card to `rounded-xl border p-3` so the panel reads as one continuous surface rather than a nested stack of boxes.
+
+---
 
 ## Sprint 30 — 2026-05-15 · Solve Loading Panel, Success-Rate Visualisation, and Plan-Card Visual Hierarchy
 

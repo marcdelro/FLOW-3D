@@ -58,19 +58,24 @@ function SubTabStrip({
   ];
 
   return (
-    <div className={`grid grid-cols-3 sticky top-0 z-10 border-b-2 ${
-      lightMode ? "border-slate-200 bg-white" : "border-gray-800 bg-gray-950"
-    }`}>
+    <div
+      role="tablist"
+      className={`grid grid-cols-3 sticky top-0 z-10 border-b ${
+        lightMode ? "border-slate-200 bg-white" : "border-gray-800 bg-gray-950"
+      }`}
+    >
       {tabs.map((t) => {
         const active = tab === t.key;
         return (
           <button
             key={t.key}
+            role="tab"
+            aria-selected={active}
             onClick={() => onChange(t.key)}
-            className={`flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+            className={`flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold border-b-2 -mb-px transition-colors ${
               active
                 ? lightMode
-                  ? "border-blue-600 text-blue-700 bg-blue-50"
+                  ? "border-blue-600 text-blue-700 bg-blue-50/60"
                   : "border-blue-500 text-blue-200 bg-blue-950/40"
                 : lightMode
                   ? "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50"
@@ -78,7 +83,7 @@ function SubTabStrip({
             }`}
           >
             {t.icon}
-            {t.label}
+            <span className="uppercase tracking-wide">{t.label}</span>
           </button>
         );
       })}
@@ -143,8 +148,8 @@ export function Explainability({ plan, items, truck, lightMode = false }: Explai
       <SubTabStrip tab={subTab} onChange={setSubTab} lightMode={lightMode} />
 
       {subTab === "dispatch" && (
-        <div className="px-5 py-4 space-y-3">
-          <div className={`rounded-xl border-2 p-3.5 ${card}`}>
+        <div className="px-4 py-3 space-y-2.5">
+          <div className={`rounded-xl border p-3 ${card}`}>
             <div className="flex items-center gap-2.5 mb-2.5 flex-wrap">
               <span className={`text-sm font-bold px-2.5 py-0.5 rounded-full ${solverBadge}`}>
                 {plan.solver_mode}
@@ -158,7 +163,7 @@ export function Explainability({ plan, items, truck, lightMode = false }: Explai
             </p>
           </div>
 
-          <div className={`rounded-xl border-2 p-3.5 ${cardSoft}`}>
+          <div className={`rounded-xl border p-3 ${cardSoft}`}>
             <div className={`text-xs font-bold uppercase tracking-wide mb-2 ${textMuted}`}>
               Strategy → Solver mapping
             </div>
@@ -232,7 +237,7 @@ export function Explainability({ plan, items, truck, lightMode = false }: Explai
       )}
 
       {subTab === "metrics" && (
-        <div className="px-5 py-4 space-y-3">
+        <div className="px-4 py-3 space-y-2.5">
           {(() => {
             const successRatio = plan.success_rate ?? (total > 0 ? packed.length / total : 1);
             const successPct = Math.round(successRatio * 100);
@@ -309,7 +314,7 @@ export function Explainability({ plan, items, truck, lightMode = false }: Explai
             lightMode={lightMode}
           />
 
-          <div className={`rounded-xl border-2 p-3.5 ${card}`}>
+          <div className={`rounded-xl border p-3 ${card}`}>
             <div className={`text-xs font-bold uppercase tracking-wide mb-2 ${textMuted}`}>What these numbers mean</div>
             <dl className="space-y-2 text-sm">
               <div className="flex justify-between gap-3">
@@ -338,9 +343,9 @@ export function Explainability({ plan, items, truck, lightMode = false }: Explai
       )}
 
       {subTab === "constraints" && (
-        <div className="px-5 py-4 space-y-3">
+        <div className="px-4 py-3 space-y-2.5">
           {/* LIFO */}
-          <div className={`rounded-xl border-2 p-3.5 ${card}`}>
+          <div className={`rounded-xl border p-3 ${card}`}>
             <div className="flex items-center justify-between mb-1.5 gap-2">
               <span className={`text-sm font-bold ${textStrong}`}>Route-Sequenced LIFO</span>
               <span className={`text-xs font-mono ${textMuted}`}>
@@ -357,7 +362,7 @@ export function Explainability({ plan, items, truck, lightMode = false }: Explai
           </div>
 
           {/* Fragile */}
-          <div className={`rounded-xl border-2 p-3.5 ${card}`}>
+          <div className={`rounded-xl border p-3 ${card}`}>
             <div className="flex items-center justify-between mb-1.5 gap-2">
               <span className={`text-sm font-bold ${textStrong}`}>Fragile No-Stacking</span>
               <span className={`text-xs font-mono ${textMuted}`}>
@@ -397,7 +402,7 @@ export function Explainability({ plan, items, truck, lightMode = false }: Explai
           </div>
 
           {/* Payload */}
-          <div className={`rounded-xl border-2 p-3.5 ${card}`}>
+          <div className={`rounded-xl border p-3 ${card}`}>
             <div className="flex items-baseline justify-between mb-2 gap-2">
               <span className={`text-sm font-bold ${textStrong}`}>Truck Payload</span>
               <span className="text-xs font-mono" style={{ color: payloadColor }}>
@@ -423,7 +428,7 @@ export function Explainability({ plan, items, truck, lightMode = false }: Explai
 
           {/* Unplaced explainer */}
           {plan.unplaced_items.length > 0 && (
-            <div className={`rounded-xl border-2 p-3.5 ${
+            <div className={`rounded-xl border p-3 ${
               lightMode ? "bg-amber-50 border-amber-300" : "bg-amber-950/40 border-amber-900"
             }`}>
               <div className={`text-sm font-bold mb-1.5 ${lightMode ? "text-amber-900" : "text-amber-200"}`}>
@@ -532,7 +537,7 @@ function AxleLoadCard({
   const labelFill = lightMode ? "#334155" : "#D1D5DB";
 
   return (
-    <div className={`rounded-xl border-2 p-3.5 ${cardClass}`}>
+    <div className={`rounded-xl border p-3 ${cardClass}`}>
       <div className="flex items-center justify-between mb-2">
         <div className={`text-xs font-bold uppercase tracking-wide ${textMuted}`}>
           Per-Axle Load Distribution
