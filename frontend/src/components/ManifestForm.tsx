@@ -499,18 +499,22 @@ function AddItemForm({
         />
       </div>
 
-      {!isEditing && (
-        <div>
-          <label className={labelCls}>Quantity</label>
-          <NumberInput
-            className={`${inputCls} max-w-[120px]`}
-            min={1}
-            max={99}
-            value={quantity}
-            onChange={onQuantityChange}
-          />
-        </div>
-      )}
+      <div>
+        <label className={labelCls}>Quantity</label>
+        <NumberInput
+          className={`${inputCls} max-w-[120px]`}
+          min={1}
+          max={99}
+          value={quantity}
+          onChange={onQuantityChange}
+        />
+        {isEditing && (
+          <p className={`text-xs mt-1 ${lightMode ? "text-slate-500" : "text-gray-400"}`}>
+            Changes apply to every sibling in this group; saving with a new
+            number resizes the group.
+          </p>
+        )}
+      </div>
 
       {/* Fragile handling notice — only shown when checked */}
       {value.fragile && (
@@ -876,18 +880,54 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
     if (!stops.some((s) => s.stop_id === draft.stop_id))
       return setItemError("Stop ID does not exist in the stop list.");
 
-    // ── Edit path: single update, quantity is irrelevant ──────────────────
+    // ── Edit path: applies the draft to the whole (prefix, stop_id) group
+    // the pivot row belongs to, and resizes that group to `draftQty`.
+    // IDs are regenerated with unique _NN suffixes drawn from the global
+    // pool so changing prefix/stop/qty never produces a collision.
     if (editingIdx !== null) {
-      if (items.some((it, j) => it.item_id === baseId && j !== editingIdx))
-        return setItemError("Item ID must be unique.");
-      const newItems = items.map((it, j) => j === editingIdx ? { ...draft, item_id: baseId } : it);
+      const groupIndices = findGroupIndices(items, editingIdx);
+      const targetQty = Math.max(1, Math.min(99, draftQty));
+
+      const mEdit = baseId.match(/^(.+)_(\d+)$/);
+      const newPrefix = mEdit ? mEdit[1] : baseId;
+
+      // Collect suffixes already used by items OUTSIDE the group so we never
+      // reissue an ID held by an unrelated sibling.
+      const usedSuffixes = new Set<number>();
+      const suffixRe = new RegExp(`^${newPrefix.toLowerCase()}_(\\d+)$`);
+      for (let j = 0; j < items.length; j++) {
+        if (groupIndices.includes(j)) continue;
+        const mm = items[j].item_id.toLowerCase().match(suffixRe);
+        if (mm) usedSuffixes.add(Number(mm[1]));
+      }
+      let nextSuffix = mEdit ? Number(mEdit[2]) : 1;
+      const allocSuffix = (): number => {
+        while (usedSuffixes.has(nextSuffix)) nextSuffix++;
+        const s = nextSuffix;
+        usedSuffixes.add(s);
+        nextSuffix++;
+        return s;
+      };
+
+      const replacement: FurnitureItem[] = [];
+      for (let k = 0; k < targetQty; k++) {
+        replacement.push({ ...draft, item_id: `${newPrefix}_${pad2(allocSuffix())}` });
+      }
+
+      const groupStart = groupIndices[0];
+      const groupEnd = groupIndices[groupIndices.length - 1];
+      const newItems = [
+        ...items.slice(0, groupStart),
+        ...replacement,
+        ...items.slice(groupEnd + 1),
+      ];
       setItems(newItems);
       pushHistory(newItems);
       setEditingIdx(null);
       setDraft(blankItem());
       setDraftQty(1);
       setShowAdd(false);
-      if (user) appendSessionLog(user.username, "item_edited", baseId);
+      if (user) appendSessionLog(user.username, "item_edited", `${newPrefix} ×${targetQty} @ stop ${draft.stop_id}`);
       return;
     }
 
@@ -930,11 +970,39 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
     setDraftQty(1);
   }
 
+  /**
+   * Walk left and right from `pivotIdx` collecting contiguous items that
+   * share the same prefix AND stop_id. Mirrors the table-render grouping
+   * so that editing one item in a group operates on the whole group.
+   */
+  function findGroupIndices(arr: FurnitureItem[], pivotIdx: number): number[] {
+    const pivot = arr[pivotIdx];
+    const pivotPrefix = prefixOf(pivot.item_id) ?? pivot.item_id;
+    const pivotStop = pivot.stop_id;
+    let start = pivotIdx;
+    while (start > 0) {
+      const prev = arr[start - 1];
+      const prevPrefix = prefixOf(prev.item_id) ?? prev.item_id;
+      if (prevPrefix === pivotPrefix && prev.stop_id === pivotStop) start--;
+      else break;
+    }
+    let end = pivotIdx;
+    while (end < arr.length - 1) {
+      const nxt = arr[end + 1];
+      const nxtPrefix = prefixOf(nxt.item_id) ?? nxt.item_id;
+      if (nxtPrefix === pivotPrefix && nxt.stop_id === pivotStop) end++;
+      else break;
+    }
+    return Array.from({ length: end - start + 1 }, (_, k) => start + k);
+  }
+
   function startEdit(idx: number) {
     setPendingDeleteIdx(null);
     setEditingIdx(idx);
     setDraft({ ...items[idx] });
-    setDraftQty(1);
+    // Seed quantity with the current group size so the user can resize the
+    // whole group from the edit form (e.g. "Sofa ×7 @ Stop 1" → ×10).
+    setDraftQty(findGroupIndices(items, idx).length);
     setShowAdd(true);
     setItemError(null);
     setTimeout(() => {
@@ -1365,15 +1433,20 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
               </thead>
               <tbody>
                 {(() => {
-                  // Build display groups: items sharing the same prefix are collapsed
-                  // into one row showing "Cabinet ×3". Underlying array is unchanged.
-                  type G = { prefix: string; indices: number[] };
+                  // Build display groups: contiguous items sharing the same
+                  // prefix AND the same stop_id collapse into one row
+                  // ("Sofa ×7 @ Stop 2"). Underlying items array is unchanged.
+                  // Grouping by (prefix, stop_id) rather than prefix alone
+                  // keeps items destined for different stops in their own
+                  // rows so the stop badge always reflects the truth.
+                  type G = { prefix: string; stop_id: number; indices: number[] };
                   const groups: G[] = [];
                   for (let i = 0; i < items.length; i++) {
                     const p = prefixOf(items[i].item_id) ?? items[i].item_id;
+                    const s = items[i].stop_id;
                     const last = groups[groups.length - 1];
-                    if (last && last.prefix === p) last.indices.push(i);
-                    else groups.push({ prefix: p, indices: [i] });
+                    if (last && last.prefix === p && last.stop_id === s) last.indices.push(i);
+                    else groups.push({ prefix: p, stop_id: s, indices: [i] });
                   }
                   return groups.map((g) => {
                     const i = g.indices[0];
@@ -1652,7 +1725,9 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
             initialPrefix={editingIdx !== null ? prefixOf(items[editingIdx].item_id) : undefined}
             confirmLabel={
               editingIdx !== null
-                ? "Save"
+                ? draftQty > 1
+                  ? `Save (×${draftQty})`
+                  : "Save"
                 : draftQty > 1
                   ? `Add ${draftQty}`
                   : "Add"

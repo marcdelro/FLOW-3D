@@ -10,10 +10,83 @@ import { Explainability } from "./components/Explainability";
 import { HelpModal } from "./components/HelpModal";
 import { ManifestForm } from "./components/ManifestForm";
 import { PlanSelector } from "./components/PlanSelector";
+import { SolveLoadingPanel } from "./components/SolveLoadingPanel";
 import { TruckViewer } from "./components/TruckViewer";
 import type { FurnitureItem, PackingPlan, SavedSession, SolveRequest, TruckSpec } from "./types";
 
 type Tab = "manifest" | "results" | "explain";
+
+/**
+ * Turn a raw solver/fetch error string into a friendly title + body + hint,
+ * with the original message preserved as `raw` for the "Technical details"
+ * disclosure. Matches the well-known shapes thrown by `fetchSolution()` and
+ * the FastAPI 422 / 4xx responses; falls back to a generic message for
+ * unrecognised errors.
+ */
+function friendlyError(msg: string): {
+  title: string;
+  body: string;
+  hint?: string;
+  raw?: string;
+} {
+  // Polling timeout — Celery worker likely dead or stuck
+  if (/poll timed out/i.test(msg)) {
+    return {
+      title: "The solver did not respond in time",
+      body: "We waited 60 seconds for the packing job to finish and never got a result.",
+      hint:
+        "This usually means the background worker (Celery) is not running, " +
+        "or the manifest is too large for the current solver configuration. " +
+        "Try a smaller manifest, or contact your administrator to restart " +
+        "the worker.",
+      raw: msg,
+    };
+  }
+  // FastAPI validation
+  if (/HTTP 422/i.test(msg)) {
+    return {
+      title: "Some manifest values are invalid",
+      body:
+        "The server rejected the request because one or more truck or item " +
+        "values are missing or out of range.",
+      hint:
+        "Open the Manifest tab and check that the truck dimensions, payload, " +
+        "and every item's width / length / height / weight are non-zero.",
+      raw: msg,
+    };
+  }
+  if (/HTTP 401|HTTP 403/i.test(msg)) {
+    return {
+      title: "You are signed out",
+      body: "Your session has expired. Sign in again and retry the solve.",
+      raw: msg,
+    };
+  }
+  if (/HTTP 5\d\d/i.test(msg) || /Solve failed: HTTP/i.test(msg)) {
+    return {
+      title: "The server hit an error while solving",
+      body:
+        "The packing service is reachable but returned an internal error. " +
+        "This is usually transient.",
+      hint: "Try again in a moment. If it keeps happening, contact your administrator.",
+      raw: msg,
+    };
+  }
+  if (/Failed to fetch|NetworkError|net::/i.test(msg)) {
+    return {
+      title: "Cannot reach the packing service",
+      body:
+        "The browser could not contact the FLOW-3D server. Check your " +
+        "internet connection.",
+      raw: msg,
+    };
+  }
+  // Generic fallback
+  return {
+    title: "Could not finish",
+    body: msg,
+  };
+}
 
 function App() {
   const [plans, setPlans]               = useState<PackingPlan[]>([]);
@@ -326,8 +399,11 @@ function App() {
       {/* ── Main viewer ─────────────────────────────────────────────────────── */}
       <main data-tour="truck-viewer" className="relative overflow-hidden">
 
-        {/* ── Top-right overlay: Help + Save State + Log Out — always visible when signed in ── */}
-        <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+        {/* ── Top-right overlay: button bar on top, status banners stacked below ── */}
+        <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2 w-[min(28rem,calc(100vw-2rem))]">
+
+          {/* Button row — kept horizontal */}
+          <div className="flex items-center gap-2">
 
           {/* Help / Feedback */}
           <button
@@ -348,7 +424,7 @@ function App() {
             Help
           </button>
 
-          {/* Buttons row */}
+          {/* Save State / Log Out cluster */}
           <div className="flex items-center gap-2">
             {/* Save State */}
             <button
@@ -401,28 +477,75 @@ function App() {
               </button>
             )}
           </div>
+          </div>
 
           {/* Solve error banner */}
-          {error && (
-            <div className={`w-full rounded-xl border-2 px-4 py-3 text-sm flex gap-2.5 items-start shadow-lg ${
-              lightMode
-                ? "border-red-300 bg-red-50 text-red-800"
-                : "border-red-900/50 bg-red-950/90 text-red-300"
-            }`}>
-              <svg className="w-4 h-4 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
-              <div>
-                <div className="font-bold mb-0.5">Could not finish</div>
-                <div>{error}</div>
+          {error && (() => {
+            const friendly = friendlyError(error);
+            return (
+              <div
+                role="alert"
+                className={`w-full rounded-xl border-2 px-4 py-3 text-sm shadow-lg ${
+                  lightMode
+                    ? "border-red-300 bg-red-50 text-red-800"
+                    : "border-red-900/50 bg-red-950/95 text-red-200"
+                }`}
+              >
+                <div className="flex gap-2.5 items-start">
+                  <svg className="w-5 h-5 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold mb-1">{friendly.title}</div>
+                    <div className="leading-relaxed break-words whitespace-pre-line">
+                      {friendly.body}
+                    </div>
+                    {friendly.hint && (
+                      <div className={`mt-2 text-xs leading-relaxed ${
+                        lightMode ? "text-red-700/80" : "text-red-300/80"
+                      }`}>
+                        {friendly.hint}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setError(null)}
+                    title="Dismiss"
+                    aria-label="Dismiss error"
+                    className={`shrink-0 -mr-1 -mt-1 w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                      lightMode ? "hover:bg-red-100 text-red-700" : "hover:bg-red-900/50 text-red-300"
+                    }`}
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 mt-3 pl-7">
+                  <button
+                    onClick={() => { setError(null); setTab("manifest"); }}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                      lightMode
+                        ? "bg-red-600 hover:bg-red-700 text-white"
+                        : "bg-red-700 hover:bg-red-600 text-white"
+                    }`}
+                  >
+                    Edit manifest
+                  </button>
+                  {friendly.raw && (
+                    <details className={`text-xs ${lightMode ? "text-red-700/80" : "text-red-300/70"}`}>
+                      <summary className="cursor-pointer select-none px-3 py-1.5 rounded-lg hover:underline">
+                        Technical details
+                      </summary>
+                      <pre className={`mt-1.5 p-2 rounded-md text-[11px] font-mono whitespace-pre-wrap break-all ${
+                        lightMode ? "bg-red-100/60" : "bg-red-950/60"
+                      }`}>{friendly.raw}</pre>
+                    </details>
+                  )}
+                </div>
               </div>
-              <button onClick={() => setError(null)} className="ml-auto shrink-0 opacity-60 hover:opacity-100 transition">
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Unplaced items banner */}
           {selectedPlan && selectedPlan.unplaced_items.length > 0 && (
@@ -490,18 +613,10 @@ function App() {
             </div>
           </div>
         ) : loading ? (
-          <div className="flex flex-col items-center justify-center h-full gap-6 px-8">
-            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <div className="text-center max-w-md">
-              <p className={`text-2xl font-bold ${lightMode ? "text-slate-900" : "text-gray-100"}`}>
-                Solving packing plans…
-              </p>
-              <p className={`text-lg mt-3 leading-relaxed ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
-                Generating 3 alternative LIFO-compliant plans.
-                This usually takes only a few seconds.
-              </p>
-            </div>
-          </div>
+          <SolveLoadingPanel
+            lightMode={lightMode}
+            itemCount={solveItems.length || previewItems.length}
+          />
         ) : (
           <div className="flex flex-col items-center justify-center h-full gap-6 text-center px-8">
             <div className={`w-28 h-28 rounded-3xl border-2 flex items-center justify-center ${

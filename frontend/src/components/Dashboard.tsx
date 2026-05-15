@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import type { PackingPlan, Placement, SolveStrategy } from "../types";
+import { formatExecTime } from "../lib/format";
+import { SuccessRateBar } from "./SuccessRateBar";
 
 const STRATEGY_LABEL: Record<SolveStrategy, string> = {
   optimal:      "Optimal",
@@ -231,38 +233,67 @@ export function Dashboard({ plan, lightMode = false }: DashboardProps) {
           </div>
 
           {/* Stat cards */}
-          <div className="grid grid-cols-4 gap-2">
-            <StatCard value={String(plan.t_exec_ms)} unit="ms" label="Exec Time" lightMode={lightMode} />
-            <div className={`rounded-xl p-3 text-center border flex flex-col items-center justify-center gap-1.5 ${
-              lightMode ? "bg-slate-50 border-slate-200" : "bg-gray-900 border-gray-800"
-            }`}>
-              <span
-                className={`text-sm font-bold px-2.5 py-0.5 rounded-full ${
-                  plan.solver_mode === "ILP"
-                    ? lightMode
-                      ? "bg-violet-100 text-violet-800 border border-violet-300"
-                      : "bg-violet-950 text-violet-200 border border-violet-800"
-                    : plan.solver_mode === "BASELINE"
-                      ? lightMode
-                        ? "bg-slate-100 text-slate-700 border border-slate-300"
-                        : "bg-slate-800 text-slate-300 border border-slate-600"
-                      : lightMode
-                        ? "bg-teal-100 text-teal-800 border border-teal-300"
-                        : "bg-teal-950 text-teal-200 border border-teal-800"
-                }`}
-              >
-                {plan.solver_mode}
-              </span>
-              <span className={`text-xs font-medium ${lightMode ? "text-slate-600" : "text-gray-400"}`}>Solver</span>
-            </div>
-            <StatCard value={`${packed.length}`} unit={`/ ${total}`} label="Packed" lightMode={lightMode} />
-            <StatCard
-              value={`${Math.round((plan.success_rate ?? (total > 0 ? packed.length / total : 1)) * 100)}`}
-              unit="%"
-              label="Success Rate"
-              lightMode={lightMode}
-            />
-          </div>
+          {(() => {
+            const successRatio = plan.success_rate ?? (total > 0 ? packed.length / total : 1);
+            const successPct = Math.round(successRatio * 100);
+            const execFmt = formatExecTime(plan.t_exec_ms);
+            return (
+              <>
+                <div className="grid grid-cols-4 gap-2">
+                  <StatCard
+                    value={execFmt.value}
+                    unit={execFmt.unit}
+                    label="Exec Time"
+                    lightMode={lightMode}
+                  />
+                  <div className={`rounded-xl p-3 text-center border flex flex-col items-center justify-center gap-1.5 ${
+                    lightMode ? "bg-slate-50 border-slate-200" : "bg-gray-900 border-gray-800"
+                  }`}>
+                    <span
+                      className={`text-sm font-bold px-2.5 py-0.5 rounded-full ${
+                        plan.solver_mode === "ILP"
+                          ? lightMode
+                            ? "bg-violet-100 text-violet-800 border border-violet-300"
+                            : "bg-violet-950 text-violet-200 border border-violet-800"
+                          : plan.solver_mode === "BASELINE"
+                            ? lightMode
+                              ? "bg-slate-100 text-slate-700 border border-slate-300"
+                              : "bg-slate-800 text-slate-300 border border-slate-600"
+                            : lightMode
+                              ? "bg-teal-100 text-teal-800 border border-teal-300"
+                              : "bg-teal-950 text-teal-200 border border-teal-800"
+                      }`}
+                    >
+                      {plan.solver_mode}
+                    </span>
+                    <span className={`text-xs font-medium ${lightMode ? "text-slate-600" : "text-gray-400"}`}>Solver</span>
+                  </div>
+                  <StatCard value={`${packed.length}`} unit={`/ ${total}`} label="Packed" lightMode={lightMode} />
+                  <StatCard
+                    value={`${successPct}`}
+                    unit="%"
+                    label="Success Rate"
+                    lightMode={lightMode}
+                  />
+                </div>
+
+                {/* Success-rate bar — sibling of the V_util bar above */}
+                <div className={`rounded-xl border p-3 ${
+                  lightMode ? "bg-slate-50 border-slate-200" : "bg-gray-900 border-gray-800"
+                }`}>
+                  <div className="flex items-baseline justify-between mb-2">
+                    <span className={`text-xs font-semibold ${lightMode ? "text-slate-700" : "text-gray-300"}`}>
+                      Manifest fulfilment
+                    </span>
+                    <span className={`text-xs font-mono ${lightMode ? "text-slate-600" : "text-gray-400"}`}>
+                      {packed.length} of {total} packed · {successPct}%
+                    </span>
+                  </div>
+                  <SuccessRateBar value={successRatio} lightMode={lightMode} height={8} />
+                </div>
+              </>
+            );
+          })()}
 
           {/* Export */}
           <button

@@ -12,7 +12,7 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
-## Sprint 28 — 2026-05-15 · First-Visit Guided Onboarding Tour
+## Sprint 31 — 2026-05-15 · First-Visit Guided Onboarding Tour
 
 **Goal:** Add a Mobile Legends-style spotlight tour that walks new users through the full FLOW-3D workflow on their first visit to the simulator, locks the UI while active so they cannot skip steps accidentally, and disappears permanently once completed.
 
@@ -23,13 +23,64 @@ until the sprint is closed, then move to a dated sprint block.
 - `frontend/src/tour/TourContext.tsx`: `TourProvider` and `useTour()` hook. Uses `useLocation()` from React Router so `isAppRoute` is reactive — tour auto-starts on first `/app` visit (checks `localStorage["flow3d_tour_done"]`), deactivates immediately when the user navigates away. `tourDone` state derived from localStorage controls both auto-start and restart-button visibility. React 18 StrictMode-safe: removed `useRef` auto-start guard that persisted across the state reset between double-mounts and silently blocked the second `setActive(true)` call.
 - `frontend/src/tour/TourOverlay.tsx`: `TourOverlay` component — spotlight via `box-shadow: 0 0 0 9999px rgba(0,0,0,0.68)` with `0.22s ease` transitions; smart `computeTooltipPos()` that detects sidebar elements (center-x < 45 % of viewport) and floats the tooltip to the right into the main area, keeping it fully visible even when the target is at the bottom of the sidebar; `scrollIntoView({ behavior: "smooth", block: "nearest" })` before measuring so the solve button scrolls into view; full-screen lockout backdrop with no `onClick` so only the **Skip tour** / **✕** / **Back** / **Next** / **Done** buttons can exit. `TourRestartButton` (fixed `?` button, bottom-left) hidden once `tourDone` is true. `TourCompletedToast` with `animate-fade-in`.
 - `frontend/tailwind.config.js`: `fade-in` keyframe (`opacity 0→1`, `translateY 8px→0`, `0.25s ease`) for `TourCompletedToast`.
+- `frontend/src/main.tsx`: Wrapped routes in `TourProvider`; mounted `TourOverlay`, `TourRestartButton`, and `TourCompletedToast` outside `<Routes>` so they render on all `/app` sub-paths.
+- `frontend/src/App.tsx`: Added `data-tour="manifest-tab"` on the Manifest step tab, `data-tour="plan-selector"` on the Results step tab, and `data-tour="truck-viewer"` on `<main>`.
+- `frontend/src/components/ManifestForm.tsx`: Added `data-tour="truck-spec"` on the Truck panel tab, `data-tour="stops-tab"` on the Stops panel tab, `data-tour="cargo-items"` on the Items panel tab, and `data-tour="solve-button"` on the Solve Packing Plan button wrapper.
+
+
+## Sprint 30 — 2026-05-15 · Solve Loading Panel, Success-Rate Visualisation, and Plan-Card Visual Hierarchy
+
+**Goal:** Make the user-facing solve experience self-explanatory: surface what the engine is doing during a long ILP run, distinguish `V_util` from `success_rate` visually instead of forcing users to read two numbers, render `T_exec` in human units, and refresh the four plan cards so a glance picks the recommended option.
+
+### Added
+
+**Frontend**
+- `frontend/src/lib/format.ts`: New `formatExecTime(ms)` / `formatExecTimeStr(ms)` / `formatPct(ratio)` helpers. `formatExecTime` returns `{value, unit}` so metric tiles can style the unit smaller than the number, and maps `0–999 ms → "ms"`, `1–59.9 s → "s"`, `≥ 60 s → "m / s"`. Consumed by Dashboard, Explainability, and PlanSelector so the raw `30021 ms` reading no longer leaks into the UI.
+- `frontend/src/components/SuccessRateBar.tsx`: New accessible (`role="progressbar"`, `aria-valuenow/min/max`) horizontal bar visualising `plan.success_rate`. Colour bands are thesis-graded — emerald ≥ 0.90 (excellent), blue ≥ 0.70 (good), amber ≥ 0.40 (partial), red < 0.40 (poor) — so manifest fulfilment is legible without parsing a percentage. Rendered in Dashboard, Explainability, and every PlanSelector card.
+- `frontend/src/components/SolveLoadingPanel.tsx`: New 5-stage loading screen rendered in the main viewer while the solve pipeline runs. Stages — Validating manifest → Dispatching to solver → Running Optimal (ILP) → Running Axle Balance / Stability (FFD) → Verifying with ConstraintValidator — each carry an explanation of what the engine is doing so a long 30 s ILP wait feels intentional. Progress bar uses an asymptotic curve `1 − exp(−1.8 · elapsed / expectedMs)` that approaches 95 % without falsely claiming completion; `expectedMs` scales with manifest size (≤ 10 items ≈ 1.5 s, 20 items ≈ 30 s anchor matching `GUROBI_TIME_LIMIT`) and the bar snaps to 100 % when the parent flips `loading = false`.
 
 ### Changed
 
 **Frontend**
-- `frontend/src/main.tsx`: Wrapped routes in `TourProvider`; mounted `TourOverlay`, `TourRestartButton`, and `TourCompletedToast` outside `<Routes>` so they render on all `/app` sub-paths.
-- `frontend/src/App.tsx`: Added `data-tour="manifest-tab"` on the Manifest step tab, `data-tour="plan-selector"` on the Results step tab, and `data-tour="truck-viewer"` on `<main>`.
-- `frontend/src/components/ManifestForm.tsx`: Added `data-tour="truck-spec"` on the Truck panel tab, `data-tour="stops-tab"` on the Stops panel tab, `data-tour="cargo-items"` on the Items panel tab, and `data-tour="solve-button"` on the Solve Packing Plan button wrapper.
+- `frontend/src/components/PlanSelector.tsx`: Visual hierarchy refresh. The previous A / B / C / D letter badges are replaced with strategy-themed icon tiles (cubes for Optimal, scale for Axle Balance, anchor for Stability, dots for Baseline) coloured per strategy (violet / sky / amber / slate). A **"Best fit"** emerald ribbon now decorates the non-baseline plan with the highest `V_util` — Baseline is excluded by design because it can "win" `V_util` by violating LIFO / support, which is the very gap the thesis comparison is meant to expose. The `V_util` and **Manifest Fulfilment** bars share an identical `BarRow` layout so the eye can compare both metrics across plans without reorienting. Solver-mode badge tightened to an 11 px uppercase pill.
+- `frontend/src/components/Dashboard.tsx`: Exec Time tile routed through `formatExecTime`; new "Manifest fulfilment" card mirrors the existing `V_util` card with the new `SuccessRateBar`.
+- `frontend/src/components/Explainability.tsx`: Metrics tab — Exec Time tile routed through `formatExecTime`; new "Manifest fulfilment" card sits beneath the 4-tile grid; tooltip `title=` attributes on `V_util` / `Success Rate` / `T_exec` / `Packed` tiles explain what each measures (`V_util` ≠ `success_rate`).
+- `frontend/src/App.tsx`: The bare spinner + "Solving packing plans…" placeholder shown during a solve is replaced with `<SolveLoadingPanel itemCount={…} lightMode={…} />`.
+
+---
+
+## Sprint 29 — 2026-05-15 · ILP TimeLimit Incumbent Recovery and Friendly Solve-Error UI
+
+**Goal:** Close two regressions surfaced by the 20-sofa multi-stop test on the deployed WLS Gurobi licence — the `optimal` strategy was returning an empty plan whenever Gurobi hit `GUROBI_TIME_LIMIT` (because `_extract_plan()` only honoured `GRB.OPTIMAL` and discarded any in-hand incumbent), and the resulting "Solver poll timed out" message was being rendered in a flex-row toast that pushed the text off the viewport edge.
+
+### Fixed
+
+**Backend**
+- `backend/solver/ilp_solver.py`: `_extract_plan()` now accepts any terminal Gurobi status whose `SolCount > 0`, not just `GRB.OPTIMAL`. When `GUROBI_TIME_LIMIT` trips on a large `b_i / s_ij_k / u_{i,j}` model the solver now returns the best feasible incumbent it found instead of an empty `PackingPlan` (`placements=[]`, `V_util=0`). The pre-fix behaviour was observably worse than the FFD fallback even though Gurobi had a valid LIFO-feasible packing in hand. Thesis ref: section 3.5.2.3 — hybrid ILP/FFD dispatch (the ILP branch now honours its partial-solution contract).
+
+**Frontend**
+- `frontend/src/App.tsx`: Restructured the top-right overlay from a single horizontal `flex items-center gap-2` row to a vertical stack capped at `min(28rem, 100vw - 2rem)`. The Help / Save State / Log Out cluster sits in a horizontal sub-row above the banners, so long error messages and the unplaced-items banner now wrap cleanly inside the panel instead of being pushed off-screen by the buttons.
+
+### Added
+
+**Frontend**
+- `frontend/src/App.tsx`: New `friendlyError()` helper translates raw `fetchSolution()` / FastAPI error strings into a structured `{title, body, hint, raw}` payload for the solve-error banner. Recognised shapes — poll timeout, `HTTP 422` (manifest validation), `HTTP 401`/`HTTP 403` (signed out), `HTTP 5xx` / `Solve failed: HTTP` (server error), `Failed to fetch` / `NetworkError` (offline) — each get their own human-readable title and actionable hint. The raw message and job UUID stay accessible behind a `<details>` "Technical details" disclosure so on-call diagnostics aren't lost. An **Edit manifest** action button on the banner sends the user back to the Manifest tab in one click; the Dismiss control is a properly sized button instead of a 4 px hit-target.
+
+---
+
+## Sprint 28 — 2026-05-15 · Per-Stop Item Grouping and Edit-Mode Quantity Resize
+
+**Goal:** Fix two cargo-manifest UX bugs that surfaced during the 20-sofa multi-stop benchmark: same-prefix items at different stops collapsed into a single misleading row that showed only the first stop's badge, and editing an existing item silently locked the quantity field to 1 so users could not resize a group without deleting and re-adding it.
+
+### Fixed
+
+**Frontend**
+- `frontend/src/components/ManifestForm.tsx`: Items table now groups rows by `(prefix, stop_id)` instead of `prefix` alone. Adjacent items sharing a furniture prefix but bound for different `stop_id`s surface as their own rows with the correct stop badge, ending the display bug where adding "Sofa ×7 @ Stop 1", "Sofa ×7 @ Stop 2", "Sofa ×6 @ Stop 3" rendered as a single "Sofa ×20" row anchored to Stop 1.
+
+### Changed
+
+**Frontend**
+- `frontend/src/components/ManifestForm.tsx`: Editing an item via the table now operates on its whole `(prefix, stop_id)` group. New `findGroupIndices()` walker locates the contiguous group; `startEdit()` seeds `draftQty` with the group size; the Quantity input renders in edit mode (was previously gated behind `!isEditing`); and saving applies the draft fields to every sibling and resizes the group up or down to the new quantity. Item IDs regenerate with unique `_NN` suffixes drawn from the global pool so prefix / stop / quantity changes never collide. Confirm-button label reads `Save (×N)` when N > 1 to make the resize obvious.
 
 ---
 
