@@ -12,6 +12,25 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 29 — 2026-05-15 · ILP TimeLimit Incumbent Recovery and Friendly Solve-Error UI
+
+**Goal:** Close two regressions surfaced by the 20-sofa multi-stop test on the deployed WLS Gurobi licence — the `optimal` strategy was returning an empty plan whenever Gurobi hit `GUROBI_TIME_LIMIT` (because `_extract_plan()` only honoured `GRB.OPTIMAL` and discarded any in-hand incumbent), and the resulting "Solver poll timed out" message was being rendered in a flex-row toast that pushed the text off the viewport edge.
+
+### Fixed
+
+**Backend**
+- `backend/solver/ilp_solver.py`: `_extract_plan()` now accepts any terminal Gurobi status whose `SolCount > 0`, not just `GRB.OPTIMAL`. When `GUROBI_TIME_LIMIT` trips on a large `b_i / s_ij_k / u_{i,j}` model the solver now returns the best feasible incumbent it found instead of an empty `PackingPlan` (`placements=[]`, `V_util=0`). The pre-fix behaviour was observably worse than the FFD fallback even though Gurobi had a valid LIFO-feasible packing in hand. Thesis ref: section 3.5.2.3 — hybrid ILP/FFD dispatch (the ILP branch now honours its partial-solution contract).
+
+**Frontend**
+- `frontend/src/App.tsx`: Restructured the top-right overlay from a single horizontal `flex items-center gap-2` row to a vertical stack capped at `min(28rem, 100vw - 2rem)`. The Help / Save State / Log Out cluster sits in a horizontal sub-row above the banners, so long error messages and the unplaced-items banner now wrap cleanly inside the panel instead of being pushed off-screen by the buttons.
+
+### Added
+
+**Frontend**
+- `frontend/src/App.tsx`: New `friendlyError()` helper translates raw `fetchSolution()` / FastAPI error strings into a structured `{title, body, hint, raw}` payload for the solve-error banner. Recognised shapes — poll timeout, `HTTP 422` (manifest validation), `HTTP 401`/`HTTP 403` (signed out), `HTTP 5xx` / `Solve failed: HTTP` (server error), `Failed to fetch` / `NetworkError` (offline) — each get their own human-readable title and actionable hint. The raw message and job UUID stay accessible behind a `<details>` "Technical details" disclosure so on-call diagnostics aren't lost. An **Edit manifest** action button on the banner sends the user back to the Manifest tab in one click; the Dismiss control is a properly sized button instead of a 4 px hit-target.
+
+---
+
 ## Sprint 28 — 2026-05-15 · Per-Stop Item Grouping and Edit-Mode Quantity Resize
 
 **Goal:** Fix two cargo-manifest UX bugs that surfaced during the 20-sofa multi-stop benchmark: same-prefix items at different stops collapsed into a single misleading row that showed only the first stop's badge, and editing an existing item silently locked the quantity field to 1 so users could not resize a group without deleting and re-adding it.

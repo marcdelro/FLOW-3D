@@ -526,7 +526,17 @@ class ILPSolver(AbstractSolver):
         GRB = self._GRB
         W, L, H = self._truck.W, self._truck.L, self._truck.H
 
-        if self._model.Status != GRB.OPTIMAL:
+        # Accept any terminal status that left a feasible incumbent in the
+        # model. OPTIMAL is the happy path; TIME_LIMIT / NODE_LIMIT /
+        # SOLUTION_LIMIT / INTERRUPTED commonly fire on large manifests once
+        # GUROBI_TIME_LIMIT is set, and Gurobi still exposes the best
+        # feasible solution found so far via `.X` when `SolCount > 0`.
+        # Discarding that incumbent (the pre-fix behaviour) returned an
+        # empty plan even when the solver had a valid packing in hand —
+        # observably worse than the FFD fallback.
+        status_ok = self._model.Status == GRB.OPTIMAL
+        has_incumbent = self._model.SolCount > 0
+        if not (status_ok or has_incumbent):
             return PackingPlan(
                 placements=[],
                 v_util=0.0,
