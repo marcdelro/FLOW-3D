@@ -1110,6 +1110,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
               key={tab.id}
               role="tab"
               aria-selected={isActive}
+              data-tour={tab.id === "truck" ? "truck-spec" : tab.id === "stops" ? "stops-tab" : tab.id === "items" ? "cargo-items" : undefined}
               onClick={() => setActiveTab(tab.id)}
               className={`flex-1 px-3 py-3.5 text-base font-semibold border-b-2 -mb-[2px] transition-colors flex items-center justify-center gap-2 ${
                 isActive
@@ -1687,7 +1688,7 @@ export function ManifestForm({ onSolve, loading, lightMode = false, onPreviewCha
       )}
 
       {/* ── Big Solve button ───────────────────────────────────────────────── */}
-      <div className="px-5 pt-3 pb-1">
+      <div data-tour="solve-button" className="px-5 pt-3 pb-1">
         <button
           onClick={() => onSolve({ items, truck, stops })}
           disabled={loading || items.length === 0}

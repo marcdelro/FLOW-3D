@@ -225,6 +225,7 @@ function App() {
             return (
               <button
                 key={t.key}
+                data-tour={t.key === "manifest" ? "manifest-tab" : t.key === "results" ? "plan-selector" : undefined}
                 onClick={() => !disabled && setTab(t.key)}
                 disabled={disabled}
                 className={`flex items-center gap-2 px-3 py-4 text-left transition-all border-b-4 ${
@@ -323,7 +324,7 @@ function App() {
       </aside>
 
       {/* ── Main viewer ─────────────────────────────────────────────────────── */}
-      <main className="relative overflow-hidden">
+      <main data-tour="truck-viewer" className="relative overflow-hidden">
 
         {/* ── Top-right overlay: Help + Save State + Log Out — always visible when signed in ── */}
         <div className="absolute top-4 right-4 z-20 flex items-center gap-2">

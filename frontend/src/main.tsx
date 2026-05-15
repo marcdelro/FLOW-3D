@@ -10,27 +10,34 @@ import { Landing } from "./pages/Landing";
 import { Login } from "./pages/Login";
 import { ChangePassword } from "./pages/ChangePassword";
 import { AdminDashboard } from "./pages/AdminDashboard";
+import { TourProvider } from "./tour/TourContext.tsx";
+import { TourOverlay, TourRestartButton, TourCompletedToast } from "./tour/TourOverlay.tsx";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route path="/"               element={<Landing />} />
-          <Route path="/app/*"          element={<App />} />
-          <Route path="/login"          element={<Login />} />
-          <Route path="/change-password" element={
-            <ProtectedRoute>
-              <ChangePassword />
-            </ProtectedRoute>
-          } />
-          <Route path="/admin"          element={
-            <ProtectedRoute requireAdmin>
-              <AdminDashboard />
-            </ProtectedRoute>
-          } />
-          <Route path="*"               element={<Landing />} />
-        </Routes>
+        <TourProvider>
+          <Routes>
+            <Route path="/"               element={<Landing />} />
+            <Route path="/app/*"          element={<App />} />
+            <Route path="/login"          element={<Login />} />
+            <Route path="/change-password" element={
+              <ProtectedRoute>
+                <ChangePassword />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin"          element={
+              <ProtectedRoute requireAdmin>
+                <AdminDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="*"               element={<Landing />} />
+          </Routes>
+          <TourOverlay />
+          <TourRestartButton />
+          <TourCompletedToast />
+        </TourProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,
