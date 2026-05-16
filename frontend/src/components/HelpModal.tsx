@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import { ContactForm } from "../landing/ContactForm";
+import { GLOSSARY } from "../landing/Glossary";
 import { useTour } from "../tour/TourContext";
 
 type HelpTab = "guide" | "feedback";
@@ -12,6 +13,7 @@ type GuideSection =
   | "explain"
   | "viewer"
   | "shortcuts"
+  | "glossary"
   | "tips";
 
 export function HelpModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -108,6 +110,9 @@ export function HelpModal({ open, onClose }: { open: boolean; onClose: () => voi
               <SectionLink active={section === "shortcuts"} onClick={() => setSection("shortcuts")}>
                 Shortcuts
               </SectionLink>
+              <SectionLink active={section === "glossary"} onClick={() => setSection("glossary")}>
+                Glossary
+              </SectionLink>
               <SectionLink active={section === "tips"} onClick={() => setSection("tips")}>
                 Tips &amp; FAQ
               </SectionLink>
@@ -121,6 +126,7 @@ export function HelpModal({ open, onClose }: { open: boolean; onClose: () => voi
               {section === "explain"    && <ExplainContent />}
               {section === "viewer"     && <ViewerContent />}
               {section === "shortcuts"  && <ShortcutsContent />}
+              {section === "glossary"   && <GlossaryContent />}
               {section === "tips"       && <TipsContent />}
             </div>
           </div>
@@ -503,6 +509,48 @@ function ShortcutsContent() {
         <Highlight> Log Out</Highlight> auto-saves before signing out — the session restores
         on your next sign-in.
       </P>
+    </>
+  );
+}
+
+/**
+ * In-app glossary — reuses the term list from landing/Glossary.tsx so the
+ * wording is identical to what users saw before signing in. Rendered as a
+ * single scrolling document grouped by category, since the Help modal
+ * already has its own left-rail navigation.
+ */
+function GlossaryContent() {
+  return (
+    <>
+      <H3>Glossary</H3>
+      <P>
+        Plain-language definitions for every acronym, math symbol, and domain
+        term FLOW-3D uses. Grouped by area so you can scan for what you need.
+      </P>
+      {GLOSSARY.map((cat) => (
+        <div key={cat.label} className="mt-6 first:mt-4">
+          <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-300 mb-1">
+            {cat.label}
+          </div>
+          <p className="text-xs text-gray-500 italic mb-3">{cat.blurb}</p>
+          <div className="space-y-3">
+            {cat.terms.map((t) => (
+              <div
+                key={t.term}
+                className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3.5 py-2.5"
+              >
+                <div className="flex items-baseline gap-2 flex-wrap mb-1">
+                  <Highlight>{t.term}</Highlight>
+                  {t.aka && (
+                    <span className="text-xs italic text-blue-300/80">{t.aka}</span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-400 leading-relaxed">{t.definition}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </>
   );
 }

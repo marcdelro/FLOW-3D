@@ -12,6 +12,25 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 39 — 2026-05-16 · Glossary Section and Hero CTA Pruning
+
+**Goal:** Give first-time visitors and in-app users a single authoritative place to look up every acronym, math symbol, and domain term FLOW-3D uses (ILP, FFD, LIFO, V_util, T_exec, 3DBPP-SLC, DSS, fragile no-stacking, Big-M, …), and remove the redundant "See a Sample Plan" hero CTA that only scrolled to the already-visible How-it-works section.
+
+### Added
+
+**Frontend**
+- `frontend/src/landing/Glossary.tsx`: New shared `GLOSSARY: GlossaryCategory[]` data structure plus a landing-page `<Glossary />` section (anchor `#glossary`). 4 categories × 27 terms — **Solvers & Algorithms** (ILP, FFD, Branch-and-Bound, Gurobi, 3DBPP-SLC, DSS, SOLVER_THRESHOLD), **Constraints** (LIFO, Route-Sequenced LIFO, Non-overlap / Big-M, Boundary, Vertical Support, Fragile No-Stacking, Payload, Side-up, Orientation index), **Metrics & Outputs** (V_util, T_exec, Placement, PackingPlan, Unplaced items), and **Workflow & UI** (Manifest, Stop, Strategy, Bounding box, Boxed/Crated, LTO/LTFRB). Each term carries an optional plain-English expansion (`aka`) and a one-paragraph definition. Section renders category pill-tabs and a two-column responsive grid of definition cards.
+- `frontend/src/pages/Landing.tsx`: Mount the new `<Glossary />` between `<HowItWorks />` and `<FAQ />` so visitors can answer "what does ILP / V_util / LIFO mean?" without leaving the marketing page.
+- `frontend/src/landing/Nav.tsx`, `frontend/src/landing/Footer.tsx`: Add `#glossary` to the top-nav link list and the product column of the footer so the new section is reachable from anywhere on the landing page.
+- `frontend/src/components/HelpModal.tsx`: New **Glossary** entry in the User Guide left-rail nav (between Shortcuts and Tips & FAQ). Renders the same `GLOSSARY` data (imported from `landing/Glossary.tsx`) as a vertically scrolling document grouped by category, so the wording shown to signed-in users is bit-identical to the landing-page version. Reused the modal's existing `Highlight` primitive and card style for visual continuity.
+
+### Removed
+
+**Frontend**
+- `frontend/src/landing/Hero.tsx`: Drop the secondary **See a Sample Plan** button. It only scrolled the user to `#how`, which is already the next section below the hero and is independently reachable from the top nav. Removing it makes the **Sign In** primary CTA the unambiguous next step for first-time visitors.
+
+---
+
 ## Sprint 38 — 2026-05-16 · Size-Option Primary Picker, Mesh Distribution, and Tab-Aware Tour
 
 **Goal:** Make the Size Option picker the primary selector for items shipped in multiple sizes (suppressing the redundant mesh Variant row), distribute supplier prefixes across sibling OBJ folders so visually-similar items render as different meshes, and fix the guided tour so it navigates to the correct top-level tab and ManifestForm sub-tab on every step regardless of where the user starts the tour from.

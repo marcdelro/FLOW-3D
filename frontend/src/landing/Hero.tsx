@@ -158,14 +158,6 @@ export function Hero() {
                   <path d="M5 12h14M13 5l7 7-7 7" />
                 </svg>
               </ButtonLink>
-              <ButtonLink
-                to="#how"
-                variant="secondary"
-                size="lg"
-                className="!bg-white/70 !text-slate-900 !border-slate-900/15 hover:!bg-white/90 backdrop-blur"
-              >
-                See a Sample Plan
-              </ButtonLink>
             </div>
 
             <p className="mt-6 text-sm text-slate-700/90">

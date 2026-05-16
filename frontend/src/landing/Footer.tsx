@@ -11,6 +11,7 @@ type ModalKey = "privacy" | "terms" | "contact" | null;
 const PRODUCT_LINKS = [
   { label: "Features", href: "#features" },
   { label: "How it works", href: "#how" },
+  { label: "Glossary", href: "#glossary" },
   { label: "FAQ", href: "#faq" },
 ];
 
