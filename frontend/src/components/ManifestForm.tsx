@@ -370,12 +370,14 @@ function AddItemForm({
         </div>
       )}
 
-      {/* Inline 3D preview — shows the hovered/selected variant as a turntable thumbnail */}
-      {selectedPrefix && previewVariant !== undefined && (
+      {/* Inline 3D preview — shows the hovered/selected variant as a turntable thumbnail.
+          Falls back to a colored box for items without a mapped OBJ mesh, so every
+          selection produces some visualization. */}
+      {selectedPrefix && (
         <div className="flex items-center gap-3">
           <ModelPreview
             prefix={selectedPrefix}
-            variantIdx={previewVariant}
+            variantIdx={previewVariant ?? 0}
             size={140}
             lightMode={lightMode}
           />
@@ -386,7 +388,9 @@ function AddItemForm({
             <p className={`leading-relaxed ${lightMode ? "text-gray-600" : "text-gray-400"}`}>
               {variants.length > 1
                 ? "Hover a variant below to preview it. Click to select."
-                : "Selected model — appears in the 3D viewer once packed."}
+                : variants.length === 1
+                  ? "Selected model — appears in the 3D viewer once packed."
+                  : "Placeholder — this item renders as a sized box in the 3D viewer."}
             </p>
           </div>
         </div>

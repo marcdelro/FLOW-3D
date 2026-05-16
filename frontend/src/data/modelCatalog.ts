@@ -716,39 +716,117 @@ const CATALOG_FOLDER_MAP: Record<string, string> = {
  * absent and fall through to the colored-box fallback in TruckViewer.
  */
 const PREFIX_TO_FOLDER: Record<string, string> = {
-  // beds
+  // ── Legacy synthetic prefixes ─────────────────────────────────────────────
   bed:      "Bed",
   bunk_bed: "Bunk_Bed",
-  // bookshelves
   bookshelf: "Bookshelf",
   bookcase:  "Bookcase",
   shelf:     "Shelf",
   shelving:  "Shelving",
-  // chairs
   chair: "Chair",
-  // desks
   desk:        "Desk",
   writing_desk: "Writing_Desk",
-  // refrigerators
   refrigerator: "Refrigerator",
   fridge:       "Fridge",
-  // sofas / couches
   sofa:      "Sofa",
   couch:     "Couch",
   loveseat:  "Loveseat",
   sectional: "Sectional",
-  // tables
   table:        "Table",
   dining_table: "Dining_Table",
   coffee_table: "Coffee_Table",
   end_table:    "End_Table",
   side_table:   "Side_Table",
-  // wardrobes / cabinets
   wardrobe:  "Wardrobe",
   cabinet:   "Cabinet",
   dresser:   "Dresser",
   sideboard: "Sideboard",
   armoire:   "Armoire",
+
+  // ── Supplier prefixes mapped to closest existing OBJ folder ───────────────
+  // Bed Frame → Bed mesh
+  bed_frame_post_a:  "Bed",
+  bed_frame_post_b:  "Bed",
+  bed_frame_pullout: "Bed",
+  kids_bunk:         "Bunk_Bed",
+  // Bookshelves
+  bookshelf_5tier: "Bookshelf",
+  bookshelf_3tier: "Bookshelf",
+  bookshelf_tall:  "Bookshelf",
+  // Chair-shaped items
+  office_chair_mesh:        "Chair",
+  office_chair_pu:          "Chair",
+  office_chair_task:        "Chair",
+  dining_chair_upholstered: "Chair",
+  dining_chair_metal:       "Chair",
+  accent_barrel:            "Chair",
+  accent_wingback:          "Chair",
+  kiddie_chair:             "Chair",
+  monobloc_chair:           "Chair",
+  garden_chair:             "Chair",
+  garden_foldchair:         "Chair",
+  bar_stool_swivel:         "Chair",
+  bar_stool_luxury:         "Chair",
+  bar_stool_steel:          "Chair",
+  bar_stool_metal:          "Chair",
+  // Desks
+  desk_lshape:  "Desk",
+  desk_compact: "Writing_Desk",
+  desk_hutch:   "Desk",
+  kids_desk:    "Writing_Desk",
+  // Sofa / Sectional
+  sala_set_3_2:     "Sofa",
+  recliner_fabric:  "Sofa",
+  recliner_power:   "Sofa",
+  lshape_sectional: "Sectional",
+  lshape_corner:    "Sectional",
+  // Tables
+  garden_table:       "Table",
+  folding_table:      "Table",
+  folding_desk:       "Table",
+  dining_set_stone:   "Dining_Table",
+  dining_set_wood_6s: "Dining_Table",
+  dining_set_classic: "Dining_Table",
+  // Coffee tables
+  coffee_glass:     "Coffee_Table",
+  coffee_solidwood: "Coffee_Table",
+  coffee_marble:    "Coffee_Table",
+  coffee_nested:    "Coffee_Table",
+  // Side / Nightstand
+  nightstand_1drawer: "Side_Table",
+  nightstand_2drawer: "Side_Table",
+  nightstand_open:    "End_Table",
+  // Wardrobes
+  wardrobe_marble: "Wardrobe",
+  wardrobe_oak:    "Wardrobe",
+  wardrobe_2door:  "Wardrobe",
+  // Dressers / Vanity (mirror-fronted dresser shape)
+  dresser_6drawer:        "Dresser",
+  dresser_4drawer_mirror: "Dresser",
+  dresser_3drawer:        "Dresser",
+  vanity_dressing:        "Dresser",
+  vanity_compact:         "Dresser",
+  // Cabinets (linen, shoe, display) → Cabinet/Armoire mesh
+  linen_tall:     "Cabinet",
+  linen_bath:     "Cabinet",
+  shoe_5tier:     "Cabinet",
+  shoe_slim:      "Cabinet",
+  shoe_bench:     "Cabinet",
+  display_glass:  "Armoire",
+  display_corner: "Armoire",
+  display_curio:  "Armoire",
+  // TV Stands / Buffets / Consoles → Sideboard mesh
+  tv_stand_pctv070:      "Sideboard",
+  tv_stand_aurum:        "Sideboard",
+  tv_stand_gitv2120:     "Sideboard",
+  tv_stand_drenzo:       "Sideboard",
+  tv_stand_turati:       "Sideboard",
+  tv_stand_eldorado:     "Sideboard",
+  buffet_cabinet_jpskk3: "Sideboard",
+  buffet_cabinet_camila: "Sideboard",
+  buffet_cabinet_clover: "Sideboard",
+  console_narrow:        "Sideboard",
+  console_drawers:       "Sideboard",
 };
 
 /** djb2 hash over the full item_id string → stable, varied model selection. */

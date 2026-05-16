@@ -12,6 +12,18 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 37 — 2026-05-16 · Supplier-Prefix Mesh Wiring and Universal Form Preview
+
+**Goal:** Make the new FEU supplier catalog renderable — wire 60 of the 76 supplier prefixes to the existing `/public/models/` OBJ folders so they show real meshes instead of colored boxes, and restore the AddItem form's 3D preview for every furniture selection (mesh-backed or not) so users always see what they're about to add.
+
+### Changed
+
+**Frontend**
+- `frontend/src/data/modelCatalog.ts`: Expand `PREFIX_TO_FOLDER` with 60 supplier-prefix → OBJ-folder mappings so the new catalog actually resolves to meshes via `resolveModelMeta()`. Bed Frame variants and `kids_bunk` → `Bed` / `Bunk_Bed`; all `bookshelf_*tier` → `Bookshelf`; chair-shaped supplier items (3 office chairs, 2 dining chairs, 2 accent chairs, 4 bar stools, kiddie / monobloc / garden / fold chairs) → `Chair`; `desk_lshape/hutch` → `Desk` and `desk_compact/kids_desk` → `Writing_Desk`; sofa-shaped items (`sala_set_3_2`, recliners) → `Sofa`; L-shape sofas → `Sectional`; `garden_table`, folding pieces, dining sets → `Table` / `Dining_Table`; coffee tables → `Coffee_Table`; nightstands → `Side_Table` / `End_Table`; wardrobes → `Wardrobe`; dressers + vanity tables → `Dresser`; linen / shoe cabinets → `Cabinet`; display cabinets → `Armoire`; all 6 TV stands, 3 buffets, and 2 console tables → `Sideboard`. The 16 supplier items without a semantically honest mesh (mattresses, ottomans, bean bags, mirrors, benches, kids toy storage) are intentionally left absent and continue to fall through to the `TruckViewer` colored-box placeholder.
+- `frontend/src/components/ManifestForm.tsx`: Drop the `previewVariant !== undefined` gate on the inline 3D preview so the turntable thumbnail renders for **every** selected `selectedPrefix`, not only those with multiple mesh variants. `variantIdx` defaults to `0`, and `ModelPreview`'s existing `placeFallback()` path (`ModelPreview.tsx:116`) keeps unmapped prefixes rendering as a colored box on the same turntable so users always see a visualization. Caption now adapts to three states — multi-variant, single mesh, and placeholder — to set expectations about what will appear in the truck viewer.
+
+---
+
 ## Sprint 36 — 2026-05-16 · Supplier Furniture Catalog Replacement and Size-Option Picker
 
 **Goal:** Replace the synthetic 25-item furniture catalog with the 76-item FEU supplier sheet (`Furniture_List.xlsx`) so manifests reflect real Philippine furniture SKUs, and add a Size Option picker for items shipped in multiple sizes (Dining Set 4S/6S/8S, Bed Frame Double/Full/Queen, Nested Coffee Table) so users can switch sizes without retyping dimensions.
