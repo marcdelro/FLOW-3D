@@ -15,114 +15,485 @@ export interface FurnitureGroup {
   items: FurnitureOption[];
 }
 
-/** Furniture types grouped by category — used by ManifestForm dropdown. */
+/**
+ * Furniture types grouped by category — used by ManifestForm dropdown.
+ * Sourced from the FEU furniture supplier sheet (Furniture_List.xlsx).
+ */
 export const FURNITURE_OPTIONS: FurnitureGroup[] = [
   {
-    folder: "Bed",
-    categoryLabel: "Beds",
+    folder: "Sala_Set",
+    categoryLabel: "Sala Set",
     items: [
-      { prefix: "bed",      label: "Bed"      },
-      { prefix: "bunk_bed", label: "Bunk Bed" },
+      { prefix: "sala_set_3_2", label: "3-2 Sofa Set (78AY1008 SIS)" },
+    ],
+  },
+  {
+    folder: "TV_Stand",
+    categoryLabel: "TV Stand / Cabinet",
+    items: [
+      { prefix: "tv_stand_pctv070",  label: "TV Stand (94PCTV070 SS)" },
+      { prefix: "tv_stand_aurum",    label: "TV Stand — Sliding (94DRAURUM ES)" },
+      { prefix: "tv_stand_gitv2120", label: "TV Stand (94GITV2120 EE)" },
+      { prefix: "tv_stand_drenzo",   label: "TV Cabinet — Up to 70\" (94DRENZO)" },
+      { prefix: "tv_stand_turati",   label: "TV Stand — Glass (94DRTURATI DOE)" },
+      { prefix: "tv_stand_eldorado", label: "TV Cabinet — Glossy (94DRELDORADO DWY)" },
+    ],
+  },
+  {
+    folder: "Buffet_Cabinet",
+    categoryLabel: "Buffet Cabinet",
+    items: [
+      { prefix: "buffet_cabinet_jpskk3", label: "Buffet Cabinet (16JPSKK3 SD)" },
+      { prefix: "buffet_cabinet_camila", label: "Buffet Cabinet (16AYCAMILA YY)" },
+      { prefix: "buffet_cabinet_clover", label: "Buffet Cabinet (16AYCLOVER YY)" },
+    ],
+  },
+  {
+    folder: "Dining_Set",
+    categoryLabel: "Dining Set",
+    items: [
+      { prefix: "dining_set_stone",   label: "Dining Set — Sintered Stone" },
+      { prefix: "dining_set_wood_6s", label: "Dining Set — 6-Seater Wood" },
+      { prefix: "dining_set_classic", label: "Dining Set — Classic Wood" },
+    ],
+  },
+  {
+    folder: "Plastic_Products",
+    categoryLabel: "Plastic Products",
+    items: [
+      { prefix: "kiddie_chair",   label: "Monobloc Kiddie Chair (High Type)" },
+      { prefix: "monobloc_chair", label: "Monobloc Chair with Armrest" },
+      { prefix: "monobloc_bench", label: "Monobloc Bench (3-Seater)" },
+    ],
+  },
+  {
+    folder: "Bar_Stool",
+    categoryLabel: "Bar Stool",
+    items: [
+      { prefix: "bar_stool_swivel", label: "Adjustable Swivel Bar Stool" },
+      { prefix: "bar_stool_luxury", label: "Luxury Bar Stool" },
+      { prefix: "bar_stool_steel",  label: "Bar Stool — Steel Frame" },
+      { prefix: "bar_stool_metal",  label: "Bar Stool — Metal Legs" },
+    ],
+  },
+  {
+    folder: "Wardrobe",
+    categoryLabel: "Wardrobe",
+    items: [
+      { prefix: "wardrobe_marble", label: "Sliding Door Wardrobe (Marble Print)" },
+      { prefix: "wardrobe_oak",    label: "Sliding Door Wardrobe (Light Wood)" },
+      { prefix: "wardrobe_2door",  label: "2-Door Wardrobe (Printed Design)" },
+    ],
+  },
+  {
+    folder: "Bed_Frame",
+    categoryLabel: "Bed Frame",
+    items: [
+      { prefix: "bed_frame_post_a",  label: "Bed Frame — Classic Wood Post (A)" },
+      { prefix: "bed_frame_post_b",  label: "Bed Frame — Classic Wood Post (B)" },
+      { prefix: "bed_frame_pullout", label: "Bed Frame with Pull-Out & Drawers" },
+    ],
+  },
+  {
+    folder: "Coffee_Table",
+    categoryLabel: "Coffee Table",
+    items: [
+      { prefix: "coffee_glass",     label: "Glass-Top Coffee Table" },
+      { prefix: "coffee_solidwood", label: "Solid Wood Coffee Table" },
+      { prefix: "coffee_marble",    label: "Marble-Top Coffee Table" },
+      { prefix: "coffee_nested",    label: "Nested Coffee Table Set (2 pcs)" },
+    ],
+  },
+  {
+    folder: "Nightstand",
+    categoryLabel: "Side / Nightstand",
+    items: [
+      { prefix: "nightstand_1drawer", label: "1-Drawer Nightstand" },
+      { prefix: "nightstand_2drawer", label: "2-Drawer Nightstand" },
+      { prefix: "nightstand_open",    label: "Open-Shelf Nightstand" },
+    ],
+  },
+  {
+    folder: "Study_Desk",
+    categoryLabel: "Study Desk",
+    items: [
+      { prefix: "desk_lshape",  label: "L-Shaped Study Desk" },
+      { prefix: "desk_compact", label: "Compact Writing Desk" },
+      { prefix: "desk_hutch",   label: "Desk with Hutch & Shelves" },
+    ],
+  },
+  {
+    folder: "Office_Chair",
+    categoryLabel: "Office Chair",
+    items: [
+      { prefix: "office_chair_mesh", label: "Ergonomic Mesh Chair" },
+      { prefix: "office_chair_pu",   label: "Executive PU Leather Chair" },
+      { prefix: "office_chair_task", label: "Mid-Back Task Chair" },
     ],
   },
   {
     folder: "Bookshelf",
-    categoryLabel: "Bookshelves",
+    categoryLabel: "Bookshelf",
     items: [
-      { prefix: "bookshelf", label: "Bookshelf"     },
-      { prefix: "bookcase",  label: "Bookcase"      },
-      { prefix: "shelf",     label: "Shelf"         },
-      { prefix: "shelving",  label: "Shelving Unit" },
+      { prefix: "bookshelf_5tier", label: "5-Tier Bookcase" },
+      { prefix: "bookshelf_3tier", label: "3-Tier Open Bookcase" },
+      { prefix: "bookshelf_tall",  label: "Tall Open Bookshelf" },
     ],
   },
   {
-    folder: "Chair",
-    categoryLabel: "Chairs",
+    folder: "Dresser",
+    categoryLabel: "Dresser",
     items: [
-      { prefix: "chair", label: "Chair" },
+      { prefix: "dresser_6drawer",        label: "6-Drawer Double Dresser" },
+      { prefix: "dresser_4drawer_mirror", label: "4-Drawer Dresser with Mirror" },
+      { prefix: "dresser_3drawer",        label: "3-Drawer Chest" },
     ],
   },
   {
-    folder: "Desk",
-    categoryLabel: "Desks",
+    folder: "L_Shape_Sofa",
+    categoryLabel: "L-Shape Sofa",
     items: [
-      { prefix: "desk",        label: "Desk"         },
-      { prefix: "writing_desk",label: "Writing Desk" },
+      { prefix: "lshape_sectional", label: "L-Shape Sectional Sofa" },
+      { prefix: "lshape_corner",    label: "L-Shape Corner Sofa" },
     ],
   },
   {
-    folder: "Refrigerator",
-    categoryLabel: "Refrigerators",
+    folder: "Recliner",
+    categoryLabel: "Recliner",
     items: [
-      { prefix: "refrigerator", label: "Refrigerator" },
-      { prefix: "fridge",       label: "Fridge"       },
+      { prefix: "recliner_fabric", label: "Single Fabric Recliner" },
+      { prefix: "recliner_power",  label: "Power Lift Recliner" },
     ],
   },
   {
-    folder: "Sofa_Couch",
-    categoryLabel: "Sofas & Couches",
+    folder: "Dining_Chair",
+    categoryLabel: "Dining Chair",
     items: [
-      { prefix: "sofa",      label: "Sofa"      },
-      { prefix: "couch",     label: "Couch"     },
-      { prefix: "loveseat",  label: "Loveseat"  },
-      { prefix: "sectional", label: "Sectional" },
+      { prefix: "dining_chair_upholstered", label: "Upholstered Dining Chair" },
+      { prefix: "dining_chair_metal",       label: "Metal Frame Dining Chair" },
     ],
   },
   {
-    folder: "Table",
-    categoryLabel: "Tables",
+    folder: "Shoe_Cabinet",
+    categoryLabel: "Shoe Cabinet",
     items: [
-      { prefix: "table",        label: "Table"        },
-      { prefix: "dining_table", label: "Dining Table" },
-      { prefix: "coffee_table", label: "Coffee Table" },
-      { prefix: "end_table",    label: "End Table"    },
-      { prefix: "side_table",   label: "Side Table"   },
+      { prefix: "shoe_5tier", label: "5-Tier Shoe Rack" },
+      { prefix: "shoe_bench", label: "Shoe Cabinet with Bench Seat" },
+      { prefix: "shoe_slim",  label: "Slim Shoe Cabinet" },
     ],
   },
   {
-    folder: "Wardrobe_Cabinet",
-    categoryLabel: "Wardrobes & Cabinets",
+    folder: "Display_Cabinet",
+    categoryLabel: "Display Cabinet",
     items: [
-      { prefix: "wardrobe",  label: "Wardrobe"  },
-      { prefix: "cabinet",   label: "Cabinet"   },
-      { prefix: "dresser",   label: "Dresser"   },
-      { prefix: "sideboard", label: "Sideboard" },
-      { prefix: "armoire",   label: "Armoire"   },
+      { prefix: "display_glass",  label: "Glass-Door Display Cabinet" },
+      { prefix: "display_corner", label: "Corner Display Cabinet" },
+      { prefix: "display_curio",  label: "Curio Display Cabinet" },
+    ],
+  },
+  {
+    folder: "Outdoor",
+    categoryLabel: "Outdoor / Garden",
+    items: [
+      { prefix: "garden_table",      label: "Garden Dining Table" },
+      { prefix: "garden_chair",      label: "Monobloc Garden Chair" },
+      { prefix: "garden_bench",      label: "Outdoor Bench 3-Seater" },
+      { prefix: "garden_foldchair",  label: "Foldable Garden Chair" },
+    ],
+  },
+  {
+    folder: "Mattress",
+    categoryLabel: "Mattress",
+    items: [
+      { prefix: "mattress_single", label: "Single Mattress" },
+      { prefix: "mattress_double", label: "Double Mattress" },
+      { prefix: "mattress_queen",  label: "Queen Mattress" },
+    ],
+  },
+  {
+    folder: "Accent_Chair",
+    categoryLabel: "Accent Chair",
+    items: [
+      { prefix: "accent_barrel",   label: "Barrel Accent Chair" },
+      { prefix: "accent_wingback", label: "Wingback Accent Chair" },
+    ],
+  },
+  {
+    folder: "Kids_Furniture",
+    categoryLabel: "Kids Furniture",
+    items: [
+      { prefix: "kids_desk", label: "Kids Study Table & Chair Set" },
+      { prefix: "kids_bunk", label: "Kids Bunk Bed" },
+      { prefix: "kids_toy",  label: "Kids Toy Storage Unit" },
+    ],
+  },
+  {
+    folder: "Console_Table",
+    categoryLabel: "Console Table",
+    items: [
+      { prefix: "console_narrow",  label: "Narrow Entryway Console Table" },
+      { prefix: "console_drawers", label: "Console Table with Drawers" },
+    ],
+  },
+  {
+    folder: "Ottoman",
+    categoryLabel: "Ottoman",
+    items: [
+      { prefix: "ottoman_storage",  label: "Storage Ottoman (Square)" },
+      { prefix: "ottoman_footrest", label: "Footrest Ottoman (Round)" },
+    ],
+  },
+  {
+    folder: "Linen_Cabinet",
+    categoryLabel: "Linen / Storage Cabinet",
+    items: [
+      { prefix: "linen_tall", label: "Tall Linen Cabinet" },
+      { prefix: "linen_bath", label: "Bathroom / Hallway Storage Cabinet" },
+    ],
+  },
+  {
+    folder: "Folding_Furniture",
+    categoryLabel: "Folding Furniture",
+    items: [
+      { prefix: "folding_table", label: "Folding Dining Table" },
+      { prefix: "folding_desk",  label: "Folding Study Table" },
+    ],
+  },
+  {
+    folder: "Bean_Bag",
+    categoryLabel: "Bean Bag",
+    items: [
+      { prefix: "beanbag_xl",   label: "XL Bean Bag Chair" },
+      { prefix: "beanbag_kids", label: "Kids Bean Bag" },
+    ],
+  },
+  {
+    folder: "Vanity_Table",
+    categoryLabel: "Vanity Table",
+    items: [
+      { prefix: "vanity_dressing", label: "Vanity Dressing Table with Mirror" },
+      { prefix: "vanity_compact",  label: "Compact Vanity Table" },
+    ],
+  },
+  {
+    folder: "Standing_Mirror",
+    categoryLabel: "Standing Mirror",
+    items: [
+      { prefix: "mirror_arched", label: "Full-Length Floor Mirror (Arched)" },
+      { prefix: "mirror_rect",   label: "Full-Length Floor Mirror (Rectangular)" },
+    ],
+  },
+  {
+    folder: "Dining_Bench",
+    categoryLabel: "Dining Bench",
+    items: [
+      { prefix: "bench_upholstered", label: "Upholstered Dining Bench" },
+      { prefix: "bench_wood",        label: "Wooden Dining Bench" },
     ],
   },
 ];
 
-/** Default dimensions (mm), weight, and orientation per prefix — auto-fills AddItemForm. */
+/**
+ * Default dimensions (mm), weight, and orientation per prefix — auto-fills AddItemForm.
+ * Dimensions converted from cm → mm (×10). For multi-size rows, the default is the
+ * smallest variant; SIZE_VARIANTS below holds the full set selectable in the form.
+ * `side_up: true` marks items that must remain upright (cabinets, mirrors, fridges).
+ */
 export const FURNITURE_DEFAULTS: Record<
   string,
   { w: number; l: number; h: number; weight_kg: number; side_up: boolean; fragile?: boolean }
 > = {
-  bed:           { w: 1600, l: 2000, h: 500,  weight_kg: 60,  side_up: false },
-  bunk_bed:      { w: 1000, l: 2000, h: 1700, weight_kg: 80,  side_up: true  },
-  bookshelf:     { w: 800,  l: 300,  h: 1800, weight_kg: 30,  side_up: true  },
-  bookcase:      { w: 900,  l: 350,  h: 1800, weight_kg: 35,  side_up: true  },
-  shelf:         { w: 800,  l: 300,  h: 1800, weight_kg: 25,  side_up: true  },
-  shelving:      { w: 1200, l: 400,  h: 1800, weight_kg: 40,  side_up: true  },
-  chair:         { w: 550,  l: 550,  h: 900,  weight_kg: 8,   side_up: false },
-  desk:          { w: 1200, l: 600,  h: 750,  weight_kg: 40,  side_up: false },
-  writing_desk:  { w: 1000, l: 500,  h: 750,  weight_kg: 30,  side_up: false },
-  refrigerator:  { w: 700,  l: 700,  h: 1800, weight_kg: 80,  side_up: true,  fragile: true },
-  fridge:        { w: 600,  l: 650,  h: 1700, weight_kg: 70,  side_up: true,  fragile: true },
-  sofa:          { w: 2000, l: 900,  h: 850,  weight_kg: 80,  side_up: false },
-  couch:         { w: 1800, l: 850,  h: 800,  weight_kg: 70,  side_up: false },
-  loveseat:      { w: 1400, l: 850,  h: 800,  weight_kg: 60,  side_up: false },
-  sectional:     { w: 2500, l: 1000, h: 850,  weight_kg: 120, side_up: false },
-  table:         { w: 1200, l: 800,  h: 750,  weight_kg: 35,  side_up: false },
-  dining_table:  { w: 1500, l: 900,  h: 750,  weight_kg: 50,  side_up: false },
-  coffee_table:  { w: 1200, l: 600,  h: 450,  weight_kg: 20,  side_up: false },
-  end_table:     { w: 500,  l: 500,  h: 550,  weight_kg: 10,  side_up: false },
-  side_table:    { w: 500,  l: 500,  h: 600,  weight_kg: 12,  side_up: false },
-  wardrobe:      { w: 1200, l: 600,  h: 1800, weight_kg: 90,  side_up: true  },
-  cabinet:       { w: 900,  l: 450,  h: 1800, weight_kg: 70,  side_up: true  },
-  dresser:       { w: 1000, l: 500,  h: 900,  weight_kg: 60,  side_up: true  },
-  sideboard:     { w: 1500, l: 450,  h: 800,  weight_kg: 80,  side_up: false },
-  armoire:       { w: 1200, l: 650,  h: 1900, weight_kg: 100, side_up: true  },
+  // Sala Set
+  sala_set_3_2: { w: 1930, l: 890, h: 690, weight_kg: 95, side_up: false },
+
+  // TV Stand / Cabinet
+  tv_stand_pctv070:  { w: 1500, l: 390,  h: 450,  weight_kg: 28, side_up: false },
+  tv_stand_aurum:    { w: 1600, l: 390,  h: 660,  weight_kg: 32, side_up: false },
+  tv_stand_gitv2120: { w: 1200, l: 400,  h: 450,  weight_kg: 24, side_up: false },
+  tv_stand_drenzo:   { w: 2000, l: 387,  h: 1779, weight_kg: 55, side_up: true  },
+  tv_stand_turati:   { w: 2100, l: 530,  h: 1850, weight_kg: 70, side_up: true,  fragile: true },
+  tv_stand_eldorado: { w: 2000, l: 483,  h: 1809, weight_kg: 65, side_up: true  },
+
+  // Buffet Cabinet
+  buffet_cabinet_jpskk3: { w: 800,  l: 450, h: 830, weight_kg: 38, side_up: false },
+  buffet_cabinet_camila: { w: 1190, l: 600, h: 830, weight_kg: 45, side_up: false },
+  buffet_cabinet_clover: { w: 1200, l: 610, h: 840, weight_kg: 48, side_up: false },
+
+  // Dining Set (default = smallest variant; full sizes in SIZE_VARIANTS)
+  dining_set_stone:   { w: 1400, l: 800, h: 750, weight_kg: 85, side_up: true,  fragile: true },
+  dining_set_wood_6s: { w: 1600, l: 900, h: 750, weight_kg: 72, side_up: false },
+  dining_set_classic: { w: 1100, l: 700, h: 750, weight_kg: 60, side_up: false },
+
+  // Plastic Products
+  kiddie_chair:   { w: 480,  l: 430, h: 660, weight_kg: 3, side_up: false },
+  monobloc_chair: { w: 430,  l: 540, h: 750, weight_kg: 4, side_up: false },
+  monobloc_bench: { w: 1500, l: 570, h: 830, weight_kg: 7, side_up: false },
+
+  // Bar Stool — items with "—" Excel dims use sensible defaults
+  bar_stool_swivel: { w: 400, l: 400, h: 1000, weight_kg: 8,  side_up: true  },
+  bar_stool_luxury: { w: 400, l: 400, h: 900,  weight_kg: 9,  side_up: true  },
+  bar_stool_steel:  { w: 517, l: 497, h: 990,  weight_kg: 10, side_up: true  },
+  bar_stool_metal:  { w: 450, l: 450, h: 1080, weight_kg: 9,  side_up: true  },
+
+  // Wardrobe — all fragile (mirror panel) and upright
+  wardrobe_marble: { w: 900,  l: 500, h: 1850, weight_kg: 65, side_up: true, fragile: true },
+  wardrobe_oak:    { w: 1200, l: 500, h: 1850, weight_kg: 75, side_up: true, fragile: true },
+  wardrobe_2door:  { w: 900,  l: 500, h: 1850, weight_kg: 62, side_up: true, fragile: true },
+
+  // Bed Frame — height blank in Excel, defaulted to 400 mm
+  bed_frame_post_a:  { w: 1219, l: 1905, h: 400, weight_kg: 48, side_up: false },
+  bed_frame_post_b:  { w: 1219, l: 1905, h: 400, weight_kg: 48, side_up: false },
+  bed_frame_pullout: { w: 914,  l: 1905, h: 400, weight_kg: 55, side_up: false },
+
+  // Coffee Table
+  coffee_glass:     { w: 1200, l: 600, h: 450, weight_kg: 25, side_up: false, fragile: true },
+  coffee_solidwood: { w: 1000, l: 550, h: 420, weight_kg: 22, side_up: false },
+  coffee_marble:    { w: 1100, l: 600, h: 450, weight_kg: 32, side_up: false, fragile: true },
+  coffee_nested:    { w: 900,  l: 500, h: 420, weight_kg: 18, side_up: false },
+
+  // Nightstand
+  nightstand_1drawer: { w: 500, l: 400, h: 550, weight_kg: 12, side_up: true },
+  nightstand_2drawer: { w: 550, l: 400, h: 600, weight_kg: 15, side_up: true },
+  nightstand_open:    { w: 450, l: 350, h: 550, weight_kg: 10, side_up: true },
+
+  // Study Desk
+  desk_lshape:  { w: 1500, l: 1000, h: 750,  weight_kg: 45, side_up: false },
+  desk_compact: { w: 1200, l: 600,  h: 750,  weight_kg: 22, side_up: false },
+  desk_hutch:   { w: 1400, l: 650,  h: 1400, weight_kg: 40, side_up: true  },
+
+  // Office Chair
+  office_chair_mesh: { w: 650, l: 650, h: 1200, weight_kg: 18, side_up: true },
+  office_chair_pu:   { w: 700, l: 700, h: 1300, weight_kg: 24, side_up: true },
+  office_chair_task: { w: 600, l: 600, h: 1050, weight_kg: 13, side_up: true },
+
+  // Bookshelf
+  bookshelf_5tier: { w: 800,  l: 300, h: 1800, weight_kg: 30, side_up: true },
+  bookshelf_3tier: { w: 900,  l: 350, h: 1200, weight_kg: 20, side_up: true },
+  bookshelf_tall:  { w: 1000, l: 300, h: 2000, weight_kg: 35, side_up: true },
+
+  // Dresser
+  dresser_6drawer:        { w: 1000, l: 450, h: 1100, weight_kg: 48, side_up: true },
+  dresser_4drawer_mirror: { w: 900,  l: 450, h: 1500, weight_kg: 55, side_up: true, fragile: true },
+  dresser_3drawer:        { w: 800,  l: 400, h: 900,  weight_kg: 30, side_up: true },
+
+  // L-Shape Sofa
+  lshape_sectional: { w: 2800, l: 1600, h: 850, weight_kg: 95,  side_up: false },
+  lshape_corner:    { w: 2600, l: 1700, h: 900, weight_kg: 110, side_up: false },
+
+  // Recliner
+  recliner_fabric: { w: 900, l: 900, h: 1050, weight_kg: 48, side_up: true },
+  recliner_power:  { w: 850, l: 850, h: 1100, weight_kg: 55, side_up: true },
+
+  // Dining Chair
+  dining_chair_upholstered: { w: 450, l: 500, h: 950, weight_kg: 8, side_up: true },
+  dining_chair_metal:       { w: 420, l: 420, h: 850, weight_kg: 7, side_up: true },
+
+  // Shoe Cabinet
+  shoe_5tier: { w: 800, l: 300, h: 1200, weight_kg: 15, side_up: true },
+  shoe_bench: { w: 800, l: 400, h: 850,  weight_kg: 22, side_up: true },
+  shoe_slim:  { w: 600, l: 250, h: 1000, weight_kg: 14, side_up: true },
+
+  // Display Cabinet — fragile (glass)
+  display_glass:  { w: 800, l: 350, h: 1800, weight_kg: 48, side_up: true, fragile: true },
+  display_corner: { w: 600, l: 600, h: 1700, weight_kg: 38, side_up: true, fragile: true },
+  display_curio:  { w: 700, l: 400, h: 1650, weight_kg: 42, side_up: true, fragile: true },
+
+  // Outdoor / Garden
+  garden_table:     { w: 1200, l: 700, h: 720, weight_kg: 15, side_up: false },
+  garden_chair:     { w: 550,  l: 550, h: 850, weight_kg: 4,  side_up: true  },
+  garden_bench:     { w: 1500, l: 550, h: 850, weight_kg: 9,  side_up: false },
+  garden_foldchair: { w: 580,  l: 500, h: 800, weight_kg: 5,  side_up: true  },
+
+  // Mattress — must lay flat (note in Excel: side_up=False)
+  mattress_single: { w: 910,  l: 1900, h: 250, weight_kg: 20, side_up: false },
+  mattress_double: { w: 1220, l: 1900, h: 250, weight_kg: 28, side_up: false },
+  mattress_queen:  { w: 1520, l: 1900, h: 300, weight_kg: 35, side_up: false },
+
+  // Accent Chair
+  accent_barrel:   { w: 800, l: 800, h: 850,  weight_kg: 22, side_up: true },
+  accent_wingback: { w: 750, l: 750, h: 1050, weight_kg: 26, side_up: true },
+
+  // Kids Furniture
+  kids_desk: { w: 1000, l: 600,  h: 750,  weight_kg: 20, side_up: false },
+  kids_bunk: { w: 2000, l: 1000, h: 1650, weight_kg: 65, side_up: true  },
+  kids_toy:  { w: 800,  l: 400,  h: 1000, weight_kg: 18, side_up: true  },
+
+  // Console Table
+  console_narrow:  { w: 1200, l: 350, h: 800, weight_kg: 15, side_up: true },
+  console_drawers: { w: 1000, l: 400, h: 780, weight_kg: 18, side_up: true },
+
+  // Ottoman
+  ottoman_storage:  { w: 650, l: 650, h: 420, weight_kg: 10, side_up: true },
+  ottoman_footrest: { w: 600, l: 600, h: 380, weight_kg: 8,  side_up: true },
+
+  // Linen Cabinet
+  linen_tall: { w: 800, l: 400, h: 1850, weight_kg: 45, side_up: true },
+  linen_bath: { w: 600, l: 350, h: 1400, weight_kg: 28, side_up: true },
+
+  // Folding Furniture
+  folding_table: { w: 1200, l: 750, h: 750, weight_kg: 20, side_up: false },
+  folding_desk:  { w: 1000, l: 600, h: 720, weight_kg: 14, side_up: false },
+
+  // Bean Bag
+  beanbag_xl:   { w: 1000, l: 900, h: 800, weight_kg: 8, side_up: false },
+  beanbag_kids: { w: 700,  l: 700, h: 600, weight_kg: 4, side_up: false },
+
+  // Vanity Table — fragile (mirror)
+  vanity_dressing: { w: 900, l: 450, h: 1450, weight_kg: 38, side_up: true, fragile: true },
+  vanity_compact:  { w: 750, l: 400, h: 1300, weight_kg: 28, side_up: true, fragile: true },
+
+  // Standing Mirror — fragile, upright
+  mirror_arched: { w: 600, l: 40, h: 1600, weight_kg: 12, side_up: true, fragile: true },
+  mirror_rect:   { w: 500, l: 40, h: 1500, weight_kg: 10, side_up: true, fragile: true },
+
+  // Dining Bench
+  bench_upholstered: { w: 1200, l: 350, h: 470, weight_kg: 15, side_up: false },
+  bench_wood:        { w: 1400, l: 380, h: 450, weight_kg: 18, side_up: false },
 };
+
+/**
+ * Per-prefix size options for items that ship in multiple sizes (e.g. Dining Set
+ * 4S/6S/8S, Bed Frame Double/Full/Queen). Each entry overrides the dimensions in
+ * FURNITURE_DEFAULTS when the user picks it. Items absent from this map have a
+ * single fixed size and the picker is hidden.
+ */
+export interface SizeOption {
+  label: string;
+  w: number;
+  l: number;
+  h: number;
+}
+
+export const SIZE_VARIANTS: Record<string, SizeOption[]> = {
+  dining_set_stone: [
+    { label: "4-Seater (140×80)", w: 1400, l: 800,  h: 750 },
+    { label: "6-Seater (160×90)", w: 1600, l: 900,  h: 750 },
+    { label: "8-Seater (200×100)", w: 2000, l: 1000, h: 750 },
+  ],
+  dining_set_classic: [
+    { label: "4-Seater (110×70)", w: 1100, l: 700, h: 750 },
+    { label: "6-Seater (140×80)", w: 1400, l: 800, h: 750 },
+  ],
+  bed_frame_post_a: [
+    { label: "Double (122×190)",       w: 1219, l: 1905, h: 400 },
+    { label: "Full-Double (137×190)",  w: 1372, l: 1905, h: 400 },
+    { label: "Queen (152×190)",        w: 1524, l: 1905, h: 400 },
+  ],
+  bed_frame_post_b: [
+    { label: "Double (122×190)",       w: 1219, l: 1905, h: 400 },
+    { label: "Full-Double (137×190)",  w: 1372, l: 1905, h: 400 },
+    { label: "Queen (152×190)",        w: 1524, l: 1905, h: 400 },
+  ],
+  coffee_nested: [
+    { label: "Large (90×50)", w: 900, l: 500, h: 420 },
+    { label: "Small (60×40)", w: 600, l: 400, h: 380 },
+  ],
+};
+
+/** Returns the size options for a prefix, or empty array if the item has a single fixed size. */
+export function getSizeVariants(prefix: string): SizeOption[] {
+  return SIZE_VARIANTS[prefix] ?? [];
+}
 
 export type AxisUp = "y" | "z" | "-z" | "x" | "auto";
 
@@ -131,6 +502,11 @@ export type AxisUp = "y" | "z" | "-z" | "x" | "auto";
  * model IDs from the physical folder named by the same key (or CATALOG_FOLDER_MAP[key]).
  * Splitting by prefix prevents semantic mismatch (e.g., a "Sofa" picker showing
  * a "Sectional" variant) without requiring any file copies.
+ *
+ * NOTE: New supplier prefixes (sala_set_*, tv_stand_*, etc.) intentionally do not
+ * appear here — they fall through to the colored-box fallback in TruckViewer. The
+ * legacy CATALOG below remains so saved manifests using old prefixes (bed, chair,
+ * sofa…) still resolve to real meshes.
  */
 const CATALOG: Record<string, string[]> = {
   // ── Beds ──────────────────────────────────────────────────────────────────
@@ -335,9 +711,9 @@ const CATALOG_FOLDER_MAP: Record<string, string> = {
 };
 
 /**
- * item_id prefix → catalog key. The catalog key selects a model subset from CATALOG
- * and (via CATALOG_FOLDER_MAP) its physical /public/models/ subfolder.
- * Longest match wins (handled by lookup order).
+ * item_id prefix → catalog key. Only legacy prefixes (bed, chair, sofa…) are
+ * mapped. New supplier prefixes (sala_set_*, tv_stand_*, etc.) are intentionally
+ * absent and fall through to the colored-box fallback in TruckViewer.
  */
 const PREFIX_TO_FOLDER: Record<string, string> = {
   // beds

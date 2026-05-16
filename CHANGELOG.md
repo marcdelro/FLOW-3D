@@ -12,6 +12,22 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 36 — 2026-05-16 · Supplier Furniture Catalog Replacement and Size-Option Picker
+
+**Goal:** Replace the synthetic 25-item furniture catalog with the 76-item FEU supplier sheet (`Furniture_List.xlsx`) so manifests reflect real Philippine furniture SKUs, and add a Size Option picker for items shipped in multiple sizes (Dining Set 4S/6S/8S, Bed Frame Double/Full/Queen, Nested Coffee Table) so users can switch sizes without retyping dimensions.
+
+### Changed
+
+**Frontend**
+- `frontend/src/data/modelCatalog.ts`: Replace `FURNITURE_OPTIONS` (25 items / 8 categories) with 76 supplier-sheet items grouped into 31 categories — Sala Set, TV Stand / Cabinet, Buffet Cabinet, Dining Set, Plastic Products, Bar Stool, Wardrobe, Bed Frame, Coffee Table, Side / Nightstand, Study Desk, Office Chair, Bookshelf, Dresser, L-Shape Sofa, Recliner, Dining Chair, Shoe Cabinet, Display Cabinet, Outdoor / Garden, Mattress, Accent Chair, Kids Furniture, Console Table, Ottoman, Linen / Storage Cabinet, Folding Furniture, Bean Bag, Vanity Table, Standing Mirror, Dining Bench. Each option carries the supplier SKU in its label where present.
+- `frontend/src/data/modelCatalog.ts`: Replace `FURNITURE_DEFAULTS` with the corresponding per-prefix defaults — `w_i`, `l_i`, `h_i` converted from cm → mm (`× 10`), `weight_kg` and `fragile` lifted directly from the sheet, `side_up` derived from physical category (`true` for cabinets, mirrors, dressers, fridges, bar stools, mattresses kept `false` per the sheet's flat-load note). Glass-top, mirrored, and marble pieces (TV Stand Turati, Coffee Glass / Marble, Wardrobes, Vanity Tables, Standing Mirrors, Display Cabinets, 4-Drawer Dresser w/ Mirror, Dining Set Stone) carry `fragile: true` to engage Extension G in `validator.py::validate_no_stack_on_fragile()`.
+- `frontend/src/data/modelCatalog.ts`: New `SIZE_VARIANTS: Record<string, SizeOption[]>` map + `getSizeVariants(prefix)` export. Holds size presets for items the supplier sheet lists with slash-separated dimensions — `dining_set_stone` (4S 140×80, 6S 160×90, 8S 200×100), `dining_set_classic` (4S 110×70, 6S 140×80), `bed_frame_post_a` / `bed_frame_post_b` (Double 122×190, Full 137×190, Queen 152×190), and `coffee_nested` (Large 90×50, Small 60×40). `FURNITURE_DEFAULTS` for these prefixes seeds the smallest variant.
+- `frontend/src/data/modelCatalog.ts`: Legacy `CATALOG`, `PREFIX_TO_FOLDER`, `CATALOG_LABELS`, `CATALOG_AXIS_UP`, and `CATALOG_FOLDER_MAP` left intact so any saved manifest using the old `bed_*` / `chair_*` / `sofa_*` prefixes continues to resolve to its OBJ mesh under `/public/models/`. New supplier prefixes are deliberately absent from `PREFIX_TO_FOLDER`, so `resolveModelMeta()` returns `null` for them and `TruckViewer` falls through to the colored-box placeholder (existing supported behaviour, no warning chip per Sprint 35 fix).
+- `frontend/src/components/ManifestForm.tsx`: New **Size Option** button-row section rendered when `getSizeVariants(prefix).length > 1`. Same visual treatment as the existing variant picker; clicking a size button updates `value.w` / `value.l` / `value.h` directly so the dimension inputs and the live preview reflect the chosen size immediately. Active-state highlight matches when all three current dims equal the option's dims.
+- `frontend/src/components/ManifestForm.tsx`: Rename the existing **"Model Variant"** picker label to **"Variant"** so the section heading reads cleanly alongside the new Size Option section. Picker logic unchanged — still drives `value.model_variant` and the hover preview.
+
+---
+
 ## Sprint 35 — 2026-05-15 · TruckViewer Preview Placeholder-Warning Fix
 
 **Goal:** Stop the fallback-geometry warning chip from firing on items whose OBJ models are still streaming in during the live preview, so the chip only surfaces genuine model-resolution failures.

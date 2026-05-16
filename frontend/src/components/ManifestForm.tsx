@@ -13,6 +13,7 @@ import {
   FURNITURE_DEFAULTS,
   FURNITURE_OPTIONS,
   getCatalogVariants,
+  getSizeVariants,
 } from "../data/modelCatalog";
 import { ModelPreview } from "./ModelPreview";
 import {
@@ -322,6 +323,7 @@ function AddItemForm({
   }
 
   const variants = getCatalogVariants(selectedPrefix);
+  const sizeVariants = getSizeVariants(selectedPrefix);
   /** Variant rendered in the preview — hover wins, selection second, first variant last. */
   const previewVariant =
     hoverVariant ?? value.model_variant ?? (variants.length > 0 ? 0 : undefined);
@@ -390,10 +392,43 @@ function AddItemForm({
         </div>
       )}
 
-      {/* Model variant picker — only shown when there is a real choice */}
+      {/* Size Option picker — only shown when the item has multiple stock sizes */}
+      {sizeVariants.length > 1 && (
+        <div>
+          <label className={labelCls}>Size Option</label>
+          <div className="flex flex-wrap gap-2">
+            {sizeVariants.map((s, i) => {
+              const active =
+                value.w === s.w && value.l === s.l && value.h === s.h;
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() =>
+                    onChange({ ...value, w: s.w, l: s.l, h: s.h })
+                  }
+                  className={`px-4 py-2.5 text-base font-semibold rounded-lg border-2 transition-colors ${
+                    active
+                      ? lightMode
+                        ? "border-blue-600 bg-blue-100 text-blue-800"
+                        : "border-blue-500 bg-blue-950 text-blue-200"
+                      : lightMode
+                        ? "border-slate-300 bg-white text-slate-700 hover:border-slate-500"
+                        : "border-gray-700 bg-gray-900 text-gray-300 hover:border-gray-600"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Style picker — only shown when there are multiple 3D mesh choices */}
       {variants.length > 1 && (
         <div>
-          <label className={labelCls}>Model Variant</label>
+          <label className={labelCls}>Variant</label>
           <div className="flex flex-wrap gap-2">
             {variants.map((v) => {
               const active = value.model_variant === v.index;
