@@ -324,9 +324,16 @@ function AddItemForm({
 
   const variants = getCatalogVariants(selectedPrefix);
   const sizeVariants = getSizeVariants(selectedPrefix);
-  /** Variant rendered in the preview — hover wins, selection second, first variant last. */
-  const previewVariant =
-    hoverVariant ?? value.model_variant ?? (variants.length > 0 ? 0 : undefined);
+  // When an item ships in multiple sizes (Bed Frame Double/Full/Queen, Dining
+  // Set 4S/6S/8S, Nested Coffee Table large/small), the Size Option picker
+  // takes over as the primary selector — the mesh Variant picker is hidden so
+  // the size choices aren't pushed off-screen by a tall mesh-button row.
+  const showVariantPicker = variants.length > 1 && sizeVariants.length === 0;
+  /** Variant rendered in the preview. Hover wins; explicit selection second;
+      `undefined` lets resolvePreviewMeta hash the prefix to pick a default
+      mesh, so sibling items (e.g. all office_chair_*) preview as different
+      chairs instead of all rendering the same first mesh. */
+  const previewVariant = hoverVariant ?? value.model_variant;
 
   const dimStep = unit === "m" || unit === "in" ? 0.01 : 1;
   const dimMin  = unit === "m" || unit === "in" ? 0.001 : 1;
@@ -377,7 +384,7 @@ function AddItemForm({
         <div className="flex items-center gap-3">
           <ModelPreview
             prefix={selectedPrefix}
-            variantIdx={previewVariant ?? 0}
+            variantIdx={previewVariant}
             size={140}
             lightMode={lightMode}
           />
@@ -429,8 +436,9 @@ function AddItemForm({
         </div>
       )}
 
-      {/* Style picker — only shown when there are multiple 3D mesh choices */}
-      {variants.length > 1 && (
+      {/* Style picker — only shown when there are multiple 3D mesh choices
+          AND the item doesn't have a Size Option picker (which takes over). */}
+      {showVariantPicker && (
         <div>
           <label className={labelCls}>Variant</label>
           <div className="flex flex-wrap gap-2">
@@ -713,6 +721,18 @@ export function ManifestForm({
 
   // ── Active panel tab ──
   const [activeTab, setActiveTab] = useState<"truck" | "stops" | "items">("truck");
+
+  // Tour navigation — when the spotlight points at a target inside the Truck /
+  // Stops / Items sub-tabs, the overlay dispatches `flow3d:tour-navigate` with
+  // the desired sub-tab so the panel mounts before the spotlight measures it.
+  useEffect(() => {
+    function onTourNavigate(e: Event) {
+      const detail = (e as CustomEvent<{ subTab?: "truck" | "stops" | "items" }>).detail;
+      if (detail?.subTab) setActiveTab(detail.subTab);
+    }
+    window.addEventListener("flow3d:tour-navigate", onTourNavigate);
+    return () => window.removeEventListener("flow3d:tour-navigate", onTourNavigate);
+  }, []);
 
   // ── Live preview notification — fires on every items/truck/stops change ──
   useEffect(() => {

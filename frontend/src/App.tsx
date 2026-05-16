@@ -12,6 +12,7 @@ import { ManifestForm } from "./components/ManifestForm";
 import { PlanSelector } from "./components/PlanSelector";
 import { SolveLoadingPanel } from "./components/SolveLoadingPanel";
 import { TruckViewer } from "./components/TruckViewer";
+import { TOUR_NAVIGATE_EVENT, type TourNavigateDetail } from "./tour/steps";
 import type { DeliveryStop, FurnitureItem, PackingPlan, SavedSession, SolveRequest, TruckSpec } from "./types";
 
 type Tab = "manifest" | "results" | "explain";
@@ -172,6 +173,26 @@ function App() {
       localStorage.removeItem(SESSION_KEY);
     }
   }, [SESSION_KEY]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tour navigation — when the spotlight advances to a step that lives on a
+  // different top-level tab (e.g. plan-selector → "results"), switch tabs so
+  // the target element is mounted before the overlay tries to measure it.
+  // Falls back to "manifest" when the requested tab has no content yet
+  // (e.g. tour reaches "results" before a plan has been solved) so the
+  // spotlight never strands on an empty panel.
+  useEffect(() => {
+    function onTourNavigate(e: Event) {
+      const detail = (e as CustomEvent<TourNavigateDetail>).detail;
+      if (!detail?.topTab) return;
+      if (detail.topTab === "results" && plans.length === 0) {
+        setTab("manifest");
+        return;
+      }
+      setTab(detail.topTab);
+    }
+    window.addEventListener(TOUR_NAVIGATE_EVENT, onTourNavigate);
+    return () => window.removeEventListener(TOUR_NAVIGATE_EVENT, onTourNavigate);
+  }, [plans.length]);
 
   // Log session_start once when a user signs in (or page loads with active token).
   useEffect(() => {

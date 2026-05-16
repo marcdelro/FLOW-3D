@@ -12,6 +12,24 @@ until the sprint is closed, then move to a dated sprint block.
 
 ---
 
+## Sprint 38 — 2026-05-16 · Size-Option Primary Picker, Mesh Distribution, and Tab-Aware Tour
+
+**Goal:** Make the Size Option picker the primary selector for items shipped in multiple sizes (suppressing the redundant mesh Variant row), distribute supplier prefixes across sibling OBJ folders so visually-similar items render as different meshes, and fix the guided tour so it navigates to the correct top-level tab and ManifestForm sub-tab on every step regardless of where the user starts the tour from.
+
+### Changed
+
+**Frontend**
+- `frontend/src/components/ManifestForm.tsx`: Hide the mesh Variant picker whenever `sizeVariants.length > 0`, via a new `showVariantPicker = variants.length > 1 && sizeVariants.length === 0` gate. For Bed Frame Post A/B (Double/Full/Queen), Dining Set Stone (4S/6S/8S), Dining Set Classic (4S/6S), and Coffee Nested (Large/Small), the Size Option buttons are now the only selector — the mesh Variant row no longer pushes the size choices off-screen.
+- `frontend/src/components/ManifestForm.tsx`: Drop the `previewVariant ?? 0` fallback. When no variant is hovered or selected, the form passes `undefined` to `ModelPreview` so `resolvePreviewMeta` picks a hashed default mesh (see modelCatalog change below) instead of always rendering the first mesh in the catalog.
+- `frontend/src/data/modelCatalog.ts`: Spread supplier-prefix → catalog-key mappings across sibling OBJ folders for visual variety. Bookshelves split across `Bookshelf` / `Bookcase` / `Shelving`; sofa-shaped items split across `Sofa` / `Couch` / `Loveseat` / `Sectional` (`recliner_fabric` → Loveseat, `recliner_power` → Couch); desks split across `Desk` / `Writing_Desk`; nightstands split between `Side_Table` / `End_Table`; vanity tables moved off `Dresser` to `Cabinet` so dresser items keep the dresser mesh; tall TV stands (drenzo, eldorado, turati) now render as `Wardrobe` / `Armoire` to match their height while low TV stands stay on `Sideboard`; linen / display cabinets split across `Cabinet` / `Armoire`.
+- `frontend/src/data/modelCatalog.ts`: `resolvePreviewMeta(prefix, variantIdx)` now hashes `prefix` (via the existing djb2 `hashItemId`) when `variantIdx` is undefined, so sibling supplier items sharing one catalog key (e.g. all 13 chair-shaped items mapped to `Chair`) default to different meshes in the form preview instead of all rendering `Chair[0]`.
+- `frontend/src/tour/steps.ts`: Each `TourStep` now carries optional `topTab` (`"manifest" | "results"`) and `subTab` (`"truck" | "stops" | "items"`) declaring where its target lives. All 7 steps annotated; new `TOUR_NAVIGATE_EVENT` constant + `TourNavigateDetail` type exported for the listeners.
+- `frontend/src/tour/TourOverlay.tsx`: On every step change, dispatches a `flow3d:tour-navigate` CustomEvent **before** measuring so the destination panel is mounted by the time `document.querySelector` runs. The single 250 ms scroll-settle wait is replaced by a retry-with-backoff loop (8 × 80 ms) so spotlights survive the React render cycle that follows a tab switch; if the target never appears the spotlight clears gracefully instead of pointing at nothing.
+- `frontend/src/App.tsx`: New `flow3d:tour-navigate` listener that switches the top-level tab (`manifest` / `results`) to whatever the current tour step requests. Falls back to `manifest` when the tour requests `results` but no plans have been solved yet, so the spotlight never strands on the empty Results panel.
+- `frontend/src/components/ManifestForm.tsx`: New `flow3d:tour-navigate` listener that switches the inner Truck / Stops / Items sub-tab so the spotlight finds the right `[data-tour]` target regardless of which sub-tab the user last left open.
+
+---
+
 ## Sprint 37 — 2026-05-16 · Supplier-Prefix Mesh Wiring and Universal Form Preview
 
 **Goal:** Make the new FEU supplier catalog renderable — wire 60 of the 76 supplier prefixes to the existing `/public/models/` OBJ folders so they show real meshes instead of colored boxes, and restore the AddItem form's 3D preview for every furniture selection (mesh-backed or not) so users always see what they're about to add.

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTour } from "./TourContext";
-import { TOUR_STEPS } from "./steps";
+import { TOUR_STEPS, TOUR_NAVIGATE_EVENT, type TourNavigateDetail } from "./steps";
 
 // ── Completion toast ────────────────────────────────────────────────────────────
 export function TourCompletedToast() {
@@ -173,11 +173,22 @@ export function TourOverlay() {
       return;
     }
 
+    // Tell App + ManifestForm to switch to the tab/sub-tab the step lives in
+    // before we try to find the target. App listens for the top-level tab,
+    // ManifestForm for the inner tab. The DOM mounts on the next tick, so we
+    // measure after a short delay below to give React a chance to render.
+    const detail: TourNavigateDetail = {
+      topTab: currentStep.topTab,
+      subTab: currentStep.subTab,
+    };
+    window.dispatchEvent(new CustomEvent(TOUR_NAVIGATE_EVENT, { detail }));
+
     function measure() {
       const el = document.querySelector<HTMLElement>(currentStep.target);
       if (!el) {
-        setRect(null);
-        return;
+        // Target not in the DOM yet — common right after a tab switch.
+        // Retry a few times before giving up so the spotlight catches up.
+        return false;
       }
       // Scroll the element into view in case the sidebar is scrolled away
       el.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -193,13 +204,30 @@ export function TourOverlay() {
           height: r.height + PAD * 2,
         });
       }, 250);
+      return true;
     }
 
-    measure();
-    window.addEventListener("resize", measure);
+    // Try immediately, then retry with backoff for elements that mount only
+    // after a tab change repaints.
+    let attempts = 0;
+    let retryId: ReturnType<typeof setTimeout> | null = null;
+    function tryMeasure() {
+      if (measure()) return;
+      attempts += 1;
+      if (attempts < 8) {
+        retryId = setTimeout(tryMeasure, 80);
+      } else {
+        setRect(null);
+      }
+    }
+    tryMeasure();
+
+    function onResize() { measure(); }
+    window.addEventListener("resize", onResize);
     return () => {
-      window.removeEventListener("resize", measure);
+      window.removeEventListener("resize", onResize);
       if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+      if (retryId) clearTimeout(retryId);
     };
   }, [active, step, currentStep]);
 

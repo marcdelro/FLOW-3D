@@ -744,16 +744,24 @@ const PREFIX_TO_FOLDER: Record<string, string> = {
   armoire:   "Armoire",
 
   // ── Supplier prefixes mapped to closest existing OBJ folder ───────────────
-  // Bed Frame → Bed mesh
+  // Distributed across multiple catalog keys per family so sibling supplier
+  // items render as different meshes (rather than every Bookshelf showing the
+  // same mesh, every Bed Frame the same Bed, etc.). Within a single catalog
+  // key, the prefix-hashed default in resolvePreviewMeta picks distinct
+  // variants for items that share a key.
+
+  // Bed Frame → spread across Bed (4 meshes) + Bunk_Bed
   bed_frame_post_a:  "Bed",
   bed_frame_post_b:  "Bed",
   bed_frame_pullout: "Bed",
   kids_bunk:         "Bunk_Bed",
-  // Bookshelves
+
+  // Bookshelves → spread across Bookshelf / Bookcase / Shelving
   bookshelf_5tier: "Bookshelf",
-  bookshelf_3tier: "Bookshelf",
-  bookshelf_tall:  "Bookshelf",
-  // Chair-shaped items
+  bookshelf_3tier: "Bookcase",
+  bookshelf_tall:  "Shelving",
+
+  // Chair-shaped items → all map to Chair (3 meshes); hash distributes
   office_chair_mesh:        "Chair",
   office_chair_pu:          "Chair",
   office_chair_task:        "Chair",
@@ -769,45 +777,53 @@ const PREFIX_TO_FOLDER: Record<string, string> = {
   bar_stool_luxury:         "Chair",
   bar_stool_steel:          "Chair",
   bar_stool_metal:          "Chair",
-  // Desks
+
+  // Desks → spread across Desk (3 meshes) + Writing_Desk (2 meshes)
   desk_lshape:  "Desk",
-  desk_compact: "Writing_Desk",
   desk_hutch:   "Desk",
+  desk_compact: "Writing_Desk",
   kids_desk:    "Writing_Desk",
-  // Sofa / Sectional
+  folding_desk: "Writing_Desk",
+
+  // Sofa-shaped items → spread across Sofa / Couch / Loveseat / Sectional
   sala_set_3_2:     "Sofa",
-  recliner_fabric:  "Sofa",
-  recliner_power:   "Sofa",
+  recliner_fabric:  "Loveseat",
+  recliner_power:   "Couch",
   lshape_sectional: "Sectional",
   lshape_corner:    "Sectional",
-  // Tables
+
+  // Tables → use Table for generic flat-tops, Dining_Table for dining sets
   garden_table:       "Table",
   folding_table:      "Table",
-  folding_desk:       "Table",
   dining_set_stone:   "Dining_Table",
   dining_set_wood_6s: "Dining_Table",
   dining_set_classic: "Dining_Table",
-  // Coffee tables
+
+  // Coffee Tables → all → Coffee_Table (1 mesh; visually appropriate)
   coffee_glass:     "Coffee_Table",
   coffee_solidwood: "Coffee_Table",
   coffee_marble:    "Coffee_Table",
   coffee_nested:    "Coffee_Table",
-  // Side / Nightstand
+
+  // Side / Nightstand → split End_Table / Side_Table for mesh variety
   nightstand_1drawer: "Side_Table",
-  nightstand_2drawer: "Side_Table",
-  nightstand_open:    "End_Table",
-  // Wardrobes
+  nightstand_2drawer: "End_Table",
+  nightstand_open:    "Side_Table",
+
+  // Wardrobes → all → Wardrobe (single mesh, correct shape)
   wardrobe_marble: "Wardrobe",
   wardrobe_oak:    "Wardrobe",
   wardrobe_2door:  "Wardrobe",
-  // Dressers / Vanity (mirror-fronted dresser shape)
+
+  // Dressers + Vanity → spread across Dresser / Cabinet (vanity uses Cabinet)
   dresser_6drawer:        "Dresser",
   dresser_4drawer_mirror: "Dresser",
   dresser_3drawer:        "Dresser",
-  vanity_dressing:        "Dresser",
-  vanity_compact:         "Dresser",
-  // Cabinets (linen, shoe, display) → Cabinet/Armoire mesh
-  linen_tall:     "Cabinet",
+  vanity_dressing:        "Cabinet",
+  vanity_compact:         "Cabinet",
+
+  // Linen/Shoe/Display cabinets → spread Cabinet / Armoire
+  linen_tall:     "Armoire",
   linen_bath:     "Cabinet",
   shoe_5tier:     "Cabinet",
   shoe_slim:      "Cabinet",
@@ -815,18 +831,23 @@ const PREFIX_TO_FOLDER: Record<string, string> = {
   display_glass:  "Armoire",
   display_corner: "Armoire",
   display_curio:  "Armoire",
-  // TV Stands / Buffets / Consoles → Sideboard mesh
-  tv_stand_pctv070:      "Sideboard",
-  tv_stand_aurum:        "Sideboard",
-  tv_stand_gitv2120:     "Sideboard",
-  tv_stand_drenzo:       "Sideboard",
-  tv_stand_turati:       "Sideboard",
-  tv_stand_eldorado:     "Sideboard",
+
+  // TV Stands → spread tall units to Wardrobe/Armoire, low units to Sideboard
+  tv_stand_pctv070:  "Sideboard",
+  tv_stand_aurum:    "Sideboard",
+  tv_stand_gitv2120: "Sideboard",
+  tv_stand_drenzo:   "Wardrobe",
+  tv_stand_turati:   "Armoire",
+  tv_stand_eldorado: "Wardrobe",
+
+  // Buffet cabinets → Sideboard (low storage shape)
   buffet_cabinet_jpskk3: "Sideboard",
   buffet_cabinet_camila: "Sideboard",
   buffet_cabinet_clover: "Sideboard",
-  console_narrow:        "Sideboard",
-  console_drawers:       "Sideboard",
+
+  // Console tables → Sideboard
+  console_narrow:  "Sideboard",
+  console_drawers: "Sideboard",
 };
 
 /** djb2 hash over the full item_id string → stable, varied model selection. */
@@ -872,9 +893,12 @@ export function resolvePreviewMeta(
   if (!catalogKey) return null;
   const models = CATALOG[catalogKey];
   if (!models?.length) return null;
+  // When no variant is specified, hash the prefix so sibling supplier items
+  // sharing one catalog key (e.g. all `office_chair_*` → Chair) default to
+  // different meshes in the form preview.
   const idx = variantIdx !== undefined && variantIdx >= 0
     ? variantIdx % models.length
-    : 0;
+    : hashItemId(prefix) % models.length;
   const physicalFolder = CATALOG_FOLDER_MAP[catalogKey] ?? catalogKey;
   const axisUp: AxisUp = CATALOG_AXIS_UP[catalogKey] ?? "auto";
   return { path: `/models/${physicalFolder}/${models[idx]}.obj`, axisUp };
